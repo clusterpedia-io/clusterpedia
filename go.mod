@@ -4,14 +4,12 @@ go 1.16
 
 require (
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/jackc/pgconn v1.10.0
 	github.com/jackc/pgerrcode v0.0.0-20201024163028-a0d42d470451
 	github.com/jackc/pgx/v4 v4.13.0
 	github.com/jinzhu/configor v1.2.1
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/tools v0.1.5 // indirect
 	gorm.io/datatypes v1.0.3
 	gorm.io/driver/mysql v1.2.0
 	gorm.io/driver/postgres v1.2.2
@@ -20,10 +18,12 @@ require (
 	k8s.io/apimachinery v0.22.4
 	k8s.io/apiserver v0.0.0
 	k8s.io/client-go v0.22.4
+	k8s.io/code-generator v0.0.0
 	k8s.io/component-base v0.22.4
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubernetes v1.22.4
 	sigs.k8s.io/controller-runtime v0.10.3
+	sigs.k8s.io/controller-tools v0.7.0
 )
 
 replace (
