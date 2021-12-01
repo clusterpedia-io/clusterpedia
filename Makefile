@@ -1,5 +1,5 @@
 BASEIMAGE ?= "alpine:3.14"
-REGISTRY ?= "ghcr.io/clusterpedia"
+REGISTRY ?= "ghcr.io/clusterpedia-io/clusterpedia"
 
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
@@ -20,13 +20,16 @@ LDFLAGS := "-X github.com/clusterpedia-io/clusterpedia/pkg/version.gitVersion=$(
 				-X github.com/clusterpedia-io/clusterpedia/pkg/version.gitTreeState=$(GIT_TREESTATE) \
 				-X github.com/clusterpedia-io/clusterpedia/pkg/version.buildDate=$(BUILDDATE)"
 
+ALPHA_VERSION="v0.0.9-alpha"
 VERSION ?= ""
 ifeq ($(VERSION), "")
 	LATEST_TAG=$(shell git describe --tags)
 	ifeq ($(LATEST_TAG),)
 		VERSION="unknown"
-	else
+	else ifeq ($(LATEST_TAG),$(shell git describe --abbrev=0 --tags))
 		VERSION=$(LATEST_TAG)
+	else
+		VERSION=$(ALPHA_VERSION)
 	endif
 endif
 
@@ -83,8 +86,8 @@ vendor:
 clean:
 	rm -rf bin
 
-.PHONY: push-image
-push-image: push-apiserver-image push-clustersynchro-manager-image
+.PHONY: push-images
+push-images: push-apiserver-image push-clustersynchro-manager-image
 
 push-apiserver-image:
 	set -e; \
