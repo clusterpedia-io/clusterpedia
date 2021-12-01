@@ -83,10 +83,10 @@ vendor:
 clean:
 	rm -rf bin
 
-.PHONY: release
-release: release-apiserver release-clustersynchro-manager
+.PHONY: push-image
+push-image: push-apiserver-image push-clustersynchro-manager-image
 
-release-apiserver:
+push-apiserver-image:
 	set -e; \
 	images=""; \
 	for arch in $(RELEASE_ARCHS); do \
@@ -98,7 +98,7 @@ release-apiserver:
 	docker manifest create $(REGISTRY)/apiserver:$(VERSION) --amend $$images; \
 	docker manifest push $(REGISTRY)/apiserver:$(VERSION)
 
-release-clustersynchro-manager:
+push-clustersynchro-manager-image:
 	set -e; \
 	images=""; \
 	for arch in $(RELEASE_ARCHS); do \
