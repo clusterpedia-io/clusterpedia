@@ -1,6 +1,7 @@
 package internalstorage
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -53,7 +54,8 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) *g
 					values = append(values, value)
 				}
 
-				jsonQuery := JSONQuery("object", "metadata", "labels", requirement.Key())
+				// wrap label key with `""`
+				jsonQuery := JSONQuery("object", "metadata", "labels", fmt.Sprintf("\"%s\"", requirement.Key()))
 				switch requirement.Operator() {
 				case selection.Exists:
 				case selection.Equals, selection.DoubleEquals:
