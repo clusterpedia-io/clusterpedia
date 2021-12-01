@@ -1,6 +1,6 @@
 Clusterpedia
 ---
-## Usgae
+## Usage
 ### 多集群单资源查询
 
 ```bash
@@ -11,56 +11,26 @@ $ curl $KUBEAPISERVER/apis/pedia.clusterpedia.io/v1alpha1/resources/apis/apps/v1
 $ # 获取所有集群所有命名空间下的 deployments
 $ kubectl get deployment -A
 NAMESPACE       CLUSTER          NAME                         READY   UP-TO-DATE   AVAILABLE   AGE
-dx-arch         dce-10-6-165-2   dx-arch-keycloak             1/1     1            1           66d
-dx-arch         dce-10-6-165-2   dx-arch-ram                  1/1     1            1           66d
-dx-arch         dce-10-6-165-2   dx-arch-stolon-proxy         2/2     2            2           66d
-dx-arch         dce-10-6-165-2   dx-arch-stolon-sentinel      2/2     2            2           66d
-dx-arch         dce-10-6-165-2   dx-arch-ui                   3/3     3            3           66d
-hnc-system      dce-10-6-165-2   hnc-controller-manager       1/1     1            1           4d
-kube-system     dce-10-6-165-2   calico-kube-controllers      1/1     1            1           66d
-kube-system     dce-10-6-165-2   coredns-coredns              2/2     2            2           66d
-kube-system     dce-10-6-165-2   dce-chart-manager            1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-clair                    1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-controller               1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-core-keepalived          1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-prometheus               1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-registry                 1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-uds-failover-assistant   1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-uds-policy-controller    1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-uds-storage-server       1/1     1            1           66d
-kube-system     dce-10-6-165-2   metrics-server               1/1     1            1           66d
+default         cluster-1        dao-2048                     1/1     1            1           23d
+default         cluster-1        nginx                        1/1     1            1           23d
+kube-system     cluster-1        calico-kube-controllers      1/1     1            1           34d
+kube-system     cluster-1        calico-node                  1/1     1            1           34d
+default         cluster-2        dao-2048                     1/1     1            1           23d
+default         cluster-2        nginx                        1/1     1            1           23d
+kube-system     cluster-2        calico-kube-controllers      1/1     1            1           66d
+kube-system     cluster-2        coredns-coredns              2/2     2            2           66d
+kube-system     cluster-2        calico-node                  1/1     1            1           66d
+kube-system     cluster-2        metrics-server               1/1     1            1           66d
 
 $ # 获取 kube-system 命名空间下的所有集群的 deployment
 $ kubectl -n kube-system get deployment
 NAMESPACE       CLUSTER          NAME                         READY   UP-TO-DATE   AVAILABLE   AGE
-dce-acm         dce-10-6-165-2   dce-acm-apiserver            1/1     1            1           41d
-dce-acm         dce-10-6-165-2   dce-acm-nginx                1/1     1            1           41d
-dce-acm         dce-10-6-165-2   dce-acm-stolon-proxy         2/2     2            2           41d
-dce-acm         dce-10-6-165-2   dce-acm-stolon-sentinel      2/2     2            2           41d
-dce-acm         dce-10-6-165-2   dce-acm-synchromanager       1/1     1            1           41d
-dce-acm         dce-10-6-165-2   dce-acm-ui                   1/1     1            1           41d
-dce-acm-agent   dce-10-6-165-2   dce-acm-agent                1/1     1            1           41d
-dce-system      dce-10-6-165-2   dce-system-dnsservice        1/1     1            1           66d
-dce-system      dce-10-6-165-2   dce-system-uds               1/1     1            1           66d
-dx-arch         dce-10-6-165-2   dx-arch-keycloak             1/1     1            1           66d
-dx-arch         dce-10-6-165-2   dx-arch-ram                  1/1     1            1           66d
-dx-arch         dce-10-6-165-2   dx-arch-stolon-proxy         2/2     2            2           66d
-dx-arch         dce-10-6-165-2   dx-arch-stolon-sentinel      2/2     2            2           66d
-dx-arch         dce-10-6-165-2   dx-arch-ui                   3/3     3            3           66d
-hnc-system      dce-10-6-165-2   hnc-controller-manager       1/1     1            1           4d
-kube-system     dce-10-6-165-2   calico-kube-controllers      1/1     1            1           66d
-kube-system     dce-10-6-165-2   coredns-coredns              2/2     2            2           66d
-kube-system     dce-10-6-165-2   dce-chart-manager            1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-clair                    1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-controller               1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-core-keepalived          1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-prometheus               1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-registry                 1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-uds-failover-assistant   1/2     2            1           66d
-kube-system     dce-10-6-165-2   dce-uds-policy-controller    1/1     1            1           66d
-kube-system     dce-10-6-165-2   dce-uds-storage-server       1/1     1            1           66d
-kube-system     dce-10-6-165-2   metrics-server               1/1     1            1           66d
-
+kube-system     cluster-1        calico-kube-controllers      1/1     1            1           34d
+kube-system     cluster-1        calico-node                  1/1     1            1           34d
+kube-system     cluster-2        calico-kube-controllers      1/1     1            1           66d
+kube-system     cluster-2        coredns-coredns              2/2     2            2           66d
+kube-system     cluster-2        calico-node                  1/1     1            1           66d
+kube-system     cluster-2        metrics-server               1/1     1            1           66d
 $ # 通过 label 来指定复杂查询的参数
 $ kubectl get deployment -A -l "search.clusterpedia.io/clusters=test"
 ```
@@ -76,12 +46,11 @@ workloads   Deployment.apps,DaemonSet.apps,StatefulSet.apps
 
 $ kubectl get collectionresources workloads
 GROUP   VERSION   KIND         CLUSTER          NAMESPACE       NAME                         AGE
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-apiserver            41d
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-nginx                41d
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-stolon-proxy         41d
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-stolon-sentinel      41d
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-synchromanager       41d
-apps    v1        Deployment   dce-10-6-165-2   dce-acm         dce-acm-ui                   41d
+apps    v1        Deployment   cluster-1        default         wordpress                    41d
+apps    v1        Deployment   cluster-1        default         nginx                        41d
+apps    v1        Deployment   cluster-1        default         stolon-proxy                 41d
+apps    v1        Deployment   cluster-1        default         stolon-sentinel              41d
+apps    v1        Deployment   cluster-1        default         default-ui                   41d
 ```
 
 ### 单集群单资源收集
