@@ -42,13 +42,13 @@ clean-clusterconfigs:
 	./hack/clean-clusterconfigs.sh
 
 apiserver:
-	CGO_ENABLE=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 			   -ldflags $(LDFLAGS) \
 			   -o bin/apiserver \
 			   cmd/apiserver/main.go
 
 clustersynchro-manager:
-	CGO_ENABLE=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 			   -ldflags $(LDFLAGS) \
 			   -o  bin/clustersynchro-manager \
 			   cmd/clustersynchro-manager/main.go
