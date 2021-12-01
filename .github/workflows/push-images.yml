@@ -9,6 +9,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
+          fetch-depth: 0
       - name: Setup go
         uses: actions/setup-go@v1
         with:
@@ -19,4 +22,3 @@ jobs:
       - name: Push images
         run: |
           REGISTRY="ghcr.io/$(echo ${{ github.repository }} | tr "A-Z" "a-z")" make push-images
-
