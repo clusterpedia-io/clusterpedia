@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clusterpedia-apiserver
+  namespace: clusterpedia-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterpedia-apiserver
+  namespace: clusterpedia-system
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    app: clusterpedia-apiserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-apiserver
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-apiserver
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-apiserver
+    spec:
+      containers:
+      - name: clusterpedia-apiserver
+        image: ghcr.io/clusterpedia/apiserver:v0.0.9-alpha
+        command:
+        - /usr/local/bin/apiserver
+        - --secure-port=443
+        - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        - -v=3
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: internalstorage-mysql
+              key: password
+        volumeMounts:
+        - name: internalstorage-config
+          mountPath: /etc/clusterpedia/storage
+          readOnly: true
+      serviceAccountName: clusterpedia-apiserver
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+      volumes:
+      - name: internalstorage-config
+        configMap:
+          name: clusterpedia-internalstorage
