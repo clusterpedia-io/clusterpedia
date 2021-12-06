@@ -409,10 +409,7 @@ func (s *ClusterSynchro) clusterStatusUpdater() {
 		status := s.genClusterStatus()
 		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
 			klog.ErrorS(err, "Failed to update cluster status", "cluster", s.name, status.Conditions[0].Reason)
-			return
 		}
-
-		klog.V(2).InfoS("Update Cluster Status", "cluster", s.name, "status", status.Conditions[0].Reason)
 	}
 }
 

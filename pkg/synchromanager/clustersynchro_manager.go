@@ -279,7 +279,12 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 	cluster = cluster.DeepCopy()
 	cluster.Status = *status
 	_, err = manager.clusterpediaclient.ClustersV1alpha1().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
-	return err
+	if err != nil {
+		return err
+	}
+
+	klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "status", status.Conditions[0].Reason)
+	return nil
 }
 
 func buildClusterConfig(cluster *clustersv1alpha1.PediaCluster) (*rest.Config, error) {
