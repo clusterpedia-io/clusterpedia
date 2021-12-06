@@ -36,7 +36,7 @@ Clusterpedia 还提供了可以接入 mysql 和 postgres 的默认存储层。
 
 部署时可能还需要对 yaml 进行一点点手动修改
 ```sh
-$ git clone git@github.com:clusterpedia-io/clusterpedia.git
+$ git clone https://github.com/clusterpedia-io/clusterpedia.git
 $ cd clusterpedia
 $ ll
 total 288
