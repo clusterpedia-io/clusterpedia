@@ -122,13 +122,12 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) *g
 }
 
 func getNewItemFunc(listObj runtime.Object, v reflect.Value) func() runtime.Object {
-	if unstructuredList, isUnstructured := listObj.(*unstructured.UnstructuredList); isUnstructured {
-		if apiVersion := unstructuredList.GetAPIVersion(); len(apiVersion) > 0 {
-			return func() runtime.Object {
-				return &unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": apiVersion}}
-			}
+	if _, isUnstructuredList := listObj.(*unstructured.UnstructuredList); isUnstructuredList {
+		return func() runtime.Object {
+			return &unstructured.Unstructured{Object: map[string]interface{}{}}
 		}
 	}
+
 	elem := v.Type().Elem()
 	return func() runtime.Object {
 		return reflect.New(elem).Interface().(runtime.Object)

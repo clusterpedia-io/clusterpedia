@@ -1,4 +1,4 @@
-package legacyresource
+package resourcescheme
 
 import (
 	// These imports are the API groups the API server will support.

@@ -17,7 +17,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
 	pediascheme "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/scheme"
 	pediav1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/legacyresource"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
@@ -40,7 +40,7 @@ func NewREST(factory storage.StorageFactory) *REST {
 
 	list := &pedia.CollectionResourceList{}
 	storages := make(map[string]storage.CollectionResourceStorage, len(crs))
-	configFactory := legacyresource.NewStorageConfigFactory(runtime.ContentTypeJSON)
+	configFactory := storageconfig.NewStorageConfigFactory()
 	for _, cr := range crs {
 		for irt := range cr.ResourceTypes {
 			rt := &cr.ResourceTypes[irt]

@@ -4,7 +4,10 @@ import (
 	"errors"
 	"net/http"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
@@ -13,13 +16,28 @@ import (
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/legacyresource"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
 
+var (
+	Scheme = runtime.NewScheme()
+	Codecs = serializer.NewCodecFactory(Scheme)
+)
+
+func init() {
+	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Group: "", Version: "v1"})
+	Scheme.AddUnversionedTypes(schema.GroupVersion{Group: "", Version: "v1"},
+		&metav1.Status{},
+		&metav1.APIVersions{},
+		&metav1.APIGroupList{},
+		&metav1.APIGroup{},
+		&metav1.APIResourceList{},
+	)
+}
+
 func NewDefaultConfig() *Config {
-	genericConfig := genericapiserver.NewRecommendedConfig(legacyresource.Codecs)
+	genericConfig := genericapiserver.NewRecommendedConfig(Codecs)
 
 	genericConfig.APIServerID = ""
 	genericConfig.EnableIndex = false
