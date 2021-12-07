@@ -8,22 +8,35 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
+	"k8s.io/apimachinery/pkg/runtime/serializer/versioning"
 	"k8s.io/apiserver/pkg/endpoints/handlers"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/klog/v2"
+	apicore "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/apis/rbac"
+	apisstorage "k8s.io/kubernetes/pkg/apis/storage"
+	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
+	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/legacyresource"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	unstructuredresourcescheme "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme/unstructured"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
 type RESTManager struct {
-	storageFactory              storage.StorageFactory
-	legacyResourcetSorageConfig *legacyresource.StorageConfigFactory
-	equivalentResourceRegistry  runtime.EquivalentResourceMapper
+	storageFactory             storage.StorageFactory
+	resourcetSorageConfig      *storageconfig.StorageConfigFactory
+	equivalentResourceRegistry runtime.EquivalentResourceMapper
 
 	lock      sync.Mutex
 	groups    atomic.Value // map[string]metav1.APIGroup
@@ -54,7 +67,7 @@ func NewRESTManager(storageMediaType string, storageFactory storage.StorageFacto
 				}
 
 				gk := schema.GroupKind{Group: group.Name, Kind: resource.Kind}
-				if gvs := legacyresource.Scheme.VersionsForGroupKind(gk); len(gvs) == 0 {
+				if gvs := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gk); len(gvs) == 0 {
 					// skip custom resource
 					continue
 				}
@@ -67,9 +80,9 @@ func NewRESTManager(storageMediaType string, storageFactory storage.StorageFacto
 	}
 
 	manager := &RESTManager{
-		storageFactory:              storageFactory,
-		legacyResourcetSorageConfig: legacyresource.NewStorageConfigFactory(storageMediaType),
-		equivalentResourceRegistry:  runtime.NewEquivalentResourceRegistry(),
+		storageFactory:             storageFactory,
+		resourcetSorageConfig:      storageconfig.NewStorageConfigFactory(),
+		equivalentResourceRegistry: runtime.NewEquivalentResourceRegistry(),
 	}
 
 	manager.resources.Store(apiresources)
@@ -105,7 +118,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 				}
 
 				// for custom resources, the prioritizedVersions is empty
-				for _, gv := range legacyresource.Scheme.PrioritizedVersionsForGroup(gr.Group) {
+				for _, gv := range resourcescheme.LegacyResourceScheme.PrioritizedVersionsForGroup(gr.Group) {
 					group.Versions = append(group.Versions, metav1.GroupVersionForDiscovery{
 						GroupVersion: gv.String(),
 						Version:      gv.Version,
@@ -116,16 +129,18 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		}
 
 		gk := schema.GroupKind{Group: gr.Group, Kind: info.Kind}
-		versions := legacyresource.Scheme.VersionsForGroupKind(gk)
+		versions := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gk)
 		if len(versions) == 0 {
-			// not support custom resource
-			// versions = []schema.GroupVersion{schema.GroupVersion{info.Group, info.Version}}
-			continue
+			// custom resource
+			for version := range info.Versions {
+				versions = append(versions, schema.GroupVersion{Group: gr.Group, Version: version})
+			}
 		}
 
 		resource, hasResource := apiresources[gr]
 		if !hasResource {
 			resource = metav1.APIResource{Name: gr.Resource, Namespaced: info.Namespaced, Kind: info.Kind}
+			resource.Verbs = metav1.Verbs{"get", "list"}
 			addedAPIResources[gr] = resource
 		}
 
@@ -143,7 +158,6 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 			}
 		}
 		apis[gr] = api
-
 	}
 
 	//  no new APIGroups or APIResources or RESTResourceInfo
@@ -207,19 +221,42 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 		}
 
 		if info.Storage == nil {
-			storage, err := m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind)
+			var err error
+			var storage *resourcerest.RESTStorage
+			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+				storage, err = m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind)
+			} else {
+				storage, err = m.genCustomResourceRESTStorage(gvr, info.APIResource.Kind)
+			}
 			if err != nil {
 				klog.ErrorS(err, "Failed to gen resource rest storage", "gvr", gvr, "kind", info.APIResource.Kind)
 				continue
 			}
 
+			storage.DefaultQualifiedResource = gvr.GroupResource()
+			storage.TableConvertor = GetTableConvertor(gvr.GroupResource())
 			info.Storage = storage
 		}
 
 		if info.RequestScope == nil {
-			requestScope := m.genLegacyResourceRequestScope(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
-			requestScope.TableConvertor = info.Storage
+			namer := handlers.ContextBasedNaming{
+				SelfLinker:    runtime.SelfLinker(meta.NewAccessor()),
+				ClusterScoped: !info.APIResource.Namespaced,
+			}
+			if gvr.Group == "" {
+				namer.SelfLinkPathPrefix = path.Join("api", gvr.Version) + "/"
+			} else {
+				namer.SelfLinkPathPrefix = path.Join("apis", gvr.Group, gvr.Version) + "/"
+			}
 
+			var requestScope *handlers.RequestScope
+			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+				requestScope = m.genLegacyResourceRequestScope(namer, gvr, info.APIResource.Kind)
+			} else {
+				requestScope = m.genCustomResourceRequestScope(namer, gvr, info.APIResource.Kind)
+			}
+
+			requestScope.TableConvertor = info.Storage
 			info.RequestScope = requestScope
 		}
 
@@ -230,7 +267,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 }
 
 func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResource, kind string) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.legacyResourcetSorageConfig.NewConfig(gvr)
+	storageConfig, err := m.resourcetSorageConfig.NewLegacyResourceConfig(gvr.GroupResource())
 	if err != nil {
 		return nil, err
 	}
@@ -244,39 +281,55 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 		DefaultQualifiedResource: gvr.GroupResource(),
 
 		NewFunc: func() runtime.Object {
-			obj, _ := legacyresource.Scheme.New(schema.GroupVersionKind{Group: gvr.Group, Version: runtime.APIVersionInternal, Kind: kind})
+			obj, _ := resourcescheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind))
 			return obj
 		},
 		NewListFunc: func() runtime.Object {
-			obj, _ := legacyresource.Scheme.New(schema.GroupVersionKind{Group: gvr.Group, Version: runtime.APIVersionInternal, Kind: kind + "List"})
+			obj, _ := resourcescheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind + "List"))
 			return obj
 		},
 
-		Storage:        resourceStorage,
-		TableConvertor: legacyresource.GetTableConvertor(gvr.GroupResource()),
+		Storage: resourceStorage,
+	}, nil
+}
+
+func (m *RESTManager) genCustomResourceRESTStorage(gvr schema.GroupVersionResource, kind string) (*resourcerest.RESTStorage, error) {
+	storageConfig, err := m.resourcetSorageConfig.NewCustomResourceConfig(gvr)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceStorage, err := m.storageFactory.NewResourceStorage(storageConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resourcerest.RESTStorage{
+		NewFunc: func() runtime.Object {
+			obj := &unstructured.Unstructured{}
+			obj.SetGroupVersionKind(storageConfig.MemoryVersion.WithKind(kind))
+			return obj
+		},
+		NewListFunc: func() runtime.Object {
+			obj := &unstructured.UnstructuredList{}
+			obj.SetGroupVersionKind(storageConfig.MemoryVersion.WithKind(kind + "List"))
+			return obj
+		},
+
+		Storage: resourceStorage,
 	}, nil
 }
 
 // TODO: support custom resource
-func (m *RESTManager) genLegacyResourceRequestScope(gvr schema.GroupVersionResource, kind string, namespaced bool) *handlers.RequestScope {
-	namer := handlers.ContextBasedNaming{
-		SelfLinker:    runtime.SelfLinker(meta.NewAccessor()),
-		ClusterScoped: !namespaced,
-	}
-	if gvr.Group == "" {
-		namer.SelfLinkPathPrefix = path.Join("api", gvr.Version) + "/"
-	} else {
-		namer.SelfLinkPathPrefix = path.Join("apis", gvr.Group, gvr.Version) + "/"
-	}
-
+func (m *RESTManager) genLegacyResourceRequestScope(namer handlers.ScopeNamer, gvr schema.GroupVersionResource, kind string) *handlers.RequestScope {
 	return &handlers.RequestScope{
 		Namer:          namer,
-		Serializer:     legacyresource.Codecs,
-		ParameterCodec: legacyresource.ParameterCodec,
-		Creater:        legacyresource.Scheme,
-		Convertor:      legacyresource.Scheme,
-		Defaulter:      legacyresource.Scheme,
-		Typer:          legacyresource.Scheme,
+		Serializer:     resourcescheme.LegacyResourceCodecs,
+		ParameterCodec: resourcescheme.LegacyResourceParameterCodec,
+		Creater:        resourcescheme.LegacyResourceScheme,
+		Convertor:      resourcescheme.LegacyResourceScheme,
+		Defaulter:      resourcescheme.LegacyResourceScheme,
+		Typer:          resourcescheme.LegacyResourceScheme,
 
 		Resource:         gvr,
 		Kind:             gvr.GroupVersion().WithKind(kind),
@@ -284,6 +337,118 @@ func (m *RESTManager) genLegacyResourceRequestScope(gvr schema.GroupVersionResou
 
 		EquivalentResourceMapper: m.equivalentResourceRegistry,
 	}
+}
+
+func (m *RESTManager) genCustomResourceRequestScope(namer handlers.ScopeNamer, gvr schema.GroupVersionResource, kind string) *handlers.RequestScope {
+	parameterScheme := runtime.NewScheme()
+	parameterScheme.AddUnversionedTypes(schema.GroupVersion{Group: gvr.Group, Version: gvr.Version},
+		&metav1.ListOptions{},
+		&metav1.GetOptions{},
+		&metav1.DeleteOptions{},
+	)
+	parameterCodec := runtime.NewParameterCodec(parameterScheme)
+
+	typer := unstructuredObjectTyper{parameterScheme, resourcescheme.CustomResourceScheme}
+	negotiatedSerializer := unstructuredNegotiatedSerializer{
+		typer,
+		resourcescheme.CustomResourceScheme,
+		resourcescheme.CustomResourceScheme,
+	}
+
+	var standardSerializers []runtime.SerializerInfo
+	for _, s := range negotiatedSerializer.SupportedMediaTypes() {
+		if s.MediaType == runtime.ContentTypeProtobuf {
+			continue
+		}
+		standardSerializers = append(standardSerializers, s)
+	}
+
+	return &handlers.RequestScope{
+		Namer:               namer,
+		Serializer:          negotiatedSerializer,
+		StandardSerializers: standardSerializers,
+		ParameterCodec:      parameterCodec,
+		Creater:             resourcescheme.CustomResourceScheme,
+		Convertor:           resourcescheme.CustomResourceScheme,
+		UnsafeConvertor:     unstructuredresourcescheme.UnsafeObjectConvertor(resourcescheme.CustomResourceScheme),
+		Defaulter:           resourcescheme.CustomResourceScheme,
+		Typer:               typer,
+
+		Resource: gvr,
+		Kind:     gvr.GroupVersion().WithKind(kind),
+		// HubGroupVersion:  gvr.GroupVersion(),
+		MetaGroupVersion: metav1.SchemeGroupVersion,
+
+		EquivalentResourceMapper: m.equivalentResourceRegistry,
+	}
+}
+
+// from https://github.com/kubernetes/apiextensions-apiserver/blob/d79a59d4f63006d9c91bff1c417b82a54c3daeb4/pkg/apiserver/customresource_handler.go#L1029
+type unstructuredNegotiatedSerializer struct {
+	typer     runtime.ObjectTyper
+	creater   runtime.ObjectCreater
+	convertor runtime.ObjectConvertor
+}
+
+func (s unstructuredNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
+	return []runtime.SerializerInfo{
+		{
+			MediaType:        "application/json",
+			MediaTypeType:    "application",
+			MediaTypeSubType: "json",
+			EncodesAsText:    true,
+			Serializer:       json.NewSerializer(json.DefaultMetaFactory, s.creater, s.typer, false),
+			PrettySerializer: json.NewSerializer(json.DefaultMetaFactory, s.creater, s.typer, true),
+			StreamSerializer: &runtime.StreamSerializerInfo{
+				EncodesAsText: true,
+				Serializer:    json.NewSerializer(json.DefaultMetaFactory, s.creater, s.typer, false),
+				Framer:        json.Framer,
+			},
+		},
+		{
+			MediaType:        "application/yaml",
+			MediaTypeType:    "application",
+			MediaTypeSubType: "yaml",
+			EncodesAsText:    true,
+			Serializer:       json.NewYAMLSerializer(json.DefaultMetaFactory, s.creater, s.typer),
+		},
+		{
+			MediaType:        "application/vnd.kubernetes.protobuf",
+			MediaTypeType:    "application",
+			MediaTypeSubType: "vnd.kubernetes.protobuf",
+			Serializer:       protobuf.NewSerializer(s.creater, s.typer),
+			StreamSerializer: &runtime.StreamSerializerInfo{
+				Serializer: protobuf.NewRawSerializer(s.creater, s.typer),
+				Framer:     protobuf.LengthDelimitedFramer,
+			},
+		},
+	}
+}
+
+func (s unstructuredNegotiatedSerializer) EncoderForVersion(encoder runtime.Encoder, gv runtime.GroupVersioner) runtime.Encoder {
+	return versioning.NewCodec(encoder, nil, s.convertor, Scheme, Scheme, Scheme, gv, nil, "unstructuredNegotiatedSerializer")
+}
+
+func (s unstructuredNegotiatedSerializer) DecoderToVersion(decoder runtime.Decoder, gv runtime.GroupVersioner) runtime.Decoder {
+	return versioning.NewCodec(nil, decoder, runtime.UnsafeObjectConvertor(Scheme), Scheme, Scheme, nil, nil, gv, "unstructuredNegotiatedSerializer")
+}
+
+// from https://github.com/kubernetes/apiextensions-apiserver/blob/d79a59d4f63006d9c91bff1c417b82a54c3daeb4/pkg/apiserver/customresource_handler.go#L1087
+type unstructuredObjectTyper struct {
+	Delegate          runtime.ObjectTyper
+	UnstructuredTyper runtime.ObjectTyper
+}
+
+func (t unstructuredObjectTyper) ObjectKinds(obj runtime.Object) ([]schema.GroupVersionKind, bool, error) {
+	// Delegate for things other than Unstructured.
+	if _, ok := obj.(runtime.Unstructured); !ok {
+		return t.Delegate.ObjectKinds(obj)
+	}
+	return t.UnstructuredTyper.ObjectKinds(obj)
+}
+
+func (t unstructuredObjectTyper) Recognizes(gvk schema.GroupVersionKind) bool {
+	return t.Delegate.Recognizes(gvk) || t.UnstructuredTyper.Recognizes(gvk)
 }
 
 type RESTResourceInfo struct {
@@ -294,4 +459,23 @@ type RESTResourceInfo struct {
 
 func (info RESTResourceInfo) Empty() bool {
 	return info.APIResource.Name == "" || info.RequestScope == nil || info.Storage == nil
+}
+
+var legacyResourcesWithDefaultTableConvertor = map[schema.GroupResource]struct{}{
+	apicore.Resource("limitranges"):              {},
+	rbac.Resource("roles"):                       {},
+	rbac.Resource("clusterroles"):                {},
+	apisstorage.Resource("csistoragecapacities"): {},
+}
+
+func GetTableConvertor(gr schema.GroupResource) rest.TableConvertor {
+	if !resourcescheme.LegacyResourceScheme.IsGroupRegistered(gr.Group) {
+		return printers.NewDefaultTableConvertor(gr)
+	}
+
+	if _, ok := legacyResourcesWithDefaultTableConvertor[gr]; ok {
+		return printers.NewDefaultTableConvertor(gr)
+	}
+
+	return printerstorage.TableConvertor{TableGenerator: printers.NewClusterTableGenerator().With(printersinternal.AddHandlers)}
 }

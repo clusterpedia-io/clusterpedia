@@ -13,7 +13,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/legacyresource"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
@@ -30,7 +29,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		responsewriters.ErrorNegotiated(
 			apierrors.NewInternalError(fmt.Errorf("no RequestInfo found in the context")),
-			legacyresource.Codecs, schema.GroupVersion{}, w, req,
+			Codecs, schema.GroupVersion{}, w, req,
 		)
 		return
 	}
@@ -55,7 +54,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		klog.ErrorS(err, "Failed to handle resource request", "resource", gvr)
 		responsewriters.ErrorNegotiated(
 			apierrors.NewInternalError(err),
-			legacyresource.Codecs, gvr.GroupVersion(), w, req,
+			Codecs, gvr.GroupVersion(), w, req,
 		)
 		return
 	}
@@ -87,7 +86,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	default:
 		responsewriters.ErrorNegotiated(
 			apierrors.NewMethodNotSupported(gvr.GroupResource(), requestInfo.Verb),
-			legacyresource.Codecs, gvr.GroupVersion(), w, req,
+			Codecs, gvr.GroupVersion(), w, req,
 		)
 	}
 
