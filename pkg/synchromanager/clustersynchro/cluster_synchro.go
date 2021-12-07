@@ -24,7 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	clustersv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha1"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/legacyresource"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 )
@@ -43,8 +44,8 @@ type ClusterSynchro struct {
 	clusterclient        kubernetes.Interface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
 
-	storage                     storage.StorageFactory
-	legacyResourceStorageConfig *legacyresource.StorageConfigFactory
+	storage               storage.StorageFactory
+	resourceStorageConfig *storageconfig.StorageConfigFactory
 
 	closeOnce sync.Once
 	closer    chan struct{}
@@ -95,10 +96,10 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		ClusterStatusUpdater: updater,
 		storage:              storage,
 
-		restmapper:                  mapper,
-		clusterclient:               clusterclient,
-		listerWatcherFactory:        informer.NewDynamicListWatcherFactory(dynamaicclient),
-		legacyResourceStorageConfig: legacyresource.NewStorageConfigFactory(runtime.ContentTypeJSON),
+		restmapper:            mapper,
+		clusterclient:         clusterclient,
+		listerWatcherFactory:  informer.NewDynamicListWatcherFactory(dynamaicclient),
+		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
 
 		status: make(chan struct{}),
 		closer: make(chan struct{}),
@@ -175,84 +176,107 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 				continue
 			}
 
-			// get cluster pedia supported versions
-			gvs := legacyresource.Scheme.VersionsForGroupKind(gvks[0].GroupKind())
-			if len(gvs) == 0 {
-				// TODO(iceber): support custome resource
-				klog.InfoS("Skip resource sync, not support to sync custom resource", "cluster", s.name, "resource", gr)
-				continue
+			var structuredObject bool
+			versions := resources.Versions
+			legacyResourceVersions := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gvks[0].GroupKind())
+			switch {
+			case len(legacyResourceVersions) != 0:
+				// kube resource
+				var preferredVersion schema.GroupVersion
 
-				/*
-					// custome resource
-					for _, version := range resources.Versions {
-						gvrs[schema.GroupVersionResource{resources.Group, version, resource}] = struct{}{}
+				// gvks is cluster supported versions
+				// gvs is cluster pedia supported versions
+				for _, gvk := range gvks {
+					for _, gv := range legacyResourceVersions {
+						if gvk.GroupVersion() == gv {
+							preferredVersion = gv
+						}
 					}
-
-					resourceStatuses[gr] = ResourceInfo{
-						Kind:       mapper.GroupVersionKind.Kind,
-						Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
-					}
+				}
+				// if not get preferred version, skip resource
+				if preferredVersion.Empty() {
+					klog.ErrorS(errors.New("Not found preferred version"), "Skip resource sync", "cluster", s.name, "resource", gr)
 					continue
-				*/
-			}
+				}
 
-			// kube resource
-			var preferredVersion schema.GroupVersion
-
-			// gvks is cluster supported versions
-			// gvs is cluster pedia supported versions
-			for _, gvk := range gvks {
-				for _, gv := range gvs {
-					if gvk.GroupVersion() == gv {
-						preferredVersion = gv
+				structuredObject = true
+				versions = append(versions, preferredVersion.Version)
+			case len(versions) != 0:
+				// custom resource
+				// filter resource version using cluster supported resource versions
+				var filtered []string
+				for _, version := range versions {
+					for _, gvk := range gvks {
+						if gvk.Version == version {
+							filtered = append(filtered, version)
+						}
 					}
 				}
-			}
-
-			// if not get preferred version, skip resource
-			if preferredVersion.Empty() {
-				klog.ErrorS(errors.New("Not found preferred version"), "Skip resource sync", "cluster", s.name, "resource", gr)
-				continue
-			}
-
-			syncResource := preferredVersion.WithResource(resource)
-			storageConfig, err := s.legacyResourceStorageConfig.NewConfig(syncResource)
-			if err != nil {
-				// TODO(iceber): set storage error ?
-				klog.ErrorS(err, "Failed to create resource storage config", "cluster", s.name, "resource", syncResource)
-				continue
-			}
-			storageResource := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
-			if _, ok := configs[storageResource]; !ok {
-				config := &syncConfig{
-					syncResource:    syncResource,
-					storageResource: storageResource,
-					storageConfig:   storageConfig,
+				if len(filtered) == 0 {
+					// no supported version found for the cluster
+					// TODO(iceber): add warn log
+					continue
 				}
 
-				if syncResource != storageResource {
-					config.convertor = legacyresource.Scheme
+				versions = filtered
+			default:
+				// For custom resources, if the version to be synchronized is not specified,
+				// then the first three versions available from the cluster are used
+				for _, gvk := range gvks {
+					versions = append(versions, gvk.Version)
 				}
-				configs[storageResource] = config
+
+				if len(versions) > 3 {
+					versions = versions[:3]
+				}
 			}
 
 			info := &clustersv1alpha1.ClusterResourceStatus{
 				Kind:       mapper.GroupVersionKind.Kind,
 				Resource:   gr.Resource,
 				Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
-				SyncConditions: []clustersv1alpha1.ClusterResourceSyncCondition{
-					{
-						Version:        preferredVersion.Version,
-						StorageVersion: storageConfig.StorageVersion.Version,
-						Status:         clustersv1alpha1.SyncStatusPending,
-						Reason:         "SynchroCreating",
-					},
-				},
 			}
-			if gr != storageConfig.StorageGroupResource {
-				storageResource := storageConfig.StorageGroupResource.String()
-				info.SyncConditions[0].StorageResource = &storageResource
+
+			for _, version := range versions {
+				syncResource := gr.WithVersion(version)
+				storageConfig, err := s.resourceStorageConfig.NewConfig(syncResource)
+				if err != nil {
+					// TODO(iceber): set storage error ?
+					klog.ErrorS(err, "Failed to create resource storage config", "cluster", s.name, "resource", syncResource)
+					continue
+				}
+
+				storageResource := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
+				if _, ok := configs[storageResource]; !ok {
+					config := &syncConfig{
+						syncResource:    syncResource,
+						storageResource: storageResource,
+						storageConfig:   storageConfig,
+					}
+
+					if syncResource != storageResource {
+						if structuredObject {
+							config.convertor = resourcescheme.LegacyResourceScheme
+						} else {
+							config.convertor = resourcescheme.CustomResourceScheme
+						}
+					}
+					configs[storageResource] = config
+				}
+
+				syncCondition := clustersv1alpha1.ClusterResourceSyncCondition{
+					Version:        version,
+					StorageVersion: storageConfig.StorageVersion.Version,
+					Status:         clustersv1alpha1.SyncStatusPending,
+					Reason:         "SynchroCreating",
+				}
+				if gr != storageConfig.StorageGroupResource {
+					storageResource := storageConfig.StorageGroupResource.String()
+					syncCondition.StorageResource = &storageResource
+				}
+				info.SyncConditions = append(info.SyncConditions, syncCondition)
 			}
+
 			resourceStatuses[gr] = info
 		}
 	}
