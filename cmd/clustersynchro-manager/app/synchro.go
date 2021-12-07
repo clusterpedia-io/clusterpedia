@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -74,15 +75,14 @@ func Run(ctx context.Context, c *config.Config) error {
 	if err != nil {
 		return err
 	}
-	id = "local"
-	//id += "_" + string(uuid.NewUUID())
+	id += "_" + string(uuid.NewUUID())
 
 	rl, err := resourcelock.NewFromKubeconfig(
 		c.LeaderElection.ResourceLock,
 		c.LeaderElection.ResourceNamespace,
-		id,
+		c.LeaderElection.ResourceName,
 		resourcelock.ResourceLockConfig{
-			Identity:      c.LeaderElection.ResourceName,
+			Identity:      id,
 			EventRecorder: c.EventRecorder,
 		},
 		c.Kubeconfig,
