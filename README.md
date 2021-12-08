@@ -6,10 +6,13 @@
 <p align="center">
   <b>The Encyclopedia of Kubernetes clusters</b>
 </p>
-This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources.  Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
+This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources. 
+
+Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
 
 
 > The capability of Clusterpedia is not only to search for and view but also simply control resources in the future, just like Wikipedia that supports for editing entries.
+
 
 This document introduces the following topics about Clusterpedia:
 - [Architecture](#design)
@@ -18,7 +21,7 @@ This document introduces the following topics about Clusterpedia:
 - [Synchronize resources](#get)
 - [Search for resources](#view)
 - [Roadmap](#roadmap)
-- [Contact us](#contact)
+- [Contact](#contact)
 # Architecture <span id="design"></span>
 The architecture diagram of Clusterpedia is as follows:
 <div align="center"><img src="./docs/images/arch.png" style="width:900px;" /></div>
@@ -45,7 +48,7 @@ Clusterpedia also provides a default storage layer that can connect with MySQL a
 - [x] Compatible with synchronizing different versions of cluster resources, not restricted by the version of master cluster
 - [x] High performance and low memory consumption for resource synchronization
 - [x] Automatically start/stop resource synchronization according to the current health status of the cluster
--[ ] Support for plug-in storage layer. You can use other storage components to customize the storage layer according to your needs.
+- [ ] Support for plug-in storage layer. You can use other storage components to customize the storage layer according to your needs.
 - [x] High availability
 > The above unimplemented features are already in the [Roadmap](#roadmap)
 
@@ -88,7 +91,7 @@ $ cd ./deploy/internalstorage
 $ sed "s|__NODE_NAME__|$STORAGE_NODE_NAME|g" \
 ./templates/clusterpedia_internalstorage_local_pv.yaml > clusterpedia_internalstorage_local_pv.yaml
 
-$ # Log in to a node host: mkdir -p /var/local/clusterpedia/internalstorage/mysql
+$ # Log in to the selected node host: mkdir -p /var/local/clusterpedia/internalstorage/mysql
 
 $ # deploy mysql
 $ kubectl apply -f .
@@ -404,14 +407,14 @@ Due to the limitation of kubectl, you cannot use complex queries in kubectl and 
 ## Perform more complex control over resources<span id="complicated"></span>
 In addition to resource search, similar to Wikipedia, Clusterpedia should also have simple capability of resource control, such as watch, create, delete, update, and more.
 
-In fact, a write action is implemented by double write + response.
+In fact, a write action is implemented by double write + warning response.
 
 **We will discuss this feature and decide whether we should implement it according to the community needs**
 
 ## Automatic discovery and resource synchronization<span id="discovery"></span>
 The resource used to represent the cluster in Clusterpedia is called *PediaCluster*, not a simple Cluster.
 
-**This is because Clusterpedia was originally designed to build on the existing multi-cluster management platform. **
+**This is because Clusterpedia was originally designed to build on the existing multi-cluster management platform.**
 
 In order to keep the original intention, the first issue is that Clusterpedia should not conflict with the resources in the existing multi-cluster platform. Cluster is a very common resource name that represents a cluster.
 
@@ -429,7 +432,7 @@ Currently, it is only a tentative roadmap and the specific schedule depends on t
 **About some features not added to Roadmap, you can discuss in [issues](https://github.com/clusterpedia-io/clusterpedia/issues).**
 
 ## Q4 2021
-* [Support for cropping field](https://github.com/clusterpedia-io/clusterpedia/issues/4)
+* [Support for pruning field](https://github.com/clusterpedia-io/clusterpedia/issues/4)
 * Synchronize custom resources
 
 ## Q1 2022
@@ -448,7 +451,6 @@ Currently, it is only a tentative roadmap and the specific schedule depends on t
 ## Multi-cluster network connectivity
 Clusterpedia does not actually solve the problem of network connectivity in a multi-cluster environment. You can use tools such as [tower](https://github.com/kubesphere/tower) to connect and access sub-clusters, or use [submariner](https://github.com/submariner-io/submariner) or [skupper](https://github.com/skupperproject/skupper) to solve cross-cluster network problems.
 
-# Contact us <span id="contact"></span>
+# Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
-* [Talk with Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-zokhiijn-geVyvgFaAxsSZGOS_YgZ6g)
-* [Join the Clusterpedia community](https://github.com/clusterpedia-io/clusterpedia)
+* [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-zokhiijn-geVyvgFaAxsSZGOS_YgZ6g)
