@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/endpoints/handlers"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
-	kuberequest "k8s.io/apiserver/pkg/endpoints/request"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
@@ -25,7 +25,7 @@ type ResourceHandler struct {
 }
 
 func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	requestInfo, ok := kuberequest.RequestInfoFrom(req.Context())
+	requestInfo, ok := genericrequest.RequestInfoFrom(req.Context())
 	if !ok {
 		responsewriters.ErrorNegotiated(
 			apierrors.NewInternalError(fmt.Errorf("no RequestInfo found in the context")),
