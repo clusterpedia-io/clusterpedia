@@ -24,7 +24,6 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		panic("name is required")
 	}
 
-	// storage: NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc),
 	informer := &resourceVersionInformer{
 		name:          name,
 		listerWatcher: lw,
@@ -46,7 +45,7 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 			EmitDeltaTypeReplaced: true,
 		}),
 	}
-	informer.controller = NewNamedController(informer.name, config)
+	informer.controller = NewNamedController(informer.name, informer.storage, config)
 	return informer
 }
 

@@ -1,8 +1,11 @@
 package informer
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 	"time"
+	"unsafe"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -16,12 +19,20 @@ type controller struct {
 	reflectorMutex sync.RWMutex
 	reflector      *cache.Reflector
 	queue          cache.Queue
+
+	resourceVersionGetter ResourceVersionGetter
 }
 
-func NewNamedController(name string, config *cache.Config) cache.Controller {
+type ResourceVersionGetter interface {
+	LastResourceVersion() string
+}
+
+func NewNamedController(name string, getter ResourceVersionGetter, config *cache.Config) cache.Controller {
 	return &controller{
 		name:   name,
 		config: *config,
+
+		resourceVersionGetter: getter,
 	}
 }
 
@@ -31,25 +42,46 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 		<-stopCh
 		c.config.Queue.Close()
 	}()
-	r := cache.NewNamedReflector(
+	reflector := cache.NewNamedReflector(
 		c.name,
 		c.config.ListerWatcher,
 		c.config.ObjectType,
 		c.config.Queue,
 		c.config.FullResyncPeriod,
 	)
-	r.ShouldResync = c.config.ShouldResync
-	r.WatchListPageSize = c.config.WatchListPageSize
+	reflector.ShouldResync = c.config.ShouldResync
+	reflector.WatchListPageSize = c.config.WatchListPageSize
+
+	c.setLastResourceVersionForReflector(reflector)
 
 	c.reflectorMutex.Lock()
-	c.reflector = r
+	c.reflector = reflector
 	c.reflectorMutex.Unlock()
 
 	var wg wait.Group
-	wg.StartWithChannel(stopCh, r.Run)
+	wg.StartWithChannel(stopCh, reflector.Run)
 
 	wait.Until(c.processLoop, time.Second, stopCh)
 	wg.Wait()
+}
+
+func (c *controller) setLastResourceVersionForReflector(reflector *cache.Reflector) {
+	if c.resourceVersionGetter == nil {
+		return
+	}
+
+	rv := c.resourceVersionGetter.LastResourceVersion()
+	if rv == "" || rv == "0" {
+		return
+	}
+	rvValue := reflect.ValueOf(rv)
+
+	field := reflect.ValueOf(reflector).Elem().FieldByName("lastSyncResourceVersion")
+	value := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+	if value.Kind() != rvValue.Kind() {
+		panic(fmt.Sprintf("reflector.lastSyncResourceVersion's value kind is %v", value.Kind()))
+	}
+	value.Set(rvValue)
 }
 
 func (c *controller) processLoop() {
