@@ -1,40 +1,63 @@
-## Clusterpedia
-Clusterpedia，名字借鉴自 Wikipedia，同样也展现了 Clusterpedia 的核心理念 —— 多集群的百科全书。
+<span id="top"></span>
+<h1 align="center">
+  Clusterpedia
+</h1>
 
-通过聚合多集群资源，在兼容 Kubernetes OpenAPI 的基础上额外提供了更加强大的检索功能，让用户更快更方便的在多集群中获取到想要的任何资源。
-> 当然 Clusterpedia 的能力并不仅仅只是检索查看，未来还会支持对资源的简单控制，就像 wiki 同样支持编辑词条一样
+<p align="center">
+  <b>The Encyclopedia of Kubernetes clusters</b>
+</p>
+This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources. 
 
-### 架构设计
+Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
+
+
+> The capability of Clusterpedia is not only to search for and view but also simply control resources in the future, just like Wikipedia that supports for editing entries.
+
+
+This document introduces the following topics about Clusterpedia:
+- [Architecture](#design)
+- [Features](#features)
+- [Deployment](#deployment)
+- [Synchronize resources](#get)
+- [Search for resources](#view)
+- [Roadmap](#roadmap)
+- [Contact](#contact)
+# Architecture <span id="design"></span>
+The architecture diagram of Clusterpedia is as follows:
 <div align="center"><img src="./docs/images/arch.png" style="width:900px;" /></div>
-Clusterpedia 在架构上分为四个部分：
+The architecture consists of four parts:
 
-* **Clusterpedia APIServer**：以 Aggregated API 的方式注册到 Kube APIServer，通过统一的入口来提供服务。
-* **ClusterSynchro Manager**：管理用于同步集群资源的 Cluster Synchro。
-* **Storage Layer (存储层)**：用来连接操作具体的存储组件，然后通过存储层接口注册到 Clusterpedia APIServer 和 ClusterSynchro Manager 中。
-* **存储组件**：具体的存储设施，例如 mysql， postgres，redis 或者其他图数据库。
+* **Clusterpedia APIServer**: Register to Kube APIServer by the means of Aggregated API and provide services through a unified entrance
+* **ClusterSynchro Manager**: Manage the Cluster Synchro that is used to synchronize cluster resources
+* **Storage Layer**: Connect with a specific storage component and then register to Clusterpedia APIServer and ClusterSynchro Manager via a storage interface
+* **Storage component**: A specific storage facility such as MySQL, postgres, redis or other graph databases
 
-另外，Clusterpedia 会使用 *PediaCluster* 这个自定义资源来实现集群认证和资源收集配置
+In addition, Clusterpedia will use the custom resource *PediaCluster* to implement cluster authentication and synchronize the resource configuration.
 
-Clusterpedia 还提供了可以接入 mysql 和 postgres 的默认存储层。
-> Clusterpedia 并不关心用户所使用的具体存储设置是什么，
-> 用户可以根据自己的需求来选择或者实现存储层，然后将存储层以插件的形式注册到 Clusterpedia 中来使用
+Clusterpedia also provides a default storage layer that can connect with MySQL and postgres.
+> Clusterpedia does not care about the specific storage settings used by users,
+> you can choose or implement the storage layer according to your own needs and then register the storage layer in Clusterpedia as a plug-in
 
-### 特性和功能
-- [x] 支持复杂的检索条件，过滤条件，排序，分页等等
-- [ ] 支持查询资源时请求附带关系资源
-- [x] 统一主集群和多集群资源检索入口
-- [x] 兼容 kubernetes OpenAPI, 可以直接使用 kubectl 进行多集群检索, 而无需第三方插件或者工具
-- [x] 兼容收集不同版本的集群资源，不受主集群版本约束，
-- [x] 资源收集高性能，低内存
-- [x] 根据集群当前的健康状态，自动启停资源收集
-- [ ] 插件化存储层，用户可以根据自己需求使用其他存储组件来自定义存储层
-- [x] 高可用
-> 部分未实现的功能，已经在 Roadmap 中
 
-## 部署
-当前 clusterpedia 还处于非常早期的阶段，在项目流程化上还不够完善。
+[Go to top](#top)
+# Features<span id="features"></span>
+- [x] Support for complex search, filters, sorting, paging, and more
+- [ ] Support for requesting relevant resources when you query resources
+- [x] Unify the search entry for master clusters and multi-cluster resources
+- [x] Compatible with kubernetes OpenAPI, where you can directly use kubectl for multi-cluster search without any third-party plug-ins or tools
+- [x] Compatible with synchronizing different versions of cluster resources, not restricted by the version of master cluster
+- [x] High performance and low memory consumption for resource synchronization
+- [x] Automatically start/stop resource synchronization according to the current health status of the cluster
+- [ ] Support for plug-in storage layer. You can use other storage components to customize the storage layer according to your needs.
+- [x] High availability
+> The above unimplemented features are already in the [Roadmap](#roadmap)
 
-部署时可能还需要对 yaml 进行一点点手动修改
+
+[Go to top](#top)
+# Deployment<span id="deployment"></span>
+Clusterpedia is in a very early stage and the deployment process is not good enough currently.
+
+Therefore, you need to manually modify the yaml file in the process of deployment. The folder structure after cloning to your local machine is as follows:
 ```sh
 $ git clone https://github.com/clusterpedia-io/clusterpedia.git
 $ cd clusterpedia
@@ -52,25 +75,25 @@ drwxr-xr-x   8 icebergu  staff   256B 12  2 10:44 hack
 drwxr-xr-x  10 icebergu  staff   320B 12  2 10:44 pkg
 drwxr-xr-x  13 icebergu  staff   416B 12  2 10:44 vendor
 ```
-部署时分为三个步骤:
-* 默认的存储组件 mysql 8.0
-* 部署 crd yaml
-* 部署 clusterpedia
+The deployment process is divided into three steps:
+1. Deploy a storage component that is MySQL 8.0 by default
+2. Deploy crd yaml
+3. Deploy Clusterpedia
 
-### 部署存储组件
-clusterpedia 默认提供了 mysql 8.0 作为存储组件，并且使用 local pv 的方式来存储数据。
+## Deploy a storage component
+By default, Clusterpedia provides MySQL 8.0 as a storage component and uses local pv to store data.
 
-在部署 mysql 时，还需要手动指定一下 local pv 所在的节点，并且在所在节点上创建 */var/local/clusterpedia/internalstorage/mysql* 目录
-> 用户也可以选择使用自己的存储组件，默认存储层支持 mysql 和 postgres
+When deploying MySQL, you need to manually specify the node where the local pv is located and create the */var/local/clusterpedia/internalstorage/mysql* directory on the node.  
+> You can also choose to use your own storage components. The storage layer supports MySQL and postgres by default.
 ```sh
-$ export STORAGE_NODE_NAME=<所挑选的节点名称>
+$ export STORAGE_NODE_NAME=<selected node name>
 $ cd ./deploy/internalstorage
 $ sed "s|__NODE_NAME__|$STORAGE_NODE_NAME|g" \
-    ./templates/clusterpedia_internalstorage_local_pv.yaml > clusterpedia_internalstorage_local_pv.yaml
+./templates/clusterpedia_internalstorage_local_pv.yaml > clusterpedia_internalstorage_local_pv.yaml
 
-$ # 登录节点主机： mkdir -p /var/local/clusterpedia/internalstorage/mysql
+$ # Log in to the selected node host: mkdir -p /var/local/clusterpedia/internalstorage/mysql
 
-$ # 部署 mysql
+$ # deploy mysql
 $ kubectl apply -f .
 namespace/clusterpedia-system created
 service/clusterpedia-internalstorage-mysql created
@@ -79,18 +102,18 @@ secret/internalstorage-mysql created
 deployment.apps/clusterpedia-internalstorage-mysql created
 persistentvolume/clusterpedia-internalstorage-mysql created
 
-$ # 为方便后续操作，跳回到项目根目录
+$ # To provide convenience for subsequent operations, go back to the root directory
 $ cd ../..
 ```
-### 部署 CRD
-crd 的部署就很简单，直接 apply yaml 即可
+## Deploy CRD
+Run the following command to apply the yaml file and deploy CRD:
 ```sh
 $ kubectl apply -f ./deploy/crds
 customresourcedefinition.apiextensions.k8s.io/pediaclusters.clusters.clusterpedia.io created
 ```
-### 部署 clusterpedia
-部署 clusterpedia 同样不需要任何修改，直接 apply
-> 如果选择连接自己的数据库，需要修改存储层配置 `./deploy/clusterpedia_internalstorage_configmap.yaml`
+## Deploy Clusterpedia
+Run the following command to apply the yaml file and deploy Clusterpedia:  
+> If you choose to connect with your own database, you need to modify the storage layer configuration `./deploy/clusterpedia_internalstorage_configmap.yaml`
 ```sh
 $ kubectl apply -f ./deploy
 piservice.apiregistration.k8s.io/v1alpha1.pedia.clusterpedia.io created
@@ -104,7 +127,7 @@ deployment.apps/clusterpedia-clustersynchro-manager created
 configmap/clusterpedia-internalstorage created
 namespace/clusterpedia-system unchanged
 ```
-当所有 pod 都起来后就可以开始收集检索集群资源了
+When all pods are running, you can run the following command to synchronize and search for cluster resources:
 ```sh
 $ kubectl -n clusterpedia-system get pods
 NAME                                                   READY   STATUS    RESTARTS   AGE
@@ -112,13 +135,13 @@ clusterpedia-apiserver-55ff787656-bwfqb                1/1     Running   0      
 clusterpedia-clustersynchro-manager-5f55dc5887-x26bg   1/1     Running   0          35s
 clusterpedia-internalstorage-mysql-6ffbc5f4c8-kxnh7    1/1     Running   0          2m30s
 ```
-
-## 集群资源收集
-部署 clusterpedia crds 后，我们可以通过 kubectl 来操作 *PediaCluster* 资源
+[Go to top](#top)
+# Synchronize cluster resources<span id="get"></span>
+After deploying clusterpedia crds, you can use kubectl to operate *PediaCluster* resources.
 ```sh
 $ kubectl get pediaclusters
 ```
-在 examples 目录下，可以看到 *PediaCluster* 的示例
+In the examples directory, you can check examples of *PediaCluster*:
 ```yaml
 apiVersion: clusters.clusterpedia.io/v1alpha1
 kind: PediaCluster
@@ -138,36 +161,35 @@ spec:
     resources:
      - pods
 ```
-*PediaCluster* 在配置上可以分成两部分
-* **集群认证**
-* **指定资源收集 `.spec.resources`**
-### 集群认证
-`caData`, `tokenData`, `certData`, `keyData` 字段可以用于集群的验证
-> 当前暂时不支持从 ConfigMap 或者 Secret 中获取验证相关的信息，
-> 不过已经在 Roadmap 中了
+The configuration of *PediaCluster* can be divided into two parts:
+* **Cluster authentication**
+* **Synchronize a specific resource `.spec.resources`**
+## Cluster authentication
+The fields of `caData`, `tokenData`, `certData`, and `keyData` can be used for cluster verification.
+> Currently it does not support for getting the relevant verification information from ConfigMap or Secret.
+> However, the information is already in the [Roadmap](#roadmap).
 
-在设置验证字段时，注意要使用 base64 后的字符串
+When setting the verification field, you shall use the strings encoded by base64.
 
-在 `./examples` 目录下提供了生成用于子集群的 rbac yaml `clusterpedia_synchro_rbac.yaml`，可以用来方便的获取子集群的权限 token.
+The `. /examples` directory provides the rbac yaml `clusterpedia_synchro_rbac.yaml`, which can be used to easily obtain the permission token for a subcluster.
 
-在子集群中部署该 yaml, 然后获取对应的 token 和 ca 证书.
+Deploy the yaml in the subcluster and get the proper token and CA certificate.
 
 ```sh
-$ # 切换到子集群创建 rbac 相关资源
+$ # Switch to the sub-cluster to create rbac related resources
 $ kubectl apply -f examples/clusterpedia_synchro_rbac.yaml
 $ SYNCHRO_TOKEN=$(kubectl get secret $(kubectl get serviceaccount clusterpedia-synchro -o jsonpath='{.secrets[0].name}') -o jsonpath='{.data.token}')
 $ SYNCHRO_CA=$(kubectl get secret $(kubectl get serviceaccount clusterpedia-synchro -o jsonpath='{.secrets[0].name}') -o jsonpath='{.data.ca\.crt}')
 ```
-复制 *./examples/pediacluster.yaml*, 并修改 `.spec.apiserverURL` 和 `.metadata.name` 字段，
-并且将 `$SYNCHRO_TOKEN` 和 $SYNCHRO_CA 填写到 `tokenData` 和 `caData` 中。
+Copy *./examples/pediacluster.yaml*, modify `.spec.apiserverURL` and `.metadata.name` fields, and fill `$SYNCHRO_TOKEN` and `$SYNCHRO_CA` into `tokenData` and `caData`.
 ```sh
 $ kubectl apply -f cluster-1.yaml
 pediacluster.clusters.clusterpedia.io/cluster-1 created
 ```
-### 资源收集
-可以通过设置 `spec.resources` 字段的 `group` 和 group 下的 `resources` 来进行指定收集的资源。
+## Synchronize resources
+You can specify the synchronized resources by setting `group` in the `spec.resources` field and the `resources` section under `group`.
 
-在 status 中我们也可以看到资源的收集状态
+You can also view the resource synchronization status in the `status` section:
 ```sh
 status:
   conditions:
@@ -199,20 +221,18 @@ status:
         version: v1
   version: v1.22.2
 ```
-
-## 资源检索
-配置好我们需要收集的资源后，我们就可以进行重头戏了 —— 集群检索
-
-clusterpedia 支持两种资源检索:
-* 兼容 Kubernetes OpenAPI 的资源检索
-* `集合资源(Collection Resource)`的检索
+[Go to top](#top)
+# Search for resources<span id="view"></span>
+After configuring the resources to be synchronized, you can search for the cluster resources. Clusterpedia supports two types of resource search:
+* Search for resources that are compatible with Kubernetes OpenAPI
+* Search for `Collection Resource`
 ```sh
 $ kubectl api-resources | grep pedia.clusterpedia.io
 collectionresources     pedia.clusterpedia.io/v1alpha1  false   CollectionResource
 resources               pedia.clusterpedia.io/v1alpha1  false   Resources
 ```
 
-为了方便我们更好的使用 kubectl 来进行检索，我们可以先通过 `make gen-clusterconfig` 来为子集群创建用于检索的'快捷方式'
+In order to facilitate and well use kubectl for searching, you'd better create a 'shortcut' for searching the sub-cluster through `make gen-clusterconfig`:
 ```sh
 $ make gen-clusterconfigs
 ./hack/gen-clusterconfigs.sh
@@ -226,21 +246,21 @@ Current Cluster: kubernetes
 Cluster "clusterpedia" set.
 Cluster "cluster-1" set.
 ```
-使用 `kubectl config get-clusters` 可以查看当前支持的集群。
+Use the `kubectl config get-clusters` command to view the currently supported clusters.
 
-其中 clusterpedia 是一个特殊的 cluster，用于多集群检索，以 `kubectl --cluster clusterpedia` 的方式来检索多个集群的资源
+In this case, Clusterpedia is a special cluster used to search for multi-clusters by using `kubectl --cluster clusterpedia`.
 
-### 多集群资源检索
-我们先看一下我们都收集了哪些资源，只有被收集的资源才可以进行检索
+## Multi-cluster resource search
+First check which resources are synchronized. You cannot find a resource until it is properly synchronized:
 ```sh
 $ kubectl --cluster clusterpedia api-resources
 NAME          SHORTNAMES   APIVERSION   NAMESPACED   KIND
 pods          po           v1           true         Pod
 deployments   deploy       apps/v1      true         Deployment
 ```
-可以看到当前收集并支持 pods 和 deployments.apps 两种资源
+You can check the currently synchronized resources including pods and deployments.apps.
 
-**查看所有集群的 `kube-system` 命名空间下的 deployments**
+**Get deployments in the `kube-system` namespace of all clusters:**
 ```sh
 $ kubectl --cluster clusterpedia get deployments -n kube-system
 CLUSTER     NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
@@ -248,7 +268,7 @@ cluster-1   coredns                   2/2     2            2           68d
 cluster-2   calico-kube-controllers   1/1     1            1           64d
 cluster-2   coredns                   2/2     2            2           64d
 ```
-**查看所有集群的 kube-system, default 命名空间下的deployments**
+**Get deployments in the two namespaces `kube-system` and `default` of all clusters:**
 ```sh
 $ kubectl --cluster clusterpedia get deployments -A -l "search.clusterpedia.io/namespaces in (kube-system, default)"
 NAMESPACE     CLUSTER     NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
@@ -266,10 +286,10 @@ default       cluster-2   openldap                  1/1     1            1      
 default       cluster-2   phpldapadmin              1/1     1            1           41d
 ```
 
-**查看 cluster-1, cluster-2 两个集群下的 kube-system, default 命名空间下中的 deployments**
+**Get deployments in the `kube-system` and `default` namespaces in cluster-1 and cluster-2:**
 ```sh
 $ kubectl --cluster clusterpedia get deployments -A -l "search.clusterpedia.io/clusters in (cluster-1, cluster-2),\
-        search.clusterpedia.io/namespaces in (kube-system,default)"
+search.clusterpedia.io/namespaces in (kube-system,default)"
 NAMESPACE     CLUSTER     NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
 kube-system   cluster-1   coredns                   2/2     2            2           68d
 kube-system   cluster-2   calico-kube-controllers   1/1     1            1           64d
@@ -285,11 +305,11 @@ default       cluster-2   openldap                  1/1     1            1      
 default       cluster-2   phpldapadmin              1/1     1            1           41d
 ```
 
-**查看 cluster-1, cluster-2 两个集群下的 kube-system, default 命名空间下中的 deployments，并根据资源的名字排序**
+**Get deployments in the `kube-system` and `default` namespaces in cluster-1 and cluster-2:**
 ```sh
 $ kubectl --cluster clusterpedia get deployments -A -l "search.clusterpedia.io/clusters in (cluster-1, cluster-2),\
-        search.clusterpedia.io/namespaces in (kube-system,default),\
-        search.clusterpedia.io/orderby=name"
+search.clusterpedia.io/namespaces in (kube-system,default),\
+search.clusterpedia.io/orderby=name"
 NAMESPACE     CLUSTER     NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
 kube-system   cluster-2   calico-kube-controllers   1/1     1            1           64d
 kube-system   cluster-1   coredns                   2/2     2            2           68d
@@ -305,9 +325,9 @@ default       cluster-2   nginx-dev                 1/1     1            1      
 default       cluster-2   openldap                  1/1     1            1           41d
 default       cluster-2   phpldapadmin              1/1     1            1           41d
 ```
-
-### 指定集群检索
-**我们如果想要检索指定集群的资源的话，我们可以使用 --cluster 来指定具体的集群名称**
+[Go to top](#top)
+## Search a specific cluster
+**If you want to search a specific cluster for any resource therein, you can add --cluster to specify the cluster name:**
 ```sh
 $ kubectl --cluster cluster-1 get deployments -A
 NAMESPACE                           CLUSTER     NAME                                            READY   UP-TO-DATE   AVAILABLE   AGE
@@ -327,52 +347,52 @@ clusterpedia-system                 cluster-1   clusterpedia-internalstorage-mys
 kube-system                         cluster-1   coredns                                         2/2     2            2           68d
 tigera-operator                     cluster-1   tigera-operator                                 1/1     1            1           68d
 ```
-除了 `search.clusterpedia.io/clusters` 外其余的复杂查询的支持和多集群检索相同
+Except for `search.clusterpedia.io/clusters`, the support for other complex queries is same as that for multi-cluster search.
 
-如果我们要获取一个资源的详情，那么也是需要指定集群才可以
+If you want to learn about the details of a resource, you need to specify which cluster it is:
 ```sh
 $ kubectl --cluster cluster-1 -n kube-system get deployments coredns -o wide
 CLUSTER     NAME      READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES                                                   SELECTOR
 cluster-1   coredns   2/2     2            2           68d   coredns      registry.aliyuncs.com/google_containers/coredns:v1.8.4   k8s-app=kube-dns
 ```
-### 复杂检索
-clusterpedia 支持以下复杂检索：
-* 指定一个或者多个`集群名称`
-* 指定一个或者多个`命名空间`
-* 指定一个或者多个`资源名称`
-* 指定多个字段的`排序`
-* `分页`功能，可以指定 size 和 offset
-* `labels 过滤`
+## Complex search
+Clusterpedia supports for the following complex search:
+* Specify one or more `cluster names`
+* Specify one or more `namespaces`
+* Specify one or more `resource names`
+* Specify how to `sort` multiple fields
+* `Paging` function, by which you can specify its size and offset
+* `filter by labels`
 
-对于字段的排序，实际的效果是根据存储层来决定的。默认存储层支持根据 `cluster`, `name`, `namespace`, `created_at`, `resource_version` 进行正序或者倒序的排序
-### 检索条件的传递方式
-上面实例中，演示了使用 kubectl 来进行检索，而这些复杂的检索条件通过 `label` 来传递的。
-实际上 clusterpedia 还支持直接通过 `url query` 的传递这些检索条件
+The actual effect of field sorting depends on the storage layer. By default, the storage layer supports for sorting according to `cluster`, `name`, `namespace`, `created_at`, and `resource_version` in a normal or reverse order.
+## How search conditions are applied
+The above example demonstrates how you can use kubectl to search for resources. Where, complex search conditions are applied via a `label`. Clusterpedia also supports for using these search conditions directly through `url query`.
 
-|作用|label key|url query|example|
+|role|label key|url query|example|
 |---|---|---|---|
-|指定资源名字|search.clusterpedia.io/names|names|`?names=pod-1,pod-2`
-|指定命名空间|search.clusterpedia.io/namespaces|namespaces|`?namespaces=kube-system,default`
-|指定集群名称|search.clusterpedia.io/clusters|clusters|`?clusters=cluster-1,cluster-2`
-|指定排序字段|search.clusterpedia.io/orderby|orderby|`?orderby=name desc,namespace`
-|指定 size |search.clusterpedia.io/size|size|`?size=100`
-|指定 offset |search.clsuterpedia.io/offset|offset|`?offset=10`
+|Specified resource name|search.clusterpedia.io/names|names|`?names=pod-1,pod-2`
+|Specified namespace|search.clusterpedia.io/namespaces|namespaces|`?namespaces=kube-system,default`
+|Specified cluster name|search.clusterpedia.io/clusters|clusters|`?clusters=cluster-1,cluster-2`
+|Sort by specified fileds|search.clusterpedia.io/orderby|orderby|`?orderby=name desc,namespace`
+|Specified size |search.clusterpedia.io/size|size|`?size=100`
+|Specified offset |search.clsuterpedia.io/offset|offset|`?offset=10`
 
-`label key` 的操作符支持 ==, =, !=, in, not in 对于 size 这个条件，实际上 kubectl 可以通过 `--chunk-size` 来指定，而不需要通过 label key
+The operators of `label key` include ==, =, !=, in, not in. For the `size` condition, kubectl can specify a size by `--chunk-size` instead of the `label key`.
 
-### 集合资源(Collection Resource)
-在 clusterpedia 还有对资源更加高级的聚合，使用 `Collection Resource` 可以一次性获取到一组不同类型的资源
+[Go to top](#top)
+## Collection Resource
+Clusterpedia can also perform more advanced aggregation of resources. For example, you can use `Collection Resource` to get a set of different resources at once.
 
-可以先查看一下当前 clusterpedia 支持哪些 `Collection Resource`
+Let's first check which `Collection Resource` currently Clusterpedia supports:
 ```sh
 $ kubectl get collectionresources
 NAME        RESOURCES
 workloads   deployments.apps,daemonsets.apps,statefulsets.apps
 ```
 
-通过获取 workloads 便可获取到一组 deployment, daemonset, statefulset 聚合在一起的资源，而且 `Collection Resource` 同样支持所有的复杂查询
+By getting workloads, you can get a set of resources aggregated by deployment, daemonset, and statefulset, and `Collection Resource` also supports for all complex queries.
 
-**kubectl get collectionresources workloads 会默认获取所有集群下所有命名空间的相应资源**
+**`kubectl get collectionresources workloads` will get the corresponding resources of all namespaces in all clusters by default:**
 ```sh
 $ kubectl get collectionresources workloads
 CLUSTER     GROUP   VERSION   KIND         NAMESPACE                     NAME                                          AGE
@@ -380,58 +400,57 @@ cluster-1   apps    v1        DaemonSet    kube-system                   vsphere
 cluster-2   apps    v1        Deployment   kube-system                   calico-kube-controllers                       109d
 cluster-2   apps    v1        Deployment   kube-system                   coredns-coredns                               109d
 ```
-> 在 cluster-1 中增加收集 Daemonset, 输出有删减
+> Add the collection of Daemonset in cluster-1 and some of the above output is cut out
 
-由于 kubectl 的限制所以无法在 kubectl 来使用复杂查询，只能通过 `url query` 的方式来查询
+Due to the limitation of kubectl, you cannot use complex queries in kubectl and can only be queried by `url query`.
 
-## 对资源进行更复杂的操作
-clusterpedia 不仅仅只是用来做资源检索，和 wiki 一样，它也应该具有对资源简单的控制能力，例如 watch, create, delete, update 等操作
+## Perform more complex control over resources<span id="complicated"></span>
+In addition to resource search, similar to Wikipedia, Clusterpedia should also have simple capability of resource control, such as watch, create, delete, update, and more.
 
-对于写操作，实际会采用双写 + 响应 warning 的方式来完成
+In fact, a write action is implemented by double write + warning response.
 
-感兴趣的话可以在 issue 中一起讨论
+**We will discuss this feature and decide whether we should implement it according to the community needs**
 
-## 集群的自动发现和收集
-clusterpedia 中用来表示集群的资源叫做 *PediaCluster*, 而不是简单的 Cluster。
+## Automatic discovery and resource synchronization<span id="discovery"></span>
+The resource used to represent the cluster in Clusterpedia is called *PediaCluster*, not a simple Cluster.
 
-**最主要的原因便是 clusterpedia 设计初衷便是让 clusterpedia 可以建立在已有的多集群管理平台之上。**
+**This is because Clusterpedia was originally designed to build on the existing multi-cluster management platform.**
 
-为了遵循初衷，第一个问题便是不能和已有的多集群平台中的资源冲突， Cluster 便是一个非常通用的代表集群的资源名称。
+In order to keep the original intention, the first issue is that Clusterpedia should not conflict with the resources in the existing multi-cluster platform. Cluster is a very common resource name that represents a cluster.
 
-另外为了更好的去接入到已有的多集群平台上，让已经接入的集群可以自动的完成资源收集，我们需要另外的一个集群发现机制。这个发现机制需要解决以下问题：
-* 能够获取到访问集群的认证信息
-* 可以配置触发 PediaCluster 生命周期的 Condition 条件
-* 设置默认的资源收集策略，以及名称前缀等
+In addition, in order to better connect with the existing multi-cluster platform and enable the connected clusters automatically complete resource synchronization, we need a new mechanism to discover clusters. This discovery mechanism needs to solve the following issues:
+* Get the authentication info to access the cluster
+* Configure conditions that trigger the lifecycle of PediaCluster
+* Set the default policy and prefix name for resource synchronization
 
-这个功能会在 Q1 或者 Q2 中开始详细讨论实现。
-## 当前进展
-clusterpedia 当前处于比较早期的阶段(v0.0.9-alpha)，核心功能刚刚完成，还有很多可以优化的地方，对于这些优化点也都提了对应的 issues，欢迎大家一起讨论
+This feature will be discussed and implemented in detail in Q1 or Q2 2022.
 
-这里简单说一些进入 v0.1.0 版本前的优化点:
-* 从具有 [Server-Side Apply](https://kubernetes.io/docs/reference/using-api/server-side-apply/) 特性的集群中收集到的资源会带有很臃肿的 `managedFields` 字段， clustersynchro manager 模块会增加相应 feature gate，来允许用户在收集时裁减掉这个字段
-* 同样的臃肿字段 annotations 中的 `kubectl.kubernetes.io/last-applied-configuration`，也要允许裁剪这个字段
-* 在指定集群获取资源时，如果集群处于异常状态时，应该在响应中添加 warning 来提醒用户
-* 对 *PediaCluster* 的状态信息有更准确的更新
-* 弱网环境下，资源收集的优化
+[Go to top](#top)
+# Roadmap<span id="roadmap"></span>
+Currently, it is only a tentative roadmap and the specific schedule depends on the community needs.
 
-更多的优化项，大家可以在 issue 中提出新的想法。
-## Roadmap
-当前只是暂定的 Roadmap，具体的排期还要看社区的需求程度
+**About some features not added to Roadmap, you can discuss in [issues](https://github.com/clusterpedia-io/clusterpedia/issues).**
 
-### 2020 Q4
-* 在 2020 的 Q4 阶段会完成上述的优化项，并且完成对自定义资源的收集
-* 详细化资源收集状态
-* 自定义资源的收集
+## Q4 2021
+* [Support for pruning field](https://github.com/clusterpedia-io/clusterpedia/issues/4)
+* Synchronize custom resources
 
-### Q1
-* 支持插件化存储层
-* 实现集群的自动发现和收集
+## Q1 2022
+* Support for the plug-in storage layer
+* Implement [automatic discovery and resource synchronization](#discovery)
 
-### Q2
-* 支持对集群资源更多的控制，例如 watch/create/update/delete 等操作
-* 默认存储层支持自定义 Collection Resource
-* 支持请求附带关系资源
+## Q2 2022
+* Support for [more control over cluster resources](#complicated), such as watch/create/update/delete operations
+* The storage layer supports for custom Collection Resource by default
+* Support for requests with relevant resources
 
-## 使用注意
-### 多集群网络连通性
-clusterpedia 实际并不会解决多集群环境下的网络连通问题，用户可以使用 [tower](https://github.com/kubesphere/tower) 等工具来连接访问子集群，也可以借助 [submariner](https://github.com/submariner-io/submariner) 或者 [skupper](https://github.com/skupperproject/skupper) 来解决跨集群网络问题。
+
+[Go to top](#top)
+
+# Remarks
+## Multi-cluster network connectivity
+Clusterpedia does not actually solve the problem of network connectivity in a multi-cluster environment. You can use tools such as [tower](https://github.com/kubesphere/tower) to connect and access sub-clusters, or use [submariner](https://github.com/submariner-io/submariner) or [skupper](https://github.com/skupperproject/skupper) to solve cross-cluster network problems.
+
+# Contact <span id="contact"></span>
+If you have any question, feel free to reach out to us in the following ways:
+* [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-zokhiijn-geVyvgFaAxsSZGOS_YgZ6g)
