@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
@@ -78,6 +79,9 @@ func (c *Config) Complete() CompletedConfig {
 		version := version.GetKubeVersion()
 		c.GenericConfig.Version = &version
 	}
+	c.GenericConfig.RequestInfoResolver = wrapRequestInfoResolverForNamespace{
+		c.GenericConfig.RequestInfoResolver,
+	}
 	return CompletedConfig{completed}
 }
 
@@ -136,4 +140,20 @@ func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http
 
 	//	handler = filters.WithRequestQuery(handler)
 	return handler
+}
+
+type wrapRequestInfoResolverForNamespace struct {
+	genericrequest.RequestInfoResolver
+}
+
+func (r wrapRequestInfoResolverForNamespace) NewRequestInfo(req *http.Request) (*genericrequest.RequestInfo, error) {
+	info, err := r.RequestInfoResolver.NewRequestInfo(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if info.Resource == "namespaces" {
+		info.Namespace = ""
+	}
+	return info, nil
 }
