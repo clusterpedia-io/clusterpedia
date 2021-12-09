@@ -20,7 +20,9 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ResourceSynchro struct {
@@ -160,15 +162,51 @@ func (synchro *ResourceSynchro) Close() {
 	//klog.V(2).InfoS("resource synchro  is closed", "cluster", synchro.cluster, "resource", synchro.storageResource)
 }
 
+const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
+	if clusterpediafeature.FeatureGate.Enabled(features.PruneManagedFields) {
+		obj.SetManagedFields(nil)
+	}
+
+	if clusterpediafeature.FeatureGate.Enabled(features.PruneLastAppliedConfiguration) {
+		annotations := obj.GetAnnotations()
+		if _, ok := annotations[LastAppliedConfigurationAnnotation]; ok {
+			delete(annotations, LastAppliedConfigurationAnnotation)
+			if len(annotations) == 0 {
+				annotations = nil
+			}
+			obj.SetAnnotations(annotations)
+		}
+	}
+}
+
 func (synchro *ResourceSynchro) OnAdd(obj interface{}) {
+	// `obj` will not be processed in parallel elsewhere,
+	// no deep copy is needed for now.
+	//
 	// robj := obj.(runtime.Object).DeepCopyObject()
 
-	// TODO(iceber): remove ManagedFields ?
+	// Prune object before enqueue.
+	//
+	// There are many solutions for pruning fields, such as
+	// * prunning at the clusterpedia apiserver.
+	// * prunning in the storage layer, where neither clustersynchro
+	//   nor apiserver are responsible for the pruning process.
+	// https://github.com/clusterpedia-io/clusterpedia/issues/4
+	synchro.pruneObject(obj.(*unstructured.Unstructured))
+
 	synchro.queue.Add(obj)
 }
 
 func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
-	// TODO(iceber): remove ManagedFields ?
+	// `obj` will not be processed in parallel elsewhere,
+	// no deep copy is needed for now.
+	//
+	// robj := obj.(runtime.Object).DeepCopyObject()
+
+	// https://github.com/clusterpedia-io/clusterpedia/issues/4
+	synchro.pruneObject(obj.(*unstructured.Unstructured))
 	synchro.queue.Update(obj)
 }
 

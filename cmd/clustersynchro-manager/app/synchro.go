@@ -17,6 +17,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
 
@@ -52,6 +53,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+	clusterpediafeature.MutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
 	for _, f := range namedFlagSets.FlagSets {

@@ -1,0 +1,40 @@
+package features
+
+import (
+	"k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/component-base/featuregate"
+
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
+)
+
+const (
+	// Every feature gate should add method here following this template:
+	//
+	// // owner: @username
+	// // alpha: v0.X
+	// MyFeature featuregate.Feature = "MyFeature".
+
+	// PruneManagedFields is a feature gate for ClusterSynchro to prune `ManagedFields` of the resource
+	// https://kubernetes.io/docs/reference/using-api/server-side-apply/
+	//
+	// owner: @iceber
+	// alpha: v0.0.9
+	PruneManagedFields featuregate.Feature = "PruneManagedFields"
+
+	// PruneLastAppliedConfiguration is a feature gate for the ClusterSynchro to prune `LastAppliedConfiguration` of the resource
+	//
+	// owner: @iceber
+	// alpha: v0.0.9
+	PruneLastAppliedConfiguration featuregate.Feature = "PruneLastAppliedConfiguration"
+)
+
+func init() {
+	runtime.Must(clusterpediafeature.MutableFeatureGate.Add(defaultClusterSynchroManagerFeatureGates))
+}
+
+// defaultClusterSynchroManagerFeatureGates consists of all known clustersynchro-manager-specific feature keys.
+// To add a new feature, define a key for it above and add it here.
+var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
+	PruneManagedFields:            {Default: false, PreRelease: featuregate.Alpha},
+	PruneLastAppliedConfiguration: {Default: false, PreRelease: featuregate.Alpha},
+}
