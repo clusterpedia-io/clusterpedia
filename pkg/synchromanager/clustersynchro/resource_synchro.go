@@ -29,9 +29,10 @@ type ResourceSynchro struct {
 	cluster         string
 	storageResource schema.GroupResource
 
-	queue         queue.EventQueue
-	listerWatcher cache.ListerWatcher
-	cache         *informer.ResourceVersionStorage
+	queue                       queue.EventQueue
+	listerWatcher               cache.ListerWatcher
+	cache                       *informer.ResourceVersionStorage
+	syncWithLastResourceVersion bool
 
 	memoryVersion schema.GroupVersion
 	convertor     runtime.ObjectConvertor
@@ -71,6 +72,9 @@ func newResourceSynchro(cluster string, lw cache.ListerWatcher, rvcache *informe
 		closed: make(chan struct{}),
 	}
 	close(synchro.stoped)
+
+	// TODO(iceber): add feature gate
+	synchro.syncWithLastResourceVersion = true
 
 	status := clustersv1alpha1.ClusterResourceSyncCondition{
 		Status:             clustersv1alpha1.SyncStatusPending,
@@ -141,7 +145,10 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 		synchro.cache,
 		&unstructured.Unstructured{},
 		synchro,
-	).Run(informerStopCh)
+	).Run(synchro.syncWithLastResourceVersion, informerStopCh)
+
+	// next run informer with last resource version
+	synchro.syncWithLastResourceVersion = true
 
 	status = clustersv1alpha1.ClusterResourceSyncCondition{
 		Status:             clustersv1alpha1.SyncStatusStop,
