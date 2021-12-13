@@ -27,6 +27,7 @@ spec:
         command:
         - /usr/local/bin/clustersynchro-manager
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        - --feature-gates PruneManagedFields=true,PruneLastAppliedConfiguration=true
         env:
         - name: DB_PASSWORD
           valueFrom:
