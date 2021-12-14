@@ -66,9 +66,10 @@ func newResourceSynchro(cluster string, lw cache.ListerWatcher, rvcache *informe
 
 		ctx:    ctx,
 		cancel: cancel,
-		stoped: make(chan struct{}),
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
+
+		stoped: make(chan struct{}),
 	}
 	close(synchro.stoped)
 
@@ -77,9 +78,16 @@ func newResourceSynchro(cluster string, lw cache.ListerWatcher, rvcache *informe
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
-
-	go synchro.storager(1)
 	return synchro
+}
+
+func (synchro *ResourceSynchro) runStorager(shutdown <-chan struct{}) {
+	go func() {
+		<-shutdown
+		synchro.Close()
+	}()
+
+	synchro.storager(1)
 }
 
 func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
@@ -156,10 +164,10 @@ func (synchro *ResourceSynchro) Close() {
 		synchro.queue.Close()
 		synchro.cancel()
 	})
+}
 
-	<-synchro.closed
-	klog.InfoS("resource synchro  is closed", "cluster", synchro.cluster, "resource", synchro.storageResource)
-	//klog.V(2).InfoS("resource synchro  is closed", "cluster", synchro.cluster, "resource", synchro.storageResource)
+func (synchro *ResourceSynchro) Closed() <-chan struct{} {
+	return synchro.closed
 }
 
 const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
