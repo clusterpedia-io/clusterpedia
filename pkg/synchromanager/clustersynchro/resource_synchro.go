@@ -74,7 +74,7 @@ func newResourceSynchro(cluster string, lw cache.ListerWatcher, rvcache *informe
 
 	status := clustersv1alpha1.ClusterResourceSyncCondition{
 		Status:             clustersv1alpha1.SyncStatusPending,
-		LastTransitionTime: metav1.Now(),
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
 
@@ -131,7 +131,7 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 
 	status := clustersv1alpha1.ClusterResourceSyncCondition{
 		Status:             clustersv1alpha1.SyncStatusSyncing,
-		LastTransitionTime: metav1.Now(),
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
 
@@ -145,7 +145,7 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 
 	status = clustersv1alpha1.ClusterResourceSyncCondition{
 		Status:             clustersv1alpha1.SyncStatusStop,
-		LastTransitionTime: metav1.Now(),
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
 }

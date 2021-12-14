@@ -272,7 +272,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 		return err
 	}
 
-	if equality.Semantic.DeepEqual(cluster.Status, status) {
+	if equality.Semantic.DeepEqual(&cluster.Status, status) {
 		return nil
 	}
 
