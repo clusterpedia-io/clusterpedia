@@ -236,7 +236,7 @@ func (manager *Manager) reconcileCluster(cluster *clustersv1alpha1.PediaCluster)
 			// There are many reasons why creating a cluster synchro can fail.
 			// How do you gracefully handle different errors?
 
-			klog.ErrorS(err, "Failed to cluster synchro", "cluster", cluster.Name)
+			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)
 			// Not requeue
 			return nil
 		}
