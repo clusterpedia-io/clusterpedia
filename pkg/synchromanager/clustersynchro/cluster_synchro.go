@@ -85,6 +85,11 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		return nil, err
 	}
 
+	version, err := clusterclient.Discovery().ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+
 	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
 	if err != nil {
 		return nil, err
@@ -110,6 +115,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 		resourceVersionCaches: make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage),
 	}
+	synchro.version.Store(*version)
 	synchro.resourceSynchros.Store(map[schema.GroupVersionResource]*ResourceSynchro{})
 	synchro.resourceStatuses.Store(map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{})
 
