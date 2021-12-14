@@ -153,6 +153,7 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 }
 
 type syncConfig struct {
+	kind            string
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 	convertor       runtime.ObjectConvertor
@@ -258,6 +259,7 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 				storageResource := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
 				if _, ok := configs[storageResource]; !ok {
 					config := &syncConfig{
+						kind:            info.Kind,
 						syncResource:    syncResource,
 						storageResource: storageResource,
 						storageConfig:   storageConfig,
@@ -340,7 +342,8 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 			s.resourceVersionCaches[gvr] = resourceVersionCache
 		}
 
-		synchro := newResourceSynchro(s.name,
+		syncKind := config.syncResource.GroupVersion().WithKind(config.kind)
+		synchro := newResourceSynchro(s.name, syncKind,
 			s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
 			resourceVersionCache,
 			config.convertor,

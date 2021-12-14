@@ -26,7 +26,9 @@ import (
 )
 
 type ResourceSynchro struct {
-	cluster         string
+	cluster string
+
+	syncKind        schema.GroupVersionKind
 	storageResource schema.GroupResource
 
 	queue                       queue.EventQueue
@@ -49,12 +51,13 @@ type ResourceSynchro struct {
 	closed    chan struct{}
 }
 
-func newResourceSynchro(cluster string, lw cache.ListerWatcher, rvcache *informer.ResourceVersionStorage,
+func newResourceSynchro(cluster string, syncKind schema.GroupVersionKind, lw cache.ListerWatcher, rvcache *informer.ResourceVersionStorage,
 	convertor runtime.ObjectConvertor, storage storage.ResourceStorage,
 ) *ResourceSynchro {
 	ctx, cancel := context.WithCancel(context.Background())
 	synchro := &ResourceSynchro{
 		cluster:         cluster,
+		syncKind:        syncKind,
 		storageResource: storage.GetStorageConfig().StorageGroupResource,
 
 		listerWatcher: lw,
@@ -139,11 +142,14 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 	}
 	synchro.status.Store(status)
 
+	exampleObj := &unstructured.Unstructured{}
+	exampleObj.SetGroupVersionKind(synchro.syncKind)
+
 	informer.NewResourceVersionInformer(
 		synchro.cluster,
 		synchro.listerWatcher,
 		synchro.cache,
-		&unstructured.Unstructured{},
+		exampleObj,
 		synchro,
 	).Run(synchro.syncWithLastResourceVersion, informerStopCh)
 
