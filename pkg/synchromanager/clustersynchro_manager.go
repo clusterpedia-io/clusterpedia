@@ -31,8 +31,8 @@ import (
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
 
 type Manager struct {
-	closeOnce sync.Once
-	closer    chan struct{}
+	runLock sync.Mutex
+	stopCh  <-chan struct{}
 
 	kubeclient         clientset.Interface
 	clusterpediaclient crdclientset.Interface
@@ -43,8 +43,9 @@ type Manager struct {
 	clusterlister   clusterlister.PediaClusterLister
 	clusterInformer cache.SharedIndexInformer
 
-	synchrolock sync.RWMutex
-	synchros    map[string]*clustersynchro.ClusterSynchro
+	synchrolock      sync.RWMutex
+	synchros         map[string]*clustersynchro.ClusterSynchro
+	synchroWaitGroup wait.Group
 }
 
 func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, storage storage.StorageFactory) *Manager {
@@ -52,8 +53,6 @@ func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, s
 	clusterinformer := factory.Clusters().V1alpha1().PediaClusters()
 
 	manager := &Manager{
-		closer: make(chan struct{}),
-
 		informerFactory:    factory,
 		kubeclient:         kubeclient,
 		clusterpediaclient: client,
@@ -80,31 +79,41 @@ func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, s
 }
 
 func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
+	manager.runLock.Lock()
+	defer manager.runLock.Unlock()
+	if manager.stopCh != nil {
+		klog.Fatal("clustersynchro manager is already running...")
+	}
 	klog.Info("Start Informer Factory")
-	manager.informerFactory.Start(stopCh)
+
+	// informerFactory should not be controlled by stopCh
+	stopInformer := make(chan struct{})
+	manager.informerFactory.Start(stopInformer)
 	if !cache.WaitForCacheSync(stopCh, manager.clusterInformer.HasSynced) {
-		return
+		klog.Fatal("clustersynchro manager: wait for informer factory failed")
 	}
 
-	klog.InfoS("Start Manager Cluster Worker", "workers", workers)
+	manager.stopCh = stopCh
 
+	klog.InfoS("Start Manager Cluster Worker", "workers", workers)
 	var waitGroup sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		waitGroup.Add(1)
 
 		go func() {
 			defer waitGroup.Done()
-			wait.Until(manager.worker, time.Second, stopCh)
+			wait.Until(manager.worker, time.Second, manager.stopCh)
 		}()
 	}
-	// TODO(iceber): if stop synchro manager, need shutdown synchros
 
-	<-stopCh
+	<-manager.stopCh
 	klog.Info("receive stop signal, stop...")
 
 	manager.queue.ShutDown()
-
 	waitGroup.Wait()
+
+	klog.Info("wait for cluster synchros stop...")
+	manager.synchroWaitGroup.Wait()
 	klog.Info("cluster synchro manager stoped.")
 }
 
@@ -137,6 +146,11 @@ func (manager *Manager) enqueue(obj interface{}) {
 
 func (manager *Manager) worker() {
 	for manager.processNextCluster() {
+		select {
+		case <-manager.stopCh:
+			return
+		default:
+		}
 	}
 }
 
@@ -240,6 +254,8 @@ func (manager *Manager) reconcileCluster(cluster *clustersv1alpha1.PediaCluster)
 			// Not requeue
 			return nil
 		}
+
+		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 	}
 
 	synchro.SetResources(cluster.Spec.Resources)
