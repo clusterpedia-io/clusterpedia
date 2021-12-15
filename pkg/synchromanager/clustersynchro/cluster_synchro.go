@@ -55,6 +55,9 @@ type ClusterSynchro struct {
 	runResourceSynchroCh  chan struct{}
 	stopResourceSynchroCh chan struct{}
 
+	waitGroup                wait.Group
+	resourceSynchroWaitGroup wait.Group
+
 	resourcelock  sync.RWMutex
 	handlerStopCh chan struct{}
 	// Key is the storage resource.
@@ -106,7 +109,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		listerWatcherFactory:  informer.NewDynamicListWatcherFactory(dynamaicclient),
 		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
 
-		status: make(chan struct{}),
+		status: make(chan struct{}, 1),
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
 
@@ -131,9 +134,9 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 	synchro.initWithResourceVersions(resourceversions)
 
-	go synchro.Monitor()
+	synchro.waitGroup.Start(synchro.Monitor)
+	synchro.waitGroup.Start(synchro.resourceSynchroRunner)
 	go synchro.clusterStatusUpdater()
-	go synchro.resourceSynchroRunner()
 	return synchro, nil
 }
 
@@ -293,6 +296,12 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 
 	s.resourcelock.Lock()
 	defer s.resourcelock.Unlock()
+	select {
+	case <-s.closer:
+		return
+	default:
+	}
+
 	s.sortedGroupResources.Store(sortedGroupResources)
 	s.resourceStatuses.Store(resourceStatuses)
 
@@ -310,6 +319,9 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 	for gvr := range deleted {
 		if handler, ok := synchros[gvr]; ok {
 			handler.Close()
+
+			// ensure that no more data is synchronized to the storage.
+			<-handler.Closed()
 			delete(synchros, gvr)
 		}
 
@@ -346,6 +358,8 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 			config.convertor,
 			resourceStorage,
 		)
+		s.resourceSynchroWaitGroup.StartWithChannel(s.closer, synchro.runStorager)
+
 		if s.handlerStopCh != nil {
 			select {
 			case <-s.handlerStopCh:
@@ -358,18 +372,42 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 	s.resourceSynchros.Store(synchros)
 }
 
-func (s *ClusterSynchro) Shutdown() {
+func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool) {
+	// ensure that we cannot call SetResource after closing `synchro.closer`
+	s.resourcelock.Lock()
 	s.closeOnce.Do(func() {
 		close(s.closer)
 	})
+	s.resourcelock.Unlock()
 
-	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
-	for _, handler := range synchros {
-		handler.Close()
+	if waitResourceSynchro {
+		// wait for all resource synchros to shutdown,
+		// to ensure that no more data is synchronized to the storage
+		s.resourceSynchroWaitGroup.Wait()
 	}
 
-	<-s.closed
+	s.waitGroup.Wait()
+
+	if updateReadyCondition {
+		var message string
+		lastReadyCondition := s.readyCondition.Load().(metav1.Condition)
+		if lastReadyCondition.Status == metav1.ConditionFalse {
+			message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
+		}
+		condition := metav1.Condition{
+			Type:               clustersv1alpha1.ClusterConditionReady,
+			Status:             metav1.ConditionUnknown,
+			Reason:             "ClusterSynchroStop",
+			Message:            message,
+			LastTransitionTime: metav1.Now(),
+		}
+		s.readyCondition.Store(condition)
+
+		s.updateStatus()
+	}
+
 	close(s.status)
+	<-s.closed
 }
 
 func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
@@ -419,6 +457,8 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 				cond.LastTransitionTime = metav1.Now().Rfc3339Copy()
 			}
 
+			// TODO(iceber): if synchro is closed, set cond.Status == Stop
+
 			resourceStatus.SyncConditions[i] = cond
 		}
 
@@ -444,6 +484,8 @@ func (s *ClusterSynchro) updateStatus() {
 }
 
 func (s *ClusterSynchro) clusterStatusUpdater() {
+	defer close(s.closed)
+
 	for range s.status {
 		status := s.genClusterStatus()
 		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
@@ -453,8 +495,6 @@ func (s *ClusterSynchro) clusterStatusUpdater() {
 }
 
 func (s *ClusterSynchro) resourceSynchroRunner() {
-	defer close(s.closed)
-
 	for {
 		select {
 		case <-s.runResourceSynchroCh:
