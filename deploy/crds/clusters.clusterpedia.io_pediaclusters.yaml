@@ -47,10 +47,13 @@ spec:
               apiserverURL:
                 type: string
               caData:
+                format: byte
                 type: string
               certData:
+                format: byte
                 type: string
               keyData:
+                format: byte
                 type: string
               resources:
                 items:
@@ -72,6 +75,7 @@ spec:
                   type: object
                 type: array
               tokenData:
+                format: byte
                 type: string
             required:
             - apiserverURL
