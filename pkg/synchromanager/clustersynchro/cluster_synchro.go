@@ -133,10 +133,6 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	synchro.readyCondition.Store(condition)
 
 	synchro.initWithResourceVersions(resourceversions)
-
-	synchro.waitGroup.Start(synchro.Monitor)
-	synchro.waitGroup.Start(synchro.resourceSynchroRunner)
-	go synchro.clusterStatusUpdater()
 	return synchro, nil
 }
 
@@ -370,6 +366,20 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 		synchros[gvr] = synchro
 	}
 	s.resourceSynchros.Store(synchros)
+}
+
+func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
+	s.waitGroup.Start(s.Monitor)
+	s.waitGroup.Start(s.resourceSynchroRunner)
+	go s.clusterStatusUpdater()
+
+	select {
+	case <-shutdown:
+		s.Shutdown(true, false)
+	case <-s.closer:
+		// clustersynchro.Shutdown has been called, wait for closed.
+		<-s.closed
+	}
 }
 
 func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool) {
