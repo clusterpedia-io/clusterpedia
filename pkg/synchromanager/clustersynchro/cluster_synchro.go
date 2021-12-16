@@ -120,7 +120,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	}
 	synchro.version.Store(*version)
 	synchro.sortedGroupResources.Store([]schema.GroupResource{})
-	synchro.resourceSynchros.Store(map[schema.GroupVersionResource]*ResourceSynchro{})
+	synchro.resourceStatuses.Store(map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{})
 
 	synchro.resourceSynchros.Store(map[schema.GroupVersionResource]*ResourceSynchro{})
 
