@@ -37,16 +37,16 @@ type ClusterSpec struct {
 	APIServerURL string `json:"apiserverURL"`
 
 	// +optional
-	TokenData string `json:"tokenData,omitmepty"`
+	TokenData []byte `json:"tokenData,omitmepty"`
 
 	// +optional
-	CAData string `json:"caData,omitempty"`
+	CAData []byte `json:"caData,omitempty"`
 
 	// +optional
-	CertData string `json:"certData,omitempty"`
+	CertData []byte `json:"certData,omitempty"`
 
 	// +optional
-	KeyData string `json:"keyData,omitempty"`
+	KeyData []byte `json:"keyData,omitempty"`
 
 	// +required
 	Resources []ClusterResource `json:"resources"`
