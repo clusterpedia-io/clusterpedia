@@ -37,7 +37,7 @@ type ClusterSpec struct {
 	APIServerURL string `json:"apiserverURL"`
 
 	// +optional
-	TokenData []byte `json:"tokenData,omitmepty"`
+	TokenData []byte `json:"tokenData,omitempty"`
 
 	// +optional
 	CAData []byte `json:"caData,omitempty"`
