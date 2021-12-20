@@ -2,9 +2,7 @@ package synchromanager
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -310,45 +308,28 @@ func buildClusterConfig(cluster *clustersv1alpha1.PediaCluster) (*rest.Config, e
 		return nil, errors.New("Cluster APIServer Endpoint is required")
 	}
 
-	if cluster.Spec.TokenData == "" && cluster.Spec.CAData == "" {
-		return nil, errors.New("Cluster APIServer's Token or CA is required")
+	if len(cluster.Spec.TokenData) == 0 &&
+		(len(cluster.Spec.CertData) == 0 || len(cluster.Spec.KeyData) == 0) {
+		return nil, errors.New("Cluster APIServer's Token or Cert is required")
 	}
 
 	config := &rest.Config{
 		Host: cluster.Spec.APIServerURL,
 	}
 
-	if cluster.Spec.CAData != "" {
-		ca, err := base64.StdEncoding.DecodeString(cluster.Spec.CAData)
-		if err != nil {
-			return nil, fmt.Errorf("Cluster CA is invalid: %v", err)
-		}
-		config.TLSClientConfig.CAData = ca
-
-		if cluster.Spec.CertData != "" && cluster.Spec.KeyData != "" {
-			cert, err := base64.StdEncoding.DecodeString(cluster.Spec.CertData)
-			if err != nil {
-				return nil, fmt.Errorf("Cluster Cert is invalid: %v", err)
-			}
-			key, err := base64.StdEncoding.DecodeString(cluster.Spec.KeyData)
-			if err != nil {
-				return nil, fmt.Errorf("Cluster Cert is invalid: %v", err)
-			}
-
-			config.TLSClientConfig.CertData = cert
-			config.TLSClientConfig.KeyData = key
-		}
+	if len(cluster.Spec.CAData) != 0 {
+		config.TLSClientConfig.CAData = cluster.Spec.CAData
 	} else {
 		config.TLSClientConfig.Insecure = true
 	}
 
-	if cluster.Spec.TokenData != "" {
-		token, err := base64.StdEncoding.DecodeString(cluster.Spec.TokenData)
-		if err != nil {
-			return nil, fmt.Errorf("Cluster CA is invalid: %v", err)
-		}
+	if len(cluster.Spec.CertData) != 0 && len(cluster.Spec.KeyData) != 0 {
+		config.TLSClientConfig.CertData = cluster.Spec.CertData
+		config.TLSClientConfig.KeyData = cluster.Spec.KeyData
+	}
 
-		config.BearerToken = string(token)
+	if len(cluster.Spec.TokenData) != 0 {
+		config.BearerToken = string(cluster.Spec.TokenData)
 	}
 	return config, nil
 }
