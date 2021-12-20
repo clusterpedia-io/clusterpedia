@@ -14,15 +14,25 @@ type controller struct {
 	config cache.Config
 
 	reflectorMutex sync.RWMutex
-	reflector      *cache.Reflector
-	queue          cache.Queue
+	reflector      *Reflector
+
+	lastResourceVersion string
 }
 
-func NewNamedController(name string, config *cache.Config) cache.Controller {
+func NewNamedController(name string, config *cache.Config) *controller {
 	return &controller{
 		name:   name,
 		config: *config,
 	}
+}
+
+func (c *controller) SetLastResourceVersion(lastResourceVersion string) {
+	c.reflectorMutex.Lock()
+	defer c.reflectorMutex.Unlock()
+	if c.reflector != nil {
+		panic("controller is running, connot set last resource version")
+	}
+	c.lastResourceVersion = lastResourceVersion
 }
 
 func (c *controller) Run(stopCh <-chan struct{}) {
@@ -31,7 +41,7 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 		<-stopCh
 		c.config.Queue.Close()
 	}()
-	r := cache.NewNamedReflector(
+	r := NewNamedReflector(
 		c.name,
 		c.config.ListerWatcher,
 		c.config.ObjectType,
@@ -42,6 +52,9 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 	r.WatchListPageSize = c.config.WatchListPageSize
 
 	c.reflectorMutex.Lock()
+	if c.lastResourceVersion != "" {
+		r.lastSyncResourceVersion = c.lastResourceVersion
+	}
 	c.reflector = r
 	c.reflectorMutex.Unlock()
 
@@ -51,6 +64,27 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 	wait.Until(c.processLoop, time.Second, stopCh)
 	wg.Wait()
 }
+
+/*
+func (c *controller) setLastResourceVersionForReflector(reflector *cache.Reflector) {
+	if c.resourceVersionGetter == nil {
+		return
+	}
+
+	rv := c.resourceVersionGetter.LastResourceVersion()
+	if rv == "" || rv == "0" {
+		return
+	}
+	rvValue := reflect.ValueOf(rv)
+
+	field := reflect.ValueOf(reflector).Elem().FieldByName("lastSyncResourceVersion")
+	value := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+	if value.Kind() != rvValue.Kind() {
+		panic(fmt.Sprintf("reflector.lastSyncResourceVersion's value kind is %v", value.Kind()))
+	}
+	value.Set(rvValue)
+}
+*/
 
 func (c *controller) processLoop() {
 	for {
@@ -71,10 +105,7 @@ func (c *controller) HasSynced() bool {
 	c.reflectorMutex.RLock()
 	defer c.reflectorMutex.RUnlock()
 
-	if c.queue == nil {
-		return false
-	}
-	return c.queue.HasSynced()
+	return c.config.Queue.HasSynced()
 }
 
 func (c *controller) LastSyncResourceVersion() string {

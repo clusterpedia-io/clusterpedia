@@ -7,7 +7,7 @@ import (
 )
 
 type ResourceVersionInformer interface {
-	Run(stopCh <-chan struct{})
+	Run(withLastResourceVersion bool, stopCh <-chan struct{})
 	HasSynced() bool
 }
 
@@ -15,7 +15,7 @@ type resourceVersionInformer struct {
 	name          string
 	storage       *ResourceVersionStorage
 	handler       ResourceEventHandler
-	controller    cache.Controller
+	controller    *controller
 	listerWatcher cache.ListerWatcher
 }
 
@@ -24,7 +24,6 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		panic("name is required")
 	}
 
-	// storage: NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc),
 	informer := &resourceVersionInformer{
 		name:          name,
 		listerWatcher: lw,
@@ -38,7 +37,7 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		RetryOnError:  false,
 		Process: func(obj interface{}) error {
 			deltas := obj.(cache.Deltas)
-			return informer.HandleDeltas(deltas)
+			return informer.handleDeltas(deltas)
 		},
 		Queue: cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
 			KeyFunction:           cache.DeletionHandlingMetaNamespaceKeyFunc,
@@ -54,11 +53,15 @@ func (informer *resourceVersionInformer) HasSynced() bool {
 	return informer.controller.HasSynced()
 }
 
-func (informer *resourceVersionInformer) Run(stopCh <-chan struct{}) {
+func (informer *resourceVersionInformer) Run(withLastResourceVersion bool, stopCh <-chan struct{}) {
+	// TODO(iceber): It can only be run once and an error is reported if it is run a second time
+	if withLastResourceVersion {
+		informer.controller.SetLastResourceVersion(informer.storage.LastResourceVersion())
+	}
 	informer.controller.Run(stopCh)
 }
 
-func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error {
+func (informer *resourceVersionInformer) handleDeltas(deltas cache.Deltas) error {
 	for _, d := range deltas {
 		switch d.Type {
 		case cache.Replaced, cache.Added, cache.Updated:
