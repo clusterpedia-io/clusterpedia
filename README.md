@@ -149,10 +149,10 @@ metadata:
   name: cluster-example
 spec:
   apiserverURL: "https://10.30.43.43:6443"
-  caData: ""
-  tokenData: ""
-  certData: ""
-  keyData: ""
+  caData:
+  tokenData:
+  certData:
+  keyData:
   resources:
   - group: apps
     resources:
