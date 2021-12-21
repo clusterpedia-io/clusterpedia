@@ -84,17 +84,17 @@ func (s *RESTStorage) list(ctx context.Context, options *pediainternal.ListOptio
 		options.ClusterNames = []string{cluster}
 	}
 
+	/*
+		TODO(iceber): add feature gates to set default option
+		if options.WithRemainingCount == nil {
+		}
+	*/
+
 	objs := s.NewList()
 	if err := s.Storage.List(ctx, objs, options); err != nil {
 		return nil, storeerr.InterpretListError(err, s.DefaultQualifiedResource)
 	}
 
-	/*
-		list, err := meta.ListAccessor(objs)
-		if err != nil {
-			return nil, err
-		}
-	*/
 	return objs, nil
 }
 

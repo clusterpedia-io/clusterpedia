@@ -32,6 +32,12 @@ type ListOptions struct {
 
 	// +optional
 	OrderBy string `json:"orderby,omitempty"`
+
+	// +optional
+	WithContinue *bool `json:"withContinue,omitempty"`
+
+	// +optional
+	WithRemainingCount *bool `json:"withRemainingCount,omitempty"`
 }
 
 // +genclient

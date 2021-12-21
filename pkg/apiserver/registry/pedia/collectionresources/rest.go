@@ -88,6 +88,10 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 	query := request.RequestQueryFrom(ctx)
 	pediascheme.ParameterCodec.DecodeParameters(query, pediav1alpha1.SchemeGroupVersion, &opts)
 
+	// collection resources don't support with remaining count
+	// ignore opts.WithRemainingCount
+	opts.WithRemainingCount = nil
+
 	storage, ok := s.storages[name]
 	if !ok {
 		return nil, errors.New("")

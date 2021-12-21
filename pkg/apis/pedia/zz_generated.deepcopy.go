@@ -123,6 +123,16 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 		*out = make([]OrderBy, len(*in))
 		copy(*out, *in)
 	}
+	if in.WithContinue != nil {
+		in, out := &in.WithContinue, &out.WithContinue
+		*out = new(bool)
+		**out = **in
+	}
+	if in.WithRemainingCount != nil {
+		in, out := &in.WithRemainingCount, &out.WithRemainingCount
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ExtraLabelSelector != nil {
 		out.ExtraLabelSelector = in.ExtraLabelSelector.DeepCopySelector()
 	}

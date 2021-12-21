@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -141,17 +142,36 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 }
 
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *pediainternal.ListOptions) error {
-	query := s.db.WithContext(ctx).Where(map[string]interface{}{
+	query := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
 	})
-	query = applyListOptionsToQuery(query, opts)
+	offset, amount, query := applyListOptionsToQuery(query, opts)
 
 	var resources []Resource
 	result := query.Find(&resources)
 	if result.Error != nil {
 		return InterpreError(s.storageGroupResource.String(), result.Error)
+	}
+
+	list, err := meta.ListAccessor(listObject)
+	if err != nil {
+		return InterpreError(s.storageGroupResource.String(), err)
+	}
+
+	if opts.WithContinue != nil && *opts.WithContinue {
+		if int64(len(resources)) == opts.Limit {
+			list.SetContinue(strconv.FormatInt(offset+opts.Limit, 10))
+		}
+	}
+
+	if amount != nil {
+		remain := *amount - offset - int64(len(resources))
+		if remain < 0 {
+			remain = 0
+		}
+		list.SetRemainingItemCount(&remain)
 	}
 
 	listPtr, err := meta.GetItemsPtr(listObject)

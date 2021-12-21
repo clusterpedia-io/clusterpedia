@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
 )
@@ -38,6 +39,9 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 	if err := convert_Slice_string_To_pedia_Slice_orderby(&orderbys, &out.OrderBy, " ", s); err != nil {
 		return err
 	}
+
+	out.WithContinue = in.WithContinue
+	out.WithRemainingCount = in.WithRemainingCount
 
 	if out.LabelSelector != nil {
 		var (
@@ -90,6 +94,18 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 							return fmt.Errorf("Invalid Query Offset(%s): %w", out.Continue, err)
 						}
 					}
+				case pedia.SearchLabelWithContinue:
+					if in.WithContinue == nil && len(values) != 0 {
+						if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithContinue, s); err != nil {
+							return err
+						}
+					}
+				case pedia.SearchLabelWithRemainingCount:
+					if in.WithRemainingCount == nil && len(values) != 0 {
+						if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithRemainingCount, s); err != nil {
+							return err
+						}
+					}
 				default:
 					if strings.Contains(require.Key(), "clusterpedia.io") {
 						extraLabelRequest = append(extraLabelRequest, require)
@@ -136,6 +152,9 @@ func Convert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions, ou
 	if err := convert_pedia_Slice_orderby_To_String(&in.OrderBy, &out.OrderBy, s); err != nil {
 		return err
 	}
+
+	out.WithContinue = in.WithContinue
+	out.WithRemainingCount = in.WithRemainingCount
 	return nil
 }
 
