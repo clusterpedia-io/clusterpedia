@@ -99,6 +99,16 @@ func (in *CollectionResourceType) DeepCopy() *CollectionResourceType {
 func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 	*out = *in
 	in.ListOptions.DeepCopyInto(&out.ListOptions)
+	if in.WithContinue != nil {
+		in, out := &in.WithContinue, &out.WithContinue
+		*out = new(bool)
+		**out = **in
+	}
+	if in.WithRemainingCount != nil {
+		in, out := &in.WithRemainingCount, &out.WithRemainingCount
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

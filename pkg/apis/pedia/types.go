@@ -17,6 +17,9 @@ const (
 	SearchLabelNamespaces = "search.clusterpedia.io/namespaces"
 	SearchLabelOrderBy    = "search.clusterpedia.io/orderby"
 
+	SearchLabelWithContinue       = "search.clusterpedia.io/with-continue"
+	SearchLabelWithRemainingCount = "search.clusterpedia.io/with-remaining-count"
+
 	SearchLabelSize   = "search.clusterpedia.io/size"
 	SearchLabelOffset = "search.clusterpedia.io/offset"
 
@@ -38,6 +41,9 @@ type ListOptions struct {
 	ClusterNames []string
 	Namespaces   []string
 	OrderBy      []OrderBy
+
+	WithContinue       *bool
+	WithRemainingCount *bool
 
 	// +k8s:conversion-fn:drop
 	ExtraLabelSelector labels.Selector

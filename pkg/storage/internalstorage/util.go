@@ -21,7 +21,7 @@ var (
 	defaultOrderByFieldSet = sets.NewString(defaultOrderByFields...)
 )
 
-func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) *gorm.DB {
+func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB) {
 	switch len(opts.ClusterNames) {
 	case 0:
 	case 1:
@@ -83,9 +83,17 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) *g
 				jsonQuery.NotEqual(requirement.Value)
 			case selection.Equals, selection.DoubleEquals:
 				jsonQuery.Equal(requirement.Value)
+			default:
+				continue
 			}
 			query = query.Where(jsonQuery)
 		}
+	}
+
+	var amount *int64
+	if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
+		amount = new(int64)
+		query = query.Count(amount)
 	}
 
 	ordered := sets.NewString()
@@ -115,10 +123,11 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) *g
 		query = query.Limit(int(opts.Limit))
 	}
 
-	if offset, err := strconv.Atoi(opts.Continue); err == nil {
+	offset, err := strconv.Atoi(opts.Continue)
+	if err == nil {
 		query = query.Offset(offset)
 	}
-	return query
+	return int64(offset), amount, query
 }
 
 func getNewItemFunc(listObj runtime.Object, v reflect.Value) func() runtime.Object {

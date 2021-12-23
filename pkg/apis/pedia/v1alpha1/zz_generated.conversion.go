@@ -193,6 +193,8 @@ func autoConvert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out 
 	// WARNING: in.ClusterNames requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.Namespaces requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types (string vs []github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia.OrderBy)
+	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
+	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
 	return nil
 }
 
@@ -210,6 +212,8 @@ func autoConvert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions
 		return err
 	}
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types ([]github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia.OrderBy vs string)
+	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
+	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
 	// WARNING: in.ExtraLabelSelector requires manual conversion: does not exist in peer-type
 	// WARNING: in.ExtraQuery requires manual conversion: does not exist in peer-type
 	return nil
@@ -252,6 +256,20 @@ func autoConvert_url_Values_To_v1alpha1_ListOptions(in *url.Values, out *ListOpt
 		}
 	} else {
 		out.OrderBy = ""
+	}
+	if values, ok := map[string][]string(*in)["withContinue"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithContinue, s); err != nil {
+			return err
+		}
+	} else {
+		out.WithContinue = nil
+	}
+	if values, ok := map[string][]string(*in)["withRemainingCount"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithRemainingCount, s); err != nil {
+			return err
+		}
+	} else {
+		out.WithRemainingCount = nil
 	}
 	return nil
 }

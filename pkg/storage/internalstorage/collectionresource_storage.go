@@ -24,7 +24,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 	cr := s.collectionResource.DeepCopy()
 
 	types := make(map[schema.GroupResource]*pediainternal.CollectionResourceType, len(cr.ResourceTypes))
-	query := s.db.WithContext(ctx).Where(&Resource{
+	query := s.db.WithContext(ctx).Model(&Resource{}).Where(&Resource{
 		Group:    cr.ResourceTypes[0].Group,
 		Version:  cr.ResourceTypes[0].Version,
 		Resource: cr.ResourceTypes[0].Resource,
@@ -39,7 +39,9 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 
 		types[rt.GroupResource()] = &cr.ResourceTypes[i]
 	}
-	query = applyListOptionsToQuery(query, opts)
+
+	// TODO(iceber): support with remaining count and continue
+	_, _, query = applyListOptionsToQuery(query, opts)
 
 	var resources []Resource
 	result := query.Find(&resources)
