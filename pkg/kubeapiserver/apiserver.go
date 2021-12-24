@@ -123,9 +123,10 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	resourceHandler := &ResourceHandler{
 		minRequestTimeout: c.GenericConfig.RequestTimeout,
 
-		delegate:  delegate,
-		rest:      restManager,
-		discovery: discoveryManager,
+		delegate:      delegate,
+		rest:          restManager,
+		discovery:     discoveryManager,
+		clusterLister: c.ExtraConfig.InformerFactory.Clusters().V1alpha1().PediaClusters().Lister(),
 	}
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
@@ -138,9 +139,18 @@ func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http
 	handler := genericapifilters.WithRequestInfo(apiHandler, c.RequestInfoResolver)
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestInfoResolver)
 
-	//	handler = filters.WithRequestQuery(handler)
+	// handler = genericapifilters.WithWarningRecorder(handler)
+	// handler = filters.WithRequestQuery(handler)
+	// handler = WithClusterName(handler, "cluster-1")
 	return handler
 }
+
+// func WithClusterName(handler http.Handler, cluster string) http.Handler {
+//	 return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+//	 	 req = req.WithContext(request.WithClusterName(req.Context(), cluster))
+//		 handler.ServeHTTP(w, req)
+//	 })
+// }
 
 type wrapRequestInfoResolverForNamespace struct {
 	genericrequest.RequestInfoResolver
