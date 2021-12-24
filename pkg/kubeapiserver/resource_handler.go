@@ -6,12 +6,17 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/endpoints/handlers"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/klog/v2"
 
+	clustersv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha1"
+	clusterslister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/clusters/v1alpha1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
@@ -20,8 +25,9 @@ type ResourceHandler struct {
 	minRequestTimeout time.Duration
 	delegate          http.Handler
 
-	rest      *RESTManager
-	discovery *discovery.DiscoveryManager
+	rest          *RESTManager
+	discovery     *discovery.DiscoveryManager
+	clusterLister clusterslister.PediaClusterLister
 }
 
 func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -42,8 +48,8 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	gvr := schema.GroupVersionResource{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion, Resource: requestInfo.Resource}
 
-	cluster := request.ClusterNameValue(req.Context())
-	if !r.discovery.ResourceEnabled(cluster, gvr) {
+	clusterName := request.ClusterNameValue(req.Context())
+	if !r.discovery.ResourceEnabled(clusterName, gvr) {
 		r.delegate.ServeHTTP(w, req)
 		return
 	}
@@ -65,17 +71,43 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	/*
-		// TODO(iceber): if cluster is not healthy, set warning ?
-		if cluster != "" {
-			warning.AddWarning(req.Context(), "", w)
+	// Check the health of the cluster
+	if clusterName != "" {
+		cluster, err := r.clusterLister.Get(clusterName)
+		if err != nil {
+			err := fmt.Errorf("not found request cluster")
+			klog.ErrorS(err, "Failed to handle resource request, not get cluster from cache", "cluster", clusterName, "resource", gvr)
+			responsewriters.ErrorNegotiated(
+				apierrors.NewInternalError(err),
+				Codecs, gvr.GroupVersion(), w, req,
+			)
+			return
 		}
-	*/
+
+		var msg string
+		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clustersv1alpha1.ClusterConditionReady)
+		switch {
+		case readyCondition == nil:
+			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", clusterName)
+		case readyCondition.Status != metav1.ConditionTrue:
+			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate, reason: %s", clusterName, readyCondition.Reason)
+		}
+		/*
+			TODO(scyda): Determine the synchronization status of a specific resource
+
+			for _, resource := range c.Status.Resources {
+			}
+		*/
+
+		if msg != "" {
+			warning.AddWarning(req.Context(), "", msg)
+		}
+	}
 
 	var handler http.Handler
 	switch requestInfo.Verb {
 	case "get":
-		if cluster == "" {
+		if clusterName == "" {
 			r.delegate.ServeHTTP(w, req)
 			return
 		}
