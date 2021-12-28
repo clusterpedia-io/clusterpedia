@@ -18,8 +18,10 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
+const StorageName = "internal"
+
 func init() {
-	storage.RegisterStorageFactoryFunc("internal", NewStorageFactory)
+	storage.RegisterStorageFactoryFunc(StorageName, NewStorageFactory)
 }
 
 func NewStorageFactory(configPath string) (storage.StorageFactory, error) {

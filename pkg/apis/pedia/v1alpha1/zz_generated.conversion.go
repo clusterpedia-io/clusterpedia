@@ -214,6 +214,7 @@ func autoConvert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types ([]github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia.OrderBy vs string)
 	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
 	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
+	// WARNING: in.EnhancedFieldSelector requires manual conversion: does not exist in peer-type
 	// WARNING: in.ExtraLabelSelector requires manual conversion: does not exist in peer-type
 	// WARNING: in.ExtraQuery requires manual conversion: does not exist in peer-type
 	return nil

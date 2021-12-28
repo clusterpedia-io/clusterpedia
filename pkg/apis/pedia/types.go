@@ -8,6 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
 )
 
 const (
@@ -44,6 +46,9 @@ type ListOptions struct {
 
 	WithContinue       *bool
 	WithRemainingCount *bool
+
+	// +k8s:conversion-fn:drop
+	EnhancedFieldSelector fields.Selector
 
 	// +k8s:conversion-fn:drop
 	ExtraLabelSelector labels.Selector

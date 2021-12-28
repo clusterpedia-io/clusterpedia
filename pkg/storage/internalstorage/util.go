@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
 )
@@ -21,7 +23,7 @@ var (
 	defaultOrderByFieldSet = sets.NewString(defaultOrderByFields...)
 )
 
-func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB) {
+func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	switch len(opts.ClusterNames) {
 	case 0:
 	case 1:
@@ -74,19 +76,47 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (i
 		}
 	}
 
-	if opts.FieldSelector != nil {
-		for _, requirement := range opts.FieldSelector.Requirements() {
-			jsonQuery := JSONQuery("object", strings.Split(requirement.Field, ".")...)
+	if opts.EnhancedFieldSelector != nil {
+		if requirements, selectable := opts.EnhancedFieldSelector.Requirements(); selectable {
+			for _, requirement := range requirements {
+				values := make([]interface{}, 0, len(requirement.Values()))
+				for value := range requirement.Values() {
+					values = append(values, value)
+				}
 
-			switch requirement.Operator {
-			case selection.NotEquals:
-				jsonQuery.NotEqual(requirement.Value)
-			case selection.Equals, selection.DoubleEquals:
-				jsonQuery.Equal(requirement.Value)
-			default:
-				continue
+				var (
+					fields      []string
+					fieldErrors field.ErrorList
+				)
+				for _, f := range requirement.Fields() {
+					if f.IsList() {
+						fieldErrors = append(fieldErrors, field.Invalid(f.Path(), f.Name(), fmt.Sprintf("Storage<%s>: Not Support list field", StorageName)))
+						continue
+					}
+
+					fields = append(fields, f.Name())
+				}
+
+				if len(fieldErrors) != 0 {
+					return 0, nil, nil, apierrors.NewInvalid(schema.GroupKind{Group: pediainternal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
+				}
+
+				jsonQuery := JSONQuery("object", fields...)
+				switch requirement.Operator() {
+				case selection.Exists:
+				case selection.Equals, selection.DoubleEquals:
+					jsonQuery.Equal(values[0])
+				case selection.NotEquals:
+					jsonQuery.NotEqual(values[0])
+				case selection.In:
+					jsonQuery.In(values...)
+				case selection.NotIn:
+					jsonQuery.NotIn(values...)
+				default:
+					continue
+				}
+				query = query.Where(jsonQuery)
 			}
-			query = query.Where(jsonQuery)
 		}
 	}
 
@@ -127,7 +157,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (i
 	if err == nil {
 		query = query.Offset(offset)
 	}
-	return int64(offset), amount, query
+	return int64(offset), amount, query, nil
 }
 
 func getNewItemFunc(listObj runtime.Object, v reflect.Value) func() runtime.Object {

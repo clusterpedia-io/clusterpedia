@@ -41,7 +41,10 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 	}
 
 	// TODO(iceber): support with remaining count and continue
-	_, _, query = applyListOptionsToQuery(query, opts)
+	_, _, query, err := applyListOptionsToQuery(query, opts)
+	if err != nil {
+		return nil, err
+	}
 
 	var resources []Resource
 	result := query.Find(&resources)
