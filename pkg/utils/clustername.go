@@ -9,8 +9,8 @@ import (
 
 func ExtractClusterName(obj runtime.Object) string {
 	if m, err := meta.Accessor(obj); err == nil {
-		if labels := m.GetLabels(); labels != nil {
-			return labels[pedia.ShadowLabelClusterName]
+		if annotations := m.GetAnnotations(); annotations != nil {
+			return annotations[pedia.ShadowAnnotationClusterName]
 		}
 	}
 	return ""
@@ -22,11 +22,11 @@ func InjectClusterName(obj runtime.Object, name string) {
 		panic(err)
 	}
 
-	labels := m.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
+	annotations := m.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
 
-	labels[pedia.ShadowLabelClusterName] = name
-	m.SetLabels(labels)
+	annotations[pedia.ShadowAnnotationClusterName] = name
+	m.SetAnnotations(annotations)
 }
