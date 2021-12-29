@@ -364,10 +364,12 @@ Clusterpedia 支持以下复杂检索：
 |指定命名空间|search.clusterpedia.io/namespaces|namespaces|`?namespaces=kube-system,default`
 |指定集群名称|search.clusterpedia.io/clusters|clusters|`?clusters=cluster-1,cluster-2`
 |指定排序字段|search.clusterpedia.io/orderby|orderby|`?orderby=name desc,namespace`
-|指定 size |search.clusterpedia.io/size|size|`?size=100`
-|指定 offset |search.clsuterpedia.io/offset|offset|`?offset=10`
+|指定 size |search.clusterpedia.io/size|limit|`?limit=100`
+|指定 offset |search.clusterpedia.io/offset|continue|`?continue=10`
 
-`label key` 的操作符支持 ==、=、!=、in、not in。对于 size 这个条件，kubectl 可以通过 `--chunk-size` 来指定，而不需要通过 label key。  
+`label key` 的操作符支持 ==、=、!=、in、not in。  
+
+> 对于 limit 这个条件，kubectl 只能通过 `--chunk-size` 来指定，而不能通过 label key。
 
 [回到页首](#top)
 ## 集合资源 (Collection Resource)

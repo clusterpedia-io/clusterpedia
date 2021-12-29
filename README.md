@@ -374,10 +374,12 @@ The above example demonstrates how you can use kubectl to search for resources. 
 |Specified namespace|search.clusterpedia.io/namespaces|namespaces|`?namespaces=kube-system,default`
 |Specified cluster name|search.clusterpedia.io/clusters|clusters|`?clusters=cluster-1,cluster-2`
 |Sort by specified fileds|search.clusterpedia.io/orderby|orderby|`?orderby=name desc,namespace`
-|Specified size |search.clusterpedia.io/size|size|`?size=100`
-|Specified offset |search.clsuterpedia.io/offset|offset|`?offset=10`
+|Specified size |search.clusterpedia.io/size|limit|`?limit=100`
+|Specified offset |search.clusterpedia.io/offset|continue|`?continue=10`
 
-The operators of `label key` include ==, =, !=, in, not in. For the `size` condition, kubectl can specify a size by `--chunk-size` instead of the `label key`.
+The operators of `label key` include ==, =, !=, in, not in. 
+
+> For the `limit` condition, kubectl can only specify a size by `--chunk-size` instead of the `label key`.
 
 [Go to top](#top)
 ## Collection Resource
