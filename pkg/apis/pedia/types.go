@@ -23,8 +23,8 @@ const (
 	SearchLabelSize   = "search.clusterpedia.io/size"
 	SearchLabelOffset = "search.clusterpedia.io/offset"
 
-	ShadowLabelClusterName          = "shadow.clusterpedia.io/cluster-name"
-	ShadowLabelGroupVersionResource = "shadow.clusterpedia.io/gvr"
+	ShadowAnnotationClusterName          = "shadow.clusterpedia.io/cluster-name"
+	ShadowAnnotationGroupVersionResource = "shadow.clusterpedia.io/gvr"
 )
 
 type OrderBy struct {
