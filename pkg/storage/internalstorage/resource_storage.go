@@ -147,7 +147,10 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
 	})
-	offset, amount, query := applyListOptionsToQuery(query, opts)
+	offset, amount, query, err := applyListOptionsToQuery(query, opts)
+	if err != nil {
+		return err
+	}
 
 	var resources []Resource
 	result := query.Find(&resources)

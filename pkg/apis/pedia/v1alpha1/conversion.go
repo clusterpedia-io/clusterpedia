@@ -14,10 +14,22 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
 )
 
 func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *pedia.ListOptions, s conversion.Scope) error {
+	fieldSelector := in.FieldSelector
+	defer func() {
+		in.FieldSelector = fieldSelector
+	}()
+
+	// skip convert fieldSelector
+	in.FieldSelector = ""
 	if err := metainternal.Convert_v1_ListOptions_To_internalversion_ListOptions(&in.ListOptions, &out.ListOptions, s); err != nil {
+		return err
+	}
+
+	if err := convert_string_To_fields_Selector(&fieldSelector, &out.EnhancedFieldSelector, s); err != nil {
 		return err
 	}
 
@@ -132,6 +144,10 @@ func Convert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions, ou
 		return err
 	}
 
+	if err := convert_fields_Selector_To_string(&in.EnhancedFieldSelector, &out.FieldSelector, s); err != nil {
+		return err
+	}
+
 	labels := in.LabelSelector.DeepCopySelector()
 	requirements, _ := in.ExtraLabelSelector.Requirements()
 	labels.Add(requirements...)
@@ -240,3 +256,20 @@ func convert_pedia_Slice_orderby_To_String(in *[]pedia.OrderBy, out *string, s c
 }
 
 func compileErrorOnMissingConversion() {}
+
+func convert_string_To_fields_Selector(in *string, out *fields.Selector, s conversion.Scope) error {
+	selector, err := fields.Parse(*in)
+	if err != nil {
+		return err
+	}
+	*out = selector
+	return nil
+}
+
+func convert_fields_Selector_To_string(in *fields.Selector, out *string, s conversion.Scope) error {
+	if *in == nil {
+		return nil
+	}
+	*out = (*in).String()
+	return nil
+}

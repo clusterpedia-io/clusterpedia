@@ -67,6 +67,8 @@ func (s *RESTStorage) List(ctx context.Context, _ *metainternalversion.ListOptio
 		return nil, apierrors.NewBadRequest(err.Error())
 	}
 
+	// TODO(iceber): validate *pediainternal.ListOptions
+
 	return s.list(ctx, &opts)
 }
 

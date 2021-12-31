@@ -133,6 +133,9 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.EnhancedFieldSelector != nil {
+		out.EnhancedFieldSelector = in.EnhancedFieldSelector.DeepCopySelector()
+	}
 	if in.ExtraLabelSelector != nil {
 		out.ExtraLabelSelector = in.ExtraLabelSelector.DeepCopySelector()
 	}
