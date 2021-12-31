@@ -35,10 +35,12 @@ type ResourceSynchro struct {
 	listerWatcher cache.ListerWatcher
 	cache         *informer.ResourceVersionStorage
 
-	memoryVersion schema.GroupVersion
-	convertor     runtime.ObjectConvertor
-	storage       storage.ResourceStorage
-	status        atomic.Value // clustersv1alpha1.ClusterResourceSyncCondition
+	memoryVersion  schema.GroupVersion
+	storageVersion schema.GroupVersion
+	storage        storage.ResourceStorage
+	convertor      runtime.ObjectConvertor
+
+	status atomic.Value // clustersv1alpha1.ClusterResourceSyncCondition
 
 	runlock sync.Mutex
 	stoped  chan struct{}
@@ -63,9 +65,10 @@ func newResourceSynchro(cluster string, syncKind schema.GroupVersionKind, lw cac
 		cache:         rvcache,
 		queue:         queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
 
-		storage:       storage,
-		convertor:     convertor,
-		memoryVersion: storage.GetStorageConfig().MemoryVersion,
+		storage:        storage,
+		convertor:      convertor,
+		memoryVersion:  storage.GetStorageConfig().MemoryVersion,
+		storageVersion: storage.GetStorageConfig().StorageVersion,
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -290,9 +293,10 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 
 	var err error
 	obj := event.Object.(runtime.Object)
+
+	// if synchro.convertor == nil, it means no conversion is needed.
 	if synchro.convertor != nil {
-		obj, err = synchro.convertor.ConvertToVersion(obj, synchro.memoryVersion)
-		if err != nil {
+		if obj, err = synchro.convertToStorageVersion(obj); err != nil {
 			klog.Error(err)
 			return
 		}
@@ -318,6 +322,25 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 			"name", o.GetName(),
 		)
 	}
+}
+
+func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
+	// convert to hub version
+	obj, err := synchro.convertor.ConvertToVersion(obj, synchro.memoryVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	if synchro.memoryVersion == synchro.storageVersion {
+		return obj, nil
+	}
+
+	// convert to storage version
+	obj, err = synchro.convertor.ConvertToVersion(obj, synchro.storageVersion)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
 func (synchro *ResourceSynchro) createOrUpdateResource(obj runtime.Object) error {
