@@ -60,7 +60,7 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		return nil, err
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{Logger: logger})
+	db, err := gorm.Open(dialector, &gorm.Config{SkipDefaultTransaction: true, Logger: logger})
 	if err != nil {
 		return nil, err
 	}

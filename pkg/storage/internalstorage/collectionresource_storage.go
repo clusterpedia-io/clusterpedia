@@ -24,19 +24,18 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 	cr := s.collectionResource.DeepCopy()
 
 	types := make(map[schema.GroupResource]*pediainternal.CollectionResourceType, len(cr.ResourceTypes))
-	query := s.db.WithContext(ctx).Model(&Resource{}).Where(&Resource{
-		Group:    cr.ResourceTypes[0].Group,
-		Version:  cr.ResourceTypes[0].Version,
-		Resource: cr.ResourceTypes[0].Resource,
+	query := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
+		"group":    cr.ResourceTypes[0].Group,
+		"version":  cr.ResourceTypes[0].Version,
+		"resource": cr.ResourceTypes[0].Resource,
 	})
 	types[cr.ResourceTypes[0].GroupResource()] = &cr.ResourceTypes[0]
 	for i, rt := range cr.ResourceTypes[1:] {
-		query.Or(&Resource{
-			Group:    rt.Group,
-			Version:  rt.Version,
-			Resource: rt.Resource,
+		query.Or(map[string]interface{}{
+			"group":    rt.Group,
+			"version":  rt.Version,
+			"resource": rt.Resource,
 		})
-
 		types[rt.GroupResource()] = &cr.ResourceTypes[i]
 	}
 

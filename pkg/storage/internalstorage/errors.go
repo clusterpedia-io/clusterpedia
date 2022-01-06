@@ -51,6 +51,8 @@ func InterpreMysqlError(key string, err error) error {
 	switch mysqlErr.Number {
 	case 1062:
 		return genericstorage.NewKeyExistsError(key, 0)
+	case 1040:
+		// klog.Error("too many connections")
 	}
 	return err
 }
