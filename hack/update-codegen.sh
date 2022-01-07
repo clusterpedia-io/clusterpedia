@@ -29,6 +29,7 @@ deepcopy-gen \
     --output-file-base=zz_generated.deepcopy
 
 echo "Generating with conversion-gen"
+GO111MODULE=on go install k8s.io/code-generator/cmd/conversion-gen
 conversion-gen \
     --go-header-file hack/boilerplate.go.txt \
     --input-dirs=./pkg/apis/pedia/v1alpha1 \
