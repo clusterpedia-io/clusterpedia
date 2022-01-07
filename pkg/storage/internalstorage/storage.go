@@ -19,14 +19,14 @@ import (
 type Resource struct {
 	ID uint `gorm:"primaryKey"`
 
-	Group    string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name"`
-	Version  string `gorm:"size:15;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name"`
-	Resource string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name"`
+	Group    string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
+	Version  string `gorm:"size:15;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
+	Resource string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
 	Kind     string `gorm:"size:63;not null"`
 
-	Cluster         string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100"`
-	Namespace       string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:50"`
-	Name            string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100"`
+	Cluster         string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_cluster"`
+	Namespace       string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:50;index:idx_group_version_resource_namespace_name"`
+	Name            string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
 	UID             types.UID `gorm:"size:36;not null"`
 	ResourceVersion string    `gorm:"size:30;not null"`
 
@@ -77,11 +77,9 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *pediainternal.Collecti
 
 func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
 	var resources []Resource
-	result := f.db.WithContext(ctx).
-		Select("group", "version", "resource", "namespace", "name", "resource_version").
-		Where(&Resource{Cluster: cluster}).
+	result := f.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
+		Where(map[string]interface{}{"cluster": cluster}).
 		Find(&resources)
-
 	if result.Error != nil {
 		return nil, InterpreError(cluster, result.Error)
 	}
@@ -105,19 +103,17 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 }
 
 func (f *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
-	result := f.db.WithContext(ctx).Where(&Resource{Cluster: cluster}).Delete(Resource{})
+	result := f.db.WithContext(ctx).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
 	return InterpreError(cluster, result.Error)
 }
 
 func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error {
-	resource := Resource{
-		Cluster:  cluster,
-		Group:    gvr.Group,
-		Resource: gvr.Resource,
-		Version:  gvr.Version,
-	}
-
-	result := s.db.Where(&resource).Delete(&Resource{})
+	result := s.db.Where(map[string]interface{}{
+		"cluster":  cluster,
+		"group":    gvr.Group,
+		"version":  gvr.Version,
+		"resource": gvr.Resource,
+	}).Delete(&Resource{})
 	return InterpreError(fmt.Sprintf("%s/%s", cluster, gvr), result.Error)
 }
 

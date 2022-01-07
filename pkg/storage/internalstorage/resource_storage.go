@@ -83,16 +83,14 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		updatedResource.DeletedAt = sql.NullTime{Time: deletedAt.Time, Valid: true}
 	}
 
-	resource := Resource{
-		Cluster:   cluster,
-		Name:      metaobj.GetName(),
-		UID:       metaobj.GetUID(),
-		Namespace: metaobj.GetNamespace(),
-		Group:     s.storageGroupResource.Group,
-		Resource:  s.storageGroupResource.Resource,
-		Version:   s.storageVersion.Version,
-	}
-	result := s.db.Where(&resource).Updates(&updatedResource)
+	result := s.db.Where(map[string]interface{}{
+		"cluster":   cluster,
+		"group":     s.storageGroupResource.Group,
+		"version":   s.storageVersion.Version,
+		"resource":  s.storageGroupResource.Resource,
+		"namespace": metaobj.GetNamespace(),
+		"name":      metaobj.GetName(),
+	}).Updates(&updatedResource)
 	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
 }
 
@@ -102,30 +100,27 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 		return InterpreError("", err)
 	}
 
-	resource := Resource{
-		Cluster:   cluster,
-		Name:      metaobj.GetName(),
-		Namespace: metaobj.GetNamespace(),
-		Group:     s.storageGroupResource.Group,
-		Resource:  s.storageGroupResource.Resource,
-		Version:   s.storageVersion.Version,
-	}
-
-	result := s.db.Where(&resource).Delete(&Resource{})
+	result := s.db.Where(map[string]interface{}{
+		"cluster":   cluster,
+		"group":     s.storageGroupResource.Group,
+		"version":   s.storageVersion.Version,
+		"resource":  s.storageGroupResource.Resource,
+		"namespace": metaobj.GetNamespace(),
+		"name":      metaobj.GetName(),
+	}).Delete(&Resource{})
 	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	resource := Resource{
-		Cluster:   cluster,
-		Namespace: namespace,
-		Name:      name,
-		Group:     s.storageGroupResource.Group,
-		Resource:  s.storageGroupResource.Resource,
-		Version:   s.storageVersion.Version,
-	}
-
-	result := s.db.WithContext(ctx).Select("object").Where(&resource).First(&resource)
+	var resource Resource
+	result := s.db.WithContext(ctx).Select("object").Where(map[string]interface{}{
+		"cluster":   cluster,
+		"group":     s.storageGroupResource.Group,
+		"version":   s.storageVersion.Version,
+		"resource":  s.storageGroupResource.Resource,
+		"namespace": namespace,
+		"name":      name,
+	}).First(&resource)
 	if result.Error != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, result.Error)
 	}
