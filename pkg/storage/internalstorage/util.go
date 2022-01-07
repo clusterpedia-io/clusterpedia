@@ -19,8 +19,7 @@ import (
 )
 
 var (
-	defaultOrderByFields   = []string{"cluster", "name", "namespace", "created_at", "resource_version"}
-	defaultOrderByFieldSet = sets.NewString(defaultOrderByFields...)
+	supportedOrderByFields = sets.NewString("cluster", "namespace", "name", "created_at", "resource_version")
 )
 
 func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB, error) {
@@ -126,27 +125,18 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions) (i
 		query = query.Count(amount)
 	}
 
-	ordered := sets.NewString()
+	// Due to performance reasons, the default order by is not set.
+	// https://github.com/clusterpedia-io/clusterpedia/pull/44
 	for _, orderby := range opts.OrderBy {
-		if defaultOrderByFieldSet.Has(orderby.Field) {
+		if supportedOrderByFields.Has(orderby.Field) {
 			column := clause.OrderByColumn{
 				Column: clause.Column{Name: orderby.Field, Raw: true},
 				Desc:   orderby.Desc,
 			}
 			query = query.Order(column)
-			ordered.Insert(orderby.Field)
-		}
-	}
-
-	for _, field := range defaultOrderByFields {
-		if ordered.Has(field) {
-			continue
 		}
 
-		column := clause.OrderByColumn{
-			Column: clause.Column{Name: field, Raw: true},
-		}
-		query = query.Order(column)
+		// if orderby.Field is unsupported, return invalid error?
 	}
 
 	if opts.Limit != -1 {
