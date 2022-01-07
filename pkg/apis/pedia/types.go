@@ -22,7 +22,7 @@ const (
 	SearchLabelWithContinue       = "search.clusterpedia.io/with-continue"
 	SearchLabelWithRemainingCount = "search.clusterpedia.io/with-remaining-count"
 
-	SearchLabelSize   = "search.clusterpedia.io/size"
+	SearchLabelLimit  = "search.clusterpedia.io/limit"
 	SearchLabelOffset = "search.clusterpedia.io/offset"
 
 	ShadowAnnotationClusterName          = "shadow.clusterpedia.io/cluster-name"

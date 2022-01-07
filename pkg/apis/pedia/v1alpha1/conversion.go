@@ -87,13 +87,13 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 							return err
 						}
 					}
-				case pedia.SearchLabelSize:
+				case pedia.SearchLabelLimit:
 					if out.Limit == 0 && len(values) != 0 {
-						size, err := strconv.ParseInt(values[0], 10, 64)
+						limit, err := strconv.ParseInt(values[0], 10, 64)
 						if err != nil {
-							return fmt.Errorf("Invalid Query Size: %w", err)
+							return fmt.Errorf("Invalid Query Limit: %w", err)
 						}
-						out.Limit = size
+						out.Limit = limit
 					}
 				case pedia.SearchLabelOffset:
 					if out.Continue == "" && len(values) != 0 {
