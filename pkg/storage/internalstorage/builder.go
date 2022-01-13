@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"k8s.io/client-go/tools/cache"
 )
 
 type JSONQueryExpression struct {
@@ -115,4 +116,29 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 			}
 		}
 	}
+}
+
+func buildParentOwner(db *gorm.DB, cluster, owner string, seniority int) interface{} {
+	if seniority == 0 {
+		return owner
+	}
+
+	parentOwner := buildParentOwner(db, cluster, owner, seniority-1)
+	ownerQuery := db.Model(Resource{}).Select("uid").Where(map[string]interface{}{"cluster": cluster})
+	if _, ok := parentOwner.(string); ok {
+		return ownerQuery.Where("owner_uid = ?", parentOwner)
+	}
+	return ownerQuery.Where("owner_uid IN (?)", parentOwner)
+}
+
+// TODO(iceber): add gvr param
+func buildParentOwnerByKey(db *gorm.DB, cluster, ownerKey string, seniority int) interface{} {
+	ownerQuery := db.Model(Resource{}).Select("uid").Where(map[string]interface{}{"cluster": cluster})
+	if seniority == 0 {
+		namespace, name, _ := cache.SplitMetaNamespaceKey(ownerKey)
+		return ownerQuery.Where(map[string]interface{}{"namespace": namespace, "name": name})
+	}
+
+	parentOwner := buildParentOwnerByKey(db, cluster, ownerKey, seniority-1)
+	return ownerQuery.Where("owner_uid IN (?)", parentOwner)
 }

@@ -27,6 +27,7 @@ type Resource struct {
 	Cluster         string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_cluster"`
 	Namespace       string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:50;index:idx_group_version_resource_namespace_name"`
 	Name            string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
+	OwnerUID        types.UID `gorm:"column:owner_uid;size:36;not null;default:''"`
 	UID             types.UID `gorm:"size:36;not null"`
 	ResourceVersion string    `gorm:"size:30;not null"`
 
