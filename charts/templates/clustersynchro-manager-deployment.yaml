@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    app: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{  .Values.clustersynchroManager.replicaCount }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+      app: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+  template:
+    metadata:
+      {{- if .Values.clustersynchroManager.podAnnotations }}
+      annotations:
+      {{- include "common.tplvalues.render" (dict "value" .Values.clustersynchroManager.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        app: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+        {{- if .Values.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.clustersynchroManager.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "clusterpedia.clustersynchroManager.imagePullSecrets" . | nindent 6 }}
+      containers:
+      - name: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+        image: {{ template "clusterpedia.clustersynchroManager.image" . }}
+        imagePullPolicy: {{ .Values.clustersynchroManager.image.pullPolicy }}
+        command:
+        - /usr/local/bin/clustersynchro-manager
+        - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        - --leader-elect-resource-namespace={{ .Release.Namespace }}
+        - --feature-gates=PruneManagedFields=true,PruneLastAppliedConfiguration=true
+        {{- if .Values.clustersynchroManager.resources }}
+        resources: {{- toYaml .Values.clustersynchroManager.resources | nindent 12 }}
+        {{- end }}
+        env:
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clusterpedia.internalstorage.fullname" . }}
+                key: password
+        volumeMounts:
+          - name: internalstorage-config
+            mountPath: /etc/clusterpedia/storage
+            readOnly: true
+      serviceAccountName: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
+      {{- if .Values.clustersynchroManager.affinity }}
+      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.clustersynchroManager.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.clustersynchroManager.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.clustersynchroManager.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.clustersynchroManager.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.clustersynchroManager.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: internalstorage-config
+          configMap:
+            name: {{ include "clusterpedia.internalstorage.fullname" . }}

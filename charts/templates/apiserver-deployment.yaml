@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clusterpedia.apiserver.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    app: {{ include "clusterpedia.apiserver.fullname" . }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.apiserver.replicaCount }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+      app: {{ include "clusterpedia.apiserver.fullname" . }}
+  template:
+    metadata:
+      {{- if .Values.apiserver.podAnnotations }}
+      annotations:
+      {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        app: {{ include "clusterpedia.apiserver.fullname" . }}
+        {{- if .Values.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "clusterpedia.apiserver.imagePullSecrets" . | nindent 6 }}
+      containers:
+      - name: {{ include "clusterpedia.apiserver.fullname" . }}
+        image: {{ template "clusterpedia.apiserver.image" . }}
+        imagePullPolicy: {{ .Values.apiserver.image.pullPolicy }}
+        command:
+        - /usr/local/bin/apiserver
+        - --secure-port=443
+        - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        - -v=3
+        {{- if .Values.apiserver.resources }}
+        resources: {{- toYaml .Values.apiserver.resources | nindent 12 }}
+        {{- end }}
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "clusterpedia.internalstorage.fullname" . }}
+              key: password
+        volumeMounts:
+        - name: internalstorage-config
+          mountPath: /etc/clusterpedia/storage
+          readOnly: true
+      serviceAccountName: {{ include "clusterpedia.apiserver.fullname" . }}
+      {{- if .Values.apiserver.affinity }}
+      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.apiserver.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.apiserver.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: internalstorage-config
+          configMap:
+            name: {{ include "clusterpedia.internalstorage.fullname" . }}

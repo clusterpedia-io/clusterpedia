@@ -1,0 +1,21 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+Documentation: https://clusterpedia.io/docs/
+
+View imported clusters:
+  $ kubectl get pediacluster
+
+  Lean More -> https://clusterpedia.io/docs/usage/import-clusters/
+
+Configure the cluster shortcut for kubectl:
+  $ curl -sfL https://raw.githubusercontent.com/clusterpedia-io/clusterpedia/main/hack/gen-clusterconfigs.sh | sh -
+  $ kubectl --cluster clusterpedia api-resources
+
+  Lean More -> https://clusterpedia.io/docs/usage/access-clusterpedia/#configure-the-cluster-shortcut-for-kubectl
