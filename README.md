@@ -30,7 +30,7 @@ The architecture consists of four parts:
 * **Clusterpedia APIServer**: Register to Kube APIServer by the means of Aggregated API and provide services through a unified entrance
 * **ClusterSynchro Manager**: Manage the Cluster Synchro that is used to synchronize cluster resources
 * **Storage Layer**: Connect with a specific storage component and then register to Clusterpedia APIServer and ClusterSynchro Manager via a storage interface
-* **Storage component**: A specific storage facility such as MySQL, postgres, redis or other graph databases
+* **Storage Component**: A specific storage facility such as MySQL, postgres, redis or other graph databases
 
 In addition, Clusterpedia will use the custom resource *PediaCluster* to implement cluster authentication and synchronize the resource configuration.
 
