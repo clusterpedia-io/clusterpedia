@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -46,10 +47,8 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 	}
 
 	var ownerUID types.UID
-	for _, owner := range metaobj.GetOwnerReferences() {
-		if owner.Controller != nil && *owner.Controller {
-			ownerUID = owner.UID
-		}
+	if owner := metav1.GetControllerOfNoCopy(metaobj); owner != nil {
+		ownerUID = owner.UID
 	}
 
 	var buffer bytes.Buffer
@@ -91,16 +90,17 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 	}
 
 	var ownerUID types.UID
-	for _, owner := range metaobj.GetOwnerReferences() {
-		if owner.Controller != nil && *owner.Controller {
-			ownerUID = owner.UID
-		}
+	if owner := metav1.GetControllerOfNoCopy(metaobj); owner != nil {
+		ownerUID = owner.UID
 	}
 
+	// The uid may not be the same for resources with the same namespace/name
+	// in the same cluster at different times.
 	updatedResource := map[string]interface{}{
+		"owner_uid":        ownerUID,
+		"uid":              metaobj.GetUID(),
 		"resource_version": metaobj.GetResourceVersion(),
 		"object":           buffer.Bytes(),
-		"owner_uid":        ownerUID,
 	}
 	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
 		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
