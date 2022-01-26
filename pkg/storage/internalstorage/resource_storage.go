@@ -13,9 +13,16 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 
 	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+)
+
+const (
+	SearchLabelOwnerKey       = "internalstorage.clusterpedia.io/owner-key"
+	SearchLabelOwnerUID       = "internalstorage.clusterpedia.io/owner-uid"
+	SearchLabelOwnerSeniority = "internalstorage.clusterpedia.io/owner-seniority"
 )
 
 type ResourceStorage struct {
@@ -38,6 +45,13 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 		return InterpreError("", err)
 	}
 
+	var ownerUID types.UID
+	for _, owner := range metaobj.GetOwnerReferences() {
+		if owner.Controller != nil && *owner.Controller {
+			ownerUID = owner.UID
+		}
+	}
+
 	var buffer bytes.Buffer
 	if err := s.codec.Encode(obj, &buffer); err != nil {
 		return InterpreResourceError(cluster, metaobj.GetName(), err)
@@ -45,6 +59,7 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 
 	resource := Resource{
 		Cluster:         cluster,
+		OwnerUID:        ownerUID,
 		UID:             metaobj.GetUID(),
 		Name:            metaobj.GetName(),
 		Namespace:       metaobj.GetNamespace(),
@@ -60,7 +75,7 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 		resource.DeletedAt = sql.NullTime{Time: deletedAt.Time, Valid: true}
 	}
 
-	result := s.db.Create(&resource)
+	result := s.db.WithContext(ctx).Create(&resource)
 	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
 }
 
@@ -75,22 +90,30 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		return InterpreResourceError(cluster, metaobj.GetName(), err)
 	}
 
-	updatedResource := Resource{
-		ResourceVersion: metaobj.GetResourceVersion(),
-		Object:          buffer.Bytes(),
-	}
-	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
-		updatedResource.DeletedAt = sql.NullTime{Time: deletedAt.Time, Valid: true}
+	var ownerUID types.UID
+	for _, owner := range metaobj.GetOwnerReferences() {
+		if owner.Controller != nil && *owner.Controller {
+			ownerUID = owner.UID
+		}
 	}
 
-	result := s.db.Where(map[string]interface{}{
+	updatedResource := map[string]interface{}{
+		"resource_version": metaobj.GetResourceVersion(),
+		"object":           buffer.Bytes(),
+		"owner_uid":        ownerUID,
+	}
+	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
+		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
+	}
+
+	result := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
 		"cluster":   cluster,
 		"group":     s.storageGroupResource.Group,
 		"version":   s.storageVersion.Version,
 		"resource":  s.storageGroupResource.Resource,
 		"namespace": metaobj.GetNamespace(),
 		"name":      metaobj.GetName(),
-	}).Updates(&updatedResource)
+	}).Updates(updatedResource)
 	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
 }
 
@@ -142,7 +165,7 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
 	})
-	offset, amount, query, err := applyListOptionsToQuery(query, opts)
+	offset, amount, query, err := applyListOptionsToResourceQuery(s.db, query, opts)
 	if err != nil {
 		return err
 	}
@@ -198,4 +221,58 @@ func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
 		StorageVersion:       s.storageVersion,
 		MemoryVersion:        s.memoryVersion,
 	}
+}
+
+func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB, error) {
+	var amount *int64
+	applyFn := func(query *gorm.DB, opts *pediainternal.ListOptions) (*gorm.DB, error) {
+		query, err := applyExtraLabelSelectorToResourceQuery(db, query, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
+			amount = new(int64)
+			query = query.Count(amount)
+		}
+		return query, nil
+	}
+
+	offset, query, err := applyListOptionsToQuery(query, opts, applyFn)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return offset, amount, query, nil
+}
+
+func applyExtraLabelSelectorToResourceQuery(db *gorm.DB, query *gorm.DB, opts *pediainternal.ListOptions) (*gorm.DB, error) {
+	if opts.ExtraLabelSelector == nil {
+		return query, nil
+	}
+
+	var seniority int
+	if value, found := opts.ExtraLabelSelector.RequiresExactMatch(SearchLabelOwnerSeniority); found {
+		if v, err := strconv.Atoi(value); err == nil {
+			seniority = v
+		}
+	}
+
+	if owner, found := opts.ExtraLabelSelector.RequiresExactMatch(SearchLabelOwnerUID); found {
+		// TODO(iceber): add validate or return error?
+		if len(opts.ClusterNames) != 1 {
+			return query, nil
+		}
+
+		cluster := opts.ClusterNames[0]
+		parent := buildParentOwner(db, cluster, owner, seniority)
+		if _, ok := parent.(string); ok {
+			query = query.Where("owner_uid = ?", parent)
+		} else {
+			query = query.Where("owner_uid IN (?)", parent)
+		}
+	}
+
+	// TODO(iceber): support search by owner key(namespace/name)
+
+	return query, nil
 }

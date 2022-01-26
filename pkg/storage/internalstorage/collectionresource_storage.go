@@ -40,7 +40,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 	}
 
 	// TODO(iceber): support with remaining count and continue
-	_, _, query, err := applyListOptionsToQuery(query, opts)
+	_, query, err := applyListOptionsToCollectionResourceQuery(query, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -65,4 +65,8 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 
 	cr.Items = objs
 	return cr, nil
+}
+
+func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *gorm.DB, error) {
+	return applyListOptionsToQuery(query, opts, nil)
 }
