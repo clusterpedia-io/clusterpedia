@@ -1,0 +1,35 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: check-__NODE_NAME__-postgres-local-pv-dir
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: postgres
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-internalstorage
+        internalstorage.clusterpedia.io/type: postgres
+        job: check-node-local-pv-dir
+    spec:
+      restartPolicy: Never
+      nodeName: __NODE_NAME__
+      containers:
+      - name: check-dir
+        image: postgres:12
+        command: ['sh', '-c', 'stat /var/lib/postgresql/data']
+        volumeMounts:
+        - name: pv-dir
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: pv-dir
+        hostPath:
+          path: /var/local/clusterpedia/internalstorage/postgres
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"

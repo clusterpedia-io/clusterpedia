@@ -1,7 +1,11 @@
+---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: clusterpedia-internalstorage-mysql
+  name: clusterpedia-internalstorage-postgres
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: postgres
 spec:
   capacity:
     storage: 20Gi
@@ -10,7 +14,7 @@ spec:
   - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   local:
-    path: /var/local/clusterpedia/internalstorage/mysql
+    path: /var/local/clusterpedia/internalstorage/postgres
   nodeAffinity:
     required:
       nodeSelectorTerms:

@@ -32,7 +32,7 @@ spec:
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: internalstorage-mysql
+              name: internalstorage-password
               key: password
         volumeMounts:
         - name: internalstorage-config

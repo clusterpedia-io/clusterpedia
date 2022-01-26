@@ -87,9 +87,9 @@ When deploying MySQL, you need to manually specify the node where the local pv i
 > You can also choose to use your own storage components. The storage layer supports MySQL and postgres by default.
 ```sh
 $ export STORAGE_NODE_NAME=<selected node name>
-$ cd ./deploy/internalstorage
-$ sed "s|__NODE_NAME__|$STORAGE_NODE_NAME|g" \
-./templates/clusterpedia_internalstorage_local_pv.yaml > clusterpedia_internalstorage_local_pv.yaml
+$ cd ./deploy/internalstorage/mysql
+$ sed "s|__NODE_NAME__|$STORAGE_NODE_NAME|g" `grep __NODE_NAME__ -rl ./templates` > clusterpedia_internalstorage_pv.yaml
+
 
 $ # Log in to the selected node host: mkdir -p /var/local/clusterpedia/internalstorage/mysql
 
@@ -103,7 +103,7 @@ deployment.apps/clusterpedia-internalstorage-mysql created
 persistentvolume/clusterpedia-internalstorage-mysql created
 
 $ # To provide convenience for subsequent operations, go back to the root directory
-$ cd ../..
+$ cd ../../..
 ```
 ## Deploy CRD
 Run the following command to apply the yaml file and deploy CRD:

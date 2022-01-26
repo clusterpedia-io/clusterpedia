@@ -1,9 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: clusterpedia-system
----
-apiVersion: v1
 kind: Service
 metadata:
   name: clusterpedia-internalstorage-mysql
@@ -26,17 +21,10 @@ spec:
   resources:
     requests:
       storage: 20Gi
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: internalstorage-mysql
-  namespace: clusterpedia-system
-  labels:
-    app: clusterpedia-internalstorage
-    internalstorage.clusterpedia.io/type: mysql
-data:
-  password: ZGFuZ2Vyb3VzMA==
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: mysql
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -69,7 +57,7 @@ spec:
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: internalstorage-mysql
+              name: internalstorage-password
               key: password
         ports:
         - name: mysql
@@ -81,3 +69,7 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: internalstorage-mysql
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
