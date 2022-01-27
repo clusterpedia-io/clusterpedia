@@ -13,30 +13,30 @@ type JSONQueryExpression struct {
 	keys   []string
 
 	not    bool
-	values []interface{}
+	values []string
 }
 
 func JSONQuery(column string, keys ...string) *JSONQueryExpression {
 	return &JSONQueryExpression{column: column, keys: keys}
 }
 
-func (jsonQuery *JSONQueryExpression) Equal(value interface{}) *JSONQueryExpression {
-	jsonQuery.values = []interface{}{value}
+func (jsonQuery *JSONQueryExpression) Equal(value string) *JSONQueryExpression {
+	jsonQuery.values = []string{value}
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) NotEqual(value interface{}) *JSONQueryExpression {
+func (jsonQuery *JSONQueryExpression) NotEqual(value string) *JSONQueryExpression {
 	jsonQuery.not = true
-	jsonQuery.values = []interface{}{value}
+	jsonQuery.values = []string{value}
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) In(values ...interface{}) *JSONQueryExpression {
+func (jsonQuery *JSONQueryExpression) In(values ...string) *JSONQueryExpression {
 	jsonQuery.values = values
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) NotIn(values ...interface{}) *JSONQueryExpression {
+func (jsonQuery *JSONQueryExpression) NotIn(values ...string) *JSONQueryExpression {
 	jsonQuery.not = true
 	jsonQuery.values = values
 	return jsonQuery
@@ -50,29 +50,25 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 		switch stmt.Dialector.Name() {
 		case "mysql", "sqlite":
-			builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
+			builder.WriteString("JSON_UNQUOTE(JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
 			builder.AddVar(stmt, fmt.Sprintf(`$."%s"`, strings.Join(jsonQuery.keys, `"."`)))
+			builder.WriteString("))")
 
 			switch len(jsonQuery.values) {
 			case 0:
-				builder.WriteString(") IS NOT NULL")
+				builder.WriteString(" IS NOT NULL")
 			case 1:
 				if jsonQuery.not {
-					builder.WriteString(") != ")
+					builder.WriteString(" != ")
 				} else {
-					builder.WriteString(") = ")
+					builder.WriteString(" = ")
 				}
-
-				if _, ok := jsonQuery.values[0].(bool); ok {
-					builder.WriteString(fmt.Sprint(jsonQuery.values[0]))
-				} else {
-					builder.AddVar(builder, jsonQuery.values[0])
-				}
+				builder.AddVar(builder, jsonQuery.values[0])
 			default:
 				if jsonQuery.not {
-					builder.WriteString(") NOT IN ")
+					builder.WriteString(" NOT IN ")
 				} else {
-					builder.WriteString(") IN ")
+					builder.WriteString(" IN ")
 				}
 				builder.AddVar(builder, jsonQuery.values)
 			}
@@ -96,12 +92,7 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 				} else {
 					stmt.WriteString(" = ")
 				}
-
-				if _, ok := jsonQuery.values[0].(bool); ok {
-					builder.WriteString(fmt.Sprint(jsonQuery.values[0]))
-				} else {
-					builder.AddVar(builder, jsonQuery.values[0])
-				}
+				builder.AddVar(builder, jsonQuery.values[0])
 			default:
 				stmt.WriteString(" ->> ")
 				stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])

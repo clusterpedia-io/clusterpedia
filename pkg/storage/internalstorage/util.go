@@ -50,11 +50,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, ap
 	if opts.LabelSelector != nil {
 		if requirements, selectable := opts.LabelSelector.Requirements(); selectable {
 			for _, requirement := range requirements {
-				values := make([]interface{}, 0, len(requirement.Values()))
-				for value := range requirement.Values() {
-					values = append(values, value)
-				}
-
+				values := requirement.Values().List()
 				jsonQuery := JSONQuery("object", "metadata", "labels", requirement.Key())
 				switch requirement.Operator() {
 				case selection.Exists:
@@ -77,11 +73,6 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, ap
 	if opts.EnhancedFieldSelector != nil {
 		if requirements, selectable := opts.EnhancedFieldSelector.Requirements(); selectable {
 			for _, requirement := range requirements {
-				values := make([]interface{}, 0, len(requirement.Values()))
-				for value := range requirement.Values() {
-					values = append(values, value)
-				}
-
 				var (
 					fields      []string
 					fieldErrors field.ErrorList
@@ -99,6 +90,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, ap
 					return 0, nil, apierrors.NewInvalid(schema.GroupKind{Group: pediainternal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
 				}
 
+				values := requirement.Values().List()
 				jsonQuery := JSONQuery("object", fields...)
 				switch requirement.Operator() {
 				case selection.Exists:
