@@ -55,8 +55,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, ap
 					values = append(values, value)
 				}
 
-				// wrap label key with `""`
-				jsonQuery := JSONQuery("object", "metadata", "labels", fmt.Sprintf("\"%s\"", requirement.Key()))
+				jsonQuery := JSONQuery("object", "metadata", "labels", requirement.Key())
 				switch requirement.Operator() {
 				case selection.Exists:
 				case selection.Equals, selection.DoubleEquals:

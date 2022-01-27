@@ -51,7 +51,7 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 		switch stmt.Dialector.Name() {
 		case "mysql", "sqlite":
 			builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
-			builder.AddVar(stmt, "$."+strings.Join(jsonQuery.keys, "."))
+			builder.AddVar(stmt, fmt.Sprintf(`$."%s"`, strings.Join(jsonQuery.keys, `"."`)))
 
 			switch len(jsonQuery.values) {
 			case 0:
