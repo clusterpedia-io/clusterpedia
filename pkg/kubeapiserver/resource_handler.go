@@ -114,14 +114,6 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		handler = handlers.GetResource(storage, reqScope)
 	case "list":
-		// remove fieldSelector query,
-		// prevent `handlers.ListResource` handling and verifying `FieldSelector`
-		// https://github.com/kubernetes/kubernetes/blob/f5be5052e3d0808abb904aebd3218fe4a5c2dd82/staging/src/k8s.io/apiserver/pkg/endpoints/handlers/get.go#L198
-		originQuery := req.URL.Query()
-		if originQuery.Get("fieldSelector") != "" {
-			originQuery.Del("fieldSelector")
-			req.URL.RawQuery = originQuery.Encode()
-		}
 		handler = handlers.ListResource(storage, nil, reqScope, false, r.minRequestTimeout)
 	default:
 		responsewriters.ErrorNegotiated(
