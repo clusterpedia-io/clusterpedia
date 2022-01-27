@@ -50,7 +50,7 @@ type CollectionResource struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// +required
-	ResourceTypes []CollectionResourceType `json:"reosurceTypes"`
+	ResourceTypes []CollectionResourceType `json:"resourceTypes"`
 
 	// +optional
 	Items []runtime.RawExtension `json:"items,omitempty"`
