@@ -18,6 +18,7 @@ import (
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
 
@@ -139,18 +140,24 @@ func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http
 	handler := genericapifilters.WithRequestInfo(apiHandler, c.RequestInfoResolver)
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestInfoResolver)
 
-	// handler = genericapifilters.WithWarningRecorder(handler)
-	// handler = filters.WithRequestQuery(handler)
-	// handler = WithClusterName(handler, "cluster-1")
+	// https://github.com/clusterpedia-io/clusterpedia/issues/54
+	handler = filters.RemoveFieldSelectorFromRequest(handler)
+
+	/* used for debugging
+	handler = genericapifilters.WithWarningRecorder(handler)
+	handler = WithClusterName(handler, "cluster-1")
+	*/
 	return handler
 }
 
-// func WithClusterName(handler http.Handler, cluster string) http.Handler {
-//	 return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-//	 	 req = req.WithContext(request.WithClusterName(req.Context(), cluster))
-//		 handler.ServeHTTP(w, req)
-//	 })
-// }
+/* used for debugging
+func WithClusterName(handler http.Handler, cluster string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req = req.WithContext(request.WithClusterName(req.Context(), cluster))
+		handler.ServeHTTP(w, req)
+	})
+}
+*/
 
 type wrapRequestInfoResolverForNamespace struct {
 	genericrequest.RequestInfoResolver
