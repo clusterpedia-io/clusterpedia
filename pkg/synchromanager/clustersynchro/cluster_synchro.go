@@ -160,84 +160,33 @@ type syncConfig struct {
 }
 
 func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.ClusterResource) {
-	// configs key is resource's storage gvk
-	configs := map[schema.GroupVersionResource]*syncConfig{}
-	sortedGroupResources := []schema.GroupResource{}
-	resourceStatuses := map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{}
+	var (
+		// syncConfigs key is resource's storage gvr
+		syncConfigs = map[schema.GroupVersionResource]*syncConfig{}
+
+		sortedGroupResources = []schema.GroupResource{}
+		resourceStatuses     = map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{}
+	)
+
 	for _, resources := range clusterResources {
 		for _, resource := range resources.Resources {
 			gr := schema.GroupResource{Group: resources.Group, Resource: resource}
-			gvks, err := s.restmapper.KindsFor(gr.WithVersion(""))
+			supportedGVKs, err := s.restmapper.KindsFor(gr.WithVersion(""))
 			if err != nil {
 				klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", s.name, "resource", gr)
 				continue
 			}
 
-			// filter cluster unsupported resource
-			if len(gvks) == 0 {
-				klog.InfoS("Skip resource sync, cluster not supported resource", "cluster", s.name, "resource", gr)
+			syncVersions, isLegacyResource, err := negotiateSyncVersions(resources.Versions, supportedGVKs)
+			if err != nil {
+				klog.InfoS("Skip resource sync", "cluster", s.name, "resource", gr, "reason", err)
 				continue
 			}
 
-			mapper, err := s.restmapper.RESTMapping(gvks[0].GroupKind(), gvks[0].Version)
+			mapper, err := s.restmapper.RESTMapping(supportedGVKs[0].GroupKind(), supportedGVKs[0].Version)
 			if err != nil {
 				klog.ErrorS(err, "Skip resource sync", "cluster", s.name, "resource", gr)
 				continue
-			}
-
-			var structuredObject bool
-			versions := resources.Versions
-			legacyResourceVersions := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gvks[0].GroupKind())
-			switch {
-			case len(legacyResourceVersions) != 0:
-				// kube resource
-				var preferredVersion schema.GroupVersion
-
-				// gvks is cluster supported versions
-				// gvs is cluster pedia supported versions
-				for _, gvk := range gvks {
-					for _, gv := range legacyResourceVersions {
-						if gvk.GroupVersion() == gv {
-							preferredVersion = gv
-						}
-					}
-				}
-				// if not get preferred version, skip resource
-				if preferredVersion.Empty() {
-					klog.ErrorS(errors.New("Not found preferred version"), "Skip resource sync", "cluster", s.name, "resource", gr)
-					continue
-				}
-
-				structuredObject = true
-				versions = append(versions, preferredVersion.Version)
-			case len(versions) != 0:
-				// custom resource
-				// filter resource version using cluster supported resource versions
-				var filtered []string
-				for _, version := range versions {
-					for _, gvk := range gvks {
-						if gvk.Version == version {
-							filtered = append(filtered, version)
-						}
-					}
-				}
-				if len(filtered) == 0 {
-					// no supported version found for the cluster
-					// TODO(iceber): add warn log
-					continue
-				}
-
-				versions = filtered
-			default:
-				// For custom resources, if the version to be synchronized is not specified,
-				// then the first three versions available from the cluster are used
-				for _, gvk := range gvks {
-					versions = append(versions, gvk.Version)
-				}
-
-				if len(versions) > 3 {
-					versions = versions[:3]
-				}
 			}
 
 			info := &clustersv1alpha1.ClusterResourceStatus{
@@ -246,7 +195,7 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 				Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
 			}
 
-			for _, version := range versions {
+			for _, version := range syncVersions {
 				syncResource := gr.WithVersion(version)
 				storageConfig, err := s.resourceStorageConfig.NewConfig(syncResource)
 				if err != nil {
@@ -256,7 +205,7 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 				}
 
 				storageResource := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
-				if _, ok := configs[storageResource]; !ok {
+				if _, ok := syncConfigs[storageResource]; !ok {
 					config := &syncConfig{
 						kind:            info.Kind,
 						syncResource:    syncResource,
@@ -265,13 +214,13 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 					}
 
 					if syncResource != storageResource {
-						if structuredObject {
+						if isLegacyResource {
 							config.convertor = resourcescheme.LegacyResourceScheme
 						} else {
 							config.convertor = resourcescheme.CustomResourceScheme
 						}
 					}
-					configs[storageResource] = config
+					syncConfigs[storageResource] = config
 				}
 
 				syncCondition := clustersv1alpha1.ClusterResourceSyncCondition{
@@ -303,15 +252,15 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 	s.sortedGroupResources.Store(sortedGroupResources)
 	s.resourceStatuses.Store(resourceStatuses)
 
-	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
-
 	// filter deleted resources
 	deleted := map[schema.GroupVersionResource]struct{}{}
 	for gvr := range s.resourceVersionCaches {
-		if _, ok := configs[gvr]; !ok {
+		if _, ok := syncConfigs[gvr]; !ok {
 			deleted[gvr] = struct{}{}
 		}
 	}
+
+	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
 
 	// remove deleted resource synchro
 	for gvr := range deleted {
@@ -332,7 +281,7 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 		delete(s.resourceVersionCaches, gvr)
 	}
 
-	for gvr, config := range configs {
+	for gvr, config := range syncConfigs {
 		if _, ok := synchros[gvr]; ok {
 			continue
 		}
@@ -644,4 +593,58 @@ func checkKubeHealthy(client kubernetes.Interface) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func negotiateSyncVersions(syncVersions []string, supportedGVKs []schema.GroupVersionKind) ([]string, bool, error) {
+	if len(supportedGVKs) == 0 {
+		return nil, false, errors.New("The supported versions are empty, the resource is not supported")
+	}
+
+	knowns := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(supportedGVKs[0].GroupKind())
+	if len(knowns) != 0 {
+		var preferredVersion schema.GroupVersion
+	Loop:
+		for _, gvk := range supportedGVKs {
+			for _, gv := range knowns {
+				if gvk.GroupVersion() == gv {
+					preferredVersion = gv
+					break Loop
+				}
+			}
+		}
+
+		if preferredVersion.Empty() {
+			// For legacy resources, only known version are synchronized,
+			// and only one version is guaranteed to be synchronized and saved.
+			return nil, true, errors.New("The supported versions do not contain any known versions")
+		}
+		return []string{preferredVersion.Version}, true, nil
+	}
+
+	// For custom resources, if the version to be synchronized is not specified,
+	// then the first three versions available from the cluster are used
+	if len(syncVersions) == 0 {
+		for _, gvk := range supportedGVKs {
+			syncVersions = append(syncVersions, gvk.Version)
+		}
+		if len(syncVersions) > 3 {
+			syncVersions = syncVersions[:3]
+		}
+		return syncVersions, false, nil
+	}
+
+	// Handles custom resources that specify sync versions
+	var filtered []string
+	for _, version := range syncVersions {
+		for _, gvk := range supportedGVKs {
+			if gvk.Version == version {
+				filtered = append(filtered, version)
+			}
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil, false, errors.New("The supported versions do not contain any specified sync version")
+	}
+	return filtered, false, nil
 }
