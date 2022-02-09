@@ -36,7 +36,7 @@ Clusterpedia also provides a `Default Storage Layer` that can connect with **MyS
 - [x] Automatically start/stop resource synchronization according to the current health status of the cluster
 - [ ] Support for plug-in storage layer. You can use other storage components to customize the storage layer according to your needs.
 - [x] High availability
-> The above unimplemented features are already in the [Roadmap](#roadmap)
+> The above unimplemented features are already in the [Roadmap](/ROADMAP.md)
 
 ---
 [Installation](https://clusterpedia.io/docs/installation/) | [Import Clusters](https://clusterpedia.io/docs/usage/import-clusters/) | [Sync Cluster Resources](https://clusterpedia.io/docs/usage/sync-resources/)
@@ -223,30 +223,7 @@ Due to the limitation of kubectl, you cannot use complex queries in kubectl and 
 
 [Lean More](https://clusterpedia.io/docs/usage/search/collection-resource/)
 
-# Roadmap<span id="roadmap"></span>
-Currently, it is only a tentative roadmap and the specific schedule depends on the community needs.
-
-**About some features not added to Roadmap, you can discuss in [issues](https://github.com/clusterpedia-io/clusterpedia/issues).**
-
-## Q1 2022
-- [x] Build the official website and provide documentation in English and Chinese
-- [x]  Support for more complex field selector filtering https://github.com/clusterpedia-io/clusterpedia/issues/40
-- [x]  Support for searching resources by owner https://github.com/clusterpedia-io/clusterpedia/issues/49
-- [ ] Support for custom resource columns when accepting data in Table format
-- [ ] Migrate and sync sub repo to a separate repo https://github.com/clusterpedia-io/clusterpedia/issues/47
-- [ ] Deploying with helm
-
-## Q2 2022
-* `PediaCluster` supports referencing cluster authentication information from other resources
-* Implement [automatic discovery and resource synchronization](#discovery)
-
-## Q3
-* Support for requests with relevant resources
-* The `Default Storage Layer` supports for Custom Collection Resource
-* Support for the plug-in storage layer
-* Support for [more control over cluster resources](#complicated), such as watch/create/update/delete operations
-
-## Others
+## Proposals
 ### Automatic discovery and sync cluster resource<span id="discovery"></span>
 The resource used to represent the cluster in Clusterpedia is called *PediaCluster*, not a simple *Cluster*.
 
@@ -268,10 +245,10 @@ In fact, a write action is implemented by double write + warning response.
 
 **We will discuss this feature and decide whether we should implement it according to the community needs**
 
-# Remarks
-## Multi-cluster network connectivity
+## Notes
+### Multi-cluster network connectivity
 Clusterpedia does not actually solve the problem of network connectivity in a multi-cluster environment. You can use tools such as [tower](https://github.com/kubesphere/tower) to connect and access sub-clusters, or use [submariner](https://github.com/submariner-io/submariner) or [skupper](https://github.com/skupperproject/skupper) to solve cross-cluster network problems.
 
-# Contact <span id="contact"></span>
+## Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
 * [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-11smmdntu-Im1YjOahqvHhJFqNzLELOA)
