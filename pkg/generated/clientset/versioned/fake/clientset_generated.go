@@ -4,8 +4,8 @@ package fake
 
 import (
 	clientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
-	clustersv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/clusters/v1alpha1"
-	fakeclustersv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/clusters/v1alpha1/fake"
+	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/clusters/v1alpha2"
+	fakeclustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/clusters/v1alpha2/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -63,7 +63,7 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// ClustersV1alpha1 retrieves the ClustersV1alpha1Client
-func (c *Clientset) ClustersV1alpha1() clustersv1alpha1.ClustersV1alpha1Interface {
-	return &fakeclustersv1alpha1.FakeClustersV1alpha1{Fake: &c.Fake}
+// ClustersV1alpha2 retrieves the ClustersV1alpha2Client
+func (c *Clientset) ClustersV1alpha2() clustersv1alpha2.ClustersV1alpha2Interface {
+	return &fakeclustersv1alpha2.FakeClustersV1alpha2{Fake: &c.Fake}
 }

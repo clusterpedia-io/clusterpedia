@@ -5,7 +5,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha1"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -16,27 +16,27 @@ import (
 
 // FakePediaClusters implements PediaClusterInterface
 type FakePediaClusters struct {
-	Fake *FakeClustersV1alpha1
+	Fake *FakeClustersV1alpha2
 }
 
-var pediaclustersResource = schema.GroupVersionResource{Group: "clusters.clusterpedia.io", Version: "v1alpha1", Resource: "pediaclusters"}
+var pediaclustersResource = schema.GroupVersionResource{Group: "clusters.clusterpedia.io", Version: "v1alpha2", Resource: "pediaclusters"}
 
-var pediaclustersKind = schema.GroupVersionKind{Group: "clusters.clusterpedia.io", Version: "v1alpha1", Kind: "PediaCluster"}
+var pediaclustersKind = schema.GroupVersionKind{Group: "clusters.clusterpedia.io", Version: "v1alpha2", Kind: "PediaCluster"}
 
 // Get takes name of the pediaCluster, and returns the corresponding pediaCluster object, and an error if there is any.
-func (c *FakePediaClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PediaCluster, err error) {
+func (c *FakePediaClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.PediaCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(pediaclustersResource, name), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootGetAction(pediaclustersResource, name), &v1alpha2.PediaCluster{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PediaCluster), err
+	return obj.(*v1alpha2.PediaCluster), err
 }
 
 // List takes label and field selectors, and returns the list of PediaClusters that match those selectors.
-func (c *FakePediaClusters) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.PediaClusterList, err error) {
+func (c *FakePediaClusters) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.PediaClusterList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(pediaclustersResource, pediaclustersKind, opts), &v1alpha1.PediaClusterList{})
+		Invokes(testing.NewRootListAction(pediaclustersResource, pediaclustersKind, opts), &v1alpha2.PediaClusterList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func (c *FakePediaClusters) List(ctx context.Context, opts v1.ListOptions) (resu
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.PediaClusterList{ListMeta: obj.(*v1alpha1.PediaClusterList).ListMeta}
-	for _, item := range obj.(*v1alpha1.PediaClusterList).Items {
+	list := &v1alpha2.PediaClusterList{ListMeta: obj.(*v1alpha2.PediaClusterList).ListMeta}
+	for _, item := range obj.(*v1alpha2.PediaClusterList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -61,40 +61,40 @@ func (c *FakePediaClusters) Watch(ctx context.Context, opts v1.ListOptions) (wat
 }
 
 // Create takes the representation of a pediaCluster and creates it.  Returns the server's representation of the pediaCluster, and an error, if there is any.
-func (c *FakePediaClusters) Create(ctx context.Context, pediaCluster *v1alpha1.PediaCluster, opts v1.CreateOptions) (result *v1alpha1.PediaCluster, err error) {
+func (c *FakePediaClusters) Create(ctx context.Context, pediaCluster *v1alpha2.PediaCluster, opts v1.CreateOptions) (result *v1alpha2.PediaCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(pediaclustersResource, pediaCluster), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootCreateAction(pediaclustersResource, pediaCluster), &v1alpha2.PediaCluster{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PediaCluster), err
+	return obj.(*v1alpha2.PediaCluster), err
 }
 
 // Update takes the representation of a pediaCluster and updates it. Returns the server's representation of the pediaCluster, and an error, if there is any.
-func (c *FakePediaClusters) Update(ctx context.Context, pediaCluster *v1alpha1.PediaCluster, opts v1.UpdateOptions) (result *v1alpha1.PediaCluster, err error) {
+func (c *FakePediaClusters) Update(ctx context.Context, pediaCluster *v1alpha2.PediaCluster, opts v1.UpdateOptions) (result *v1alpha2.PediaCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(pediaclustersResource, pediaCluster), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootUpdateAction(pediaclustersResource, pediaCluster), &v1alpha2.PediaCluster{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PediaCluster), err
+	return obj.(*v1alpha2.PediaCluster), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakePediaClusters) UpdateStatus(ctx context.Context, pediaCluster *v1alpha1.PediaCluster, opts v1.UpdateOptions) (*v1alpha1.PediaCluster, error) {
+func (c *FakePediaClusters) UpdateStatus(ctx context.Context, pediaCluster *v1alpha2.PediaCluster, opts v1.UpdateOptions) (*v1alpha2.PediaCluster, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(pediaclustersResource, "status", pediaCluster), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootUpdateSubresourceAction(pediaclustersResource, "status", pediaCluster), &v1alpha2.PediaCluster{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PediaCluster), err
+	return obj.(*v1alpha2.PediaCluster), err
 }
 
 // Delete takes name of the pediaCluster and deletes it. Returns an error if one occurs.
 func (c *FakePediaClusters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(pediaclustersResource, name), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootDeleteAction(pediaclustersResource, name), &v1alpha2.PediaCluster{})
 	return err
 }
 
@@ -102,16 +102,16 @@ func (c *FakePediaClusters) Delete(ctx context.Context, name string, opts v1.Del
 func (c *FakePediaClusters) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewRootDeleteCollectionAction(pediaclustersResource, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.PediaClusterList{})
+	_, err := c.Fake.Invokes(action, &v1alpha2.PediaClusterList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched pediaCluster.
-func (c *FakePediaClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.PediaCluster, err error) {
+func (c *FakePediaClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.PediaCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(pediaclustersResource, name, pt, data, subresources...), &v1alpha1.PediaCluster{})
+		Invokes(testing.NewRootPatchSubresourceAction(pediaclustersResource, name, pt, data, subresources...), &v1alpha2.PediaCluster{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PediaCluster), err
+	return obj.(*v1alpha2.PediaCluster), err
 }
