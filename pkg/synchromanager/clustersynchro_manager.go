@@ -256,7 +256,7 @@ func (manager *Manager) reconcileCluster(cluster *clustersv1alpha1.PediaCluster)
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 	}
 
-	synchro.SetResources(cluster.Spec.Resources)
+	synchro.SetResources(cluster.Spec.SyncResources)
 
 	manager.synchrolock.Lock()
 	manager.synchros[cluster.Name] = synchro
@@ -304,7 +304,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 }
 
 func buildClusterConfig(cluster *clustersv1alpha1.PediaCluster) (*rest.Config, error) {
-	if cluster.Spec.APIServerURL == "" {
+	if cluster.Spec.APIServer == "" {
 		return nil, errors.New("Cluster APIServer Endpoint is required")
 	}
 
@@ -314,7 +314,7 @@ func buildClusterConfig(cluster *clustersv1alpha1.PediaCluster) (*rest.Config, e
 	}
 
 	config := &rest.Config{
-		Host: cluster.Spec.APIServerURL,
+		Host: cluster.Spec.APIServer,
 	}
 
 	if len(cluster.Spec.CAData) != 0 {

@@ -159,7 +159,7 @@ type syncConfig struct {
 	storageConfig   *storage.ResourceStorageConfig
 }
 
-func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.ClusterResource) {
+func (s *ClusterSynchro) SetResources(syncResources []clustersv1alpha1.ClusterGroupResources) {
 	var (
 		// syncConfigs key is resource's storage gvr
 		syncConfigs = map[schema.GroupVersionResource]*syncConfig{}
@@ -168,16 +168,16 @@ func (s *ClusterSynchro) SetResources(clusterResources []clustersv1alpha1.Cluste
 		resourceStatuses     = map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{}
 	)
 
-	for _, resources := range clusterResources {
-		for _, resource := range resources.Resources {
-			gr := schema.GroupResource{Group: resources.Group, Resource: resource}
+	for _, groupResources := range syncResources {
+		for _, resource := range groupResources.Resources {
+			gr := schema.GroupResource{Group: groupResources.Group, Resource: resource}
 			supportedGVKs, err := s.restmapper.KindsFor(gr.WithVersion(""))
 			if err != nil {
 				klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", s.name, "resource", gr)
 				continue
 			}
 
-			syncVersions, isLegacyResource, err := negotiateSyncVersions(resources.Versions, supportedGVKs)
+			syncVersions, isLegacyResource, err := negotiateSyncVersions(groupResources.Versions, supportedGVKs)
 			if err != nil {
 				klog.InfoS("Skip resource sync", "cluster", s.name, "resource", gr, "reason", err)
 				continue
@@ -377,8 +377,8 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 	resourceStatuses := s.resourceStatuses.Load().(map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus)
 	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
 
-	groups := make(map[string]*clustersv1alpha1.ClusterGroupStatus)
-	groupStatuses := make([]clustersv1alpha1.ClusterGroupStatus, 0)
+	groups := make(map[string]*clustersv1alpha1.ClusterGroupResourcesStatus)
+	groupStatuses := make([]clustersv1alpha1.ClusterGroupResourcesStatus, 0)
 	for _, gr := range sortedGroupResources {
 		resourceStatus, ok := resourceStatuses[gr]
 		if !ok {
@@ -387,10 +387,11 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 
 		groupStatus, ok := groups[gr.Group]
 		if !ok {
-			groupStatuses = append(groupStatuses, clustersv1alpha1.ClusterGroupStatus{})
+			groupStatuses = append(groupStatuses, clustersv1alpha1.ClusterGroupResourcesStatus{})
 			groupStatus = &groupStatuses[len(groupStatuses)-1]
 			groups[gr.Group] = groupStatus
 		}
+
 		resourceStatus = resourceStatus.DeepCopy()
 		for i, cond := range resourceStatus.SyncConditions {
 			var gvr schema.GroupVersionResource
@@ -431,9 +432,9 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 	version := s.version.Load().(version.Info).GitVersion
 	readyCondition := s.readyCondition.Load().(metav1.Condition)
 	return &clustersv1alpha1.ClusterStatus{
-		Version:    version,
-		Conditions: []metav1.Condition{readyCondition},
-		Resources:  groupStatuses,
+		Version:       version,
+		Conditions:    []metav1.Condition{readyCondition},
+		SyncResources: groupStatuses,
 	}
 }
 
