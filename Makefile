@@ -88,12 +88,10 @@ push-apiserver-image: clean-apiserver-manifest
 	for arch in $(RELEASE_ARCHS); do \
 		GOARCH=$$arch $(MAKE) image-apiserver; \
 		image=$(REGISTRY)/apiserver-$$arch:$(VERSION); \
-		docker push $$image; \
 		images="$$images $$image"; \
 		if [ $(VERSION) != latest ]; then \
 			latest_image=$(REGISTRY)/apiserver-$$arch:latest; \
 			docker tag $$image $$latest_image; \
-			docker push $$latest_image; \
 		fi; \
 	done; \
 	docker manifest create $(REGISTRY)/apiserver:$(VERSION) $$images; \
@@ -110,12 +108,10 @@ push-clustersynchro-manager-image: clean-clustersynchro-manager-manifest
 	for arch in $(RELEASE_ARCHS); do \
 		GOARCH=$$arch $(MAKE) image-clustersynchro-manager; \
 		image=$(REGISTRY)/clustersynchro-manager-$$arch:$(VERSION); \
-		docker push $$image; \
 		images="$$images $$image"; \
 		if [ $(VERSION) != latest ]; then \
 			latest_image=$(REGISTRY)/clustersynchro-manager-$$arch:latest; \
 			docker tag $$image $$latest_image; \
-			docker push $$latest_image; \
 		fi; \
 	done; \
 	docker manifest create $(REGISTRY)/clustersynchro-manager:$(VERSION) $$images; \
