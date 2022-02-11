@@ -34,7 +34,7 @@ type PediaCluster struct {
 type ClusterSpec struct {
 	// +required
 	// +kubebuilder:validation:Required
-	APIServerURL string `json:"apiserverURL"`
+	APIServer string `json:"apiserver"`
 
 	// +optional
 	TokenData []byte `json:"tokenData,omitempty"`
@@ -49,10 +49,10 @@ type ClusterSpec struct {
 	KeyData []byte `json:"keyData,omitempty"`
 
 	// +required
-	Resources []ClusterResource `json:"resources"`
+	SyncResources []ClusterGroupResources `json:"syncResources"`
 }
 
-type ClusterResource struct {
+type ClusterGroupResources struct {
 	Group string `json:"group"`
 
 	// +optional
@@ -73,10 +73,10 @@ type ClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// +optional
-	Resources []ClusterGroupStatus `json:"resources,omitempty"`
+	SyncResources []ClusterGroupResourcesStatus `json:"syncResources,omitempty"`
 }
 
-type ClusterGroupStatus struct {
+type ClusterGroupResourcesStatus struct {
 	// +required
 	// +kubebuilder:validation:Required
 	Group string `json:"group"`

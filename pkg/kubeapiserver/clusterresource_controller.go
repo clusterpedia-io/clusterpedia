@@ -58,28 +58,28 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 
 func (c *ClusterResourceController) updateClusterResources(cluster *clustersv1alpha1.PediaCluster) {
 	resources := ResourceInfoMap{}
-	for _, groupstatus := range cluster.Status.Resources {
-		for _, resourcestatus := range groupstatus.Resources {
-			if len(resourcestatus.SyncConditions) == 0 {
+	for _, groupResources := range cluster.Status.SyncResources {
+		for _, resource := range groupResources.Resources {
+			if len(resource.SyncConditions) == 0 {
 				continue
 			}
 
 			versions := sets.NewString()
-			for _, cond := range resourcestatus.SyncConditions {
+			for _, cond := range resource.SyncConditions {
 				versions.Insert(cond.Version)
 			}
 
-			gr := schema.GroupResource{Group: groupstatus.Group, Resource: resourcestatus.Resource}
+			gr := schema.GroupResource{Group: groupResources.Group, Resource: resource.Resource}
 			resources[gr] = resourceInfo{
-				Namespaced: resourcestatus.Namespaced,
-				Kind:       resourcestatus.Kind,
+				Namespaced: resource.Namespaced,
+				Kind:       resource.Kind,
 				Versions:   versions,
 			}
 		}
 	}
 
-	clusterresources := c.clusterresources[cluster.Name]
-	if reflect.DeepEqual(resources, clusterresources) {
+	currentResources := c.clusterresources[cluster.Name]
+	if reflect.DeepEqual(resources, currentResources) {
 		return
 	}
 

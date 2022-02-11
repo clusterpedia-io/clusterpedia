@@ -3,12 +3,12 @@ kind: PediaCluster
 metadata:
   name: cluster-example
 spec:
-  apiserverURL: "https://10.30.43.43:6443"
+  apiserver: "https://10.30.43.43:6443"
   caData:
   tokenData:
   certData:
   keyData:
-  resources:
+  syncResources:
   - group: apps
     resources:
      - deployments
