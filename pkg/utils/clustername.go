@@ -4,13 +4,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	pedia "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
 func ExtractClusterName(obj runtime.Object) string {
 	if m, err := meta.Accessor(obj); err == nil {
 		if annotations := m.GetAnnotations(); annotations != nil {
-			return annotations[pedia.ShadowAnnotationClusterName]
+			return annotations[internal.ShadowAnnotationClusterName]
 		}
 	}
 	return ""
@@ -27,6 +27,6 @@ func InjectClusterName(obj runtime.Object, name string) {
 		annotations = make(map[string]string)
 	}
 
-	annotations[pedia.ShadowAnnotationClusterName] = name
+	annotations[internal.ShadowAnnotationClusterName] = name
 	m.SetAnnotations(annotations)
 }

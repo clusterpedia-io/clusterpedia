@@ -12,7 +12,7 @@ import (
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericrest "k8s.io/apiserver/pkg/registry/rest"
 
-	pediav1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
@@ -26,7 +26,7 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 func (r *REST) New() runtime.Object {
-	return &pediav1alpha1.Resources{}
+	return &v1beta1.Resources{}
 }
 
 func NewREST(resourceHandler http.Handler) *REST {

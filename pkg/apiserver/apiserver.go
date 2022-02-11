@@ -18,10 +18,10 @@ import (
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
-	pediainstall "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/install"
-	pediacollectionresources "github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/pedia/collectionresources"
-	pediaresources "github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/pedia/resources"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/install"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/collectionresources"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/resources"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver"
@@ -41,7 +41,7 @@ var (
 )
 
 func init() {
-	pediainstall.Install(Scheme)
+	install.Install(Scheme)
 
 	// we need to add the options to empty v1
 	// TODO fix the server code to avoid this
@@ -146,14 +146,13 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 		return nil, err
 	}
 
-	pediaAPIGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(pedia.GroupName, Scheme, ParameterCodec, Codecs)
+	v1beta1storage := map[string]rest.Storage{}
+	v1beta1storage["resources"] = resources.NewREST(kubeResourceAPIServer.Handler)
+	v1beta1storage["collectionresources"] = collectionresources.NewREST(config.StorageFactory)
 
-	pediav1alpha1storage := map[string]rest.Storage{}
-	pediav1alpha1storage["resources"] = pediaresources.NewREST(kubeResourceAPIServer.Handler)
-	pediav1alpha1storage["collectionresources"] = pediacollectionresources.NewREST(config.StorageFactory)
-	pediaAPIGroupInfo.VersionedResourcesStorageMap["v1alpha1"] = pediav1alpha1storage
-
-	if err := genericServer.InstallAPIGroup(&pediaAPIGroupInfo); err != nil {
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(internal.GroupName, Scheme, ParameterCodec, Codecs)
+	apiGroupInfo.VersionedResourcesStorageMap["v1beta1"] = v1beta1storage
+	if err := genericServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, err
 	}
 

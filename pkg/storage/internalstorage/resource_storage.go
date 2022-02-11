@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
@@ -159,7 +159,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	return nil
 }
 
-func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *pediainternal.ListOptions) error {
+func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
 	query := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
@@ -223,9 +223,9 @@ func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
 	}
 }
 
-func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *pediainternal.ListOptions) (int64, *int64, *gorm.DB, error) {
+func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	var amount *int64
-	applyFn := func(query *gorm.DB, opts *pediainternal.ListOptions) (*gorm.DB, error) {
+	applyFn := func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
 		query, err := applyExtraLabelSelectorToResourceQuery(db, query, opts)
 		if err != nil {
 			return nil, err
@@ -245,7 +245,7 @@ func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *pediaint
 	return offset, amount, query, nil
 }
 
-func applyExtraLabelSelectorToResourceQuery(db *gorm.DB, query *gorm.DB, opts *pediainternal.ListOptions) (*gorm.DB, error) {
+func applyExtraLabelSelectorToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
 	if opts.ExtraLabelSelector == nil {
 		return query, nil
 	}

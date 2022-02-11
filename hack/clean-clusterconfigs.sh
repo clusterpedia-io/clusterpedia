@@ -17,7 +17,7 @@ if [[ -z $server ]] ; then
 fi
 
 server=${server%/}
-pediaserver=$server/apis/pedia.clusterpedia.io
+pediaserver=$server/apis/clusterpedia.io
 
 for cluster in $(kubectl config get-clusters)
 do

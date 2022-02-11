@@ -13,9 +13,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
-	pediascheme "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/scheme"
-	pediav1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	scheme "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/scheme"
+	v1beta1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
@@ -61,18 +61,18 @@ func (s *RESTStorage) Get(ctx context.Context, name string, _ *metav1.GetOptions
 }
 
 func (s *RESTStorage) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
-	var opts pediainternal.ListOptions
+	var opts internal.ListOptions
 	query := request.RequestQueryFrom(ctx)
-	if err := pediascheme.ParameterCodec.DecodeParameters(query, pediav1alpha1.SchemeGroupVersion, &opts); err != nil {
+	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts); err != nil {
 		return nil, apierrors.NewBadRequest(err.Error())
 	}
 
-	// TODO(iceber): validate *pediainternal.ListOptions
+	// TODO(iceber): validate *internal.ListOptions
 
 	return s.list(ctx, &opts)
 }
 
-func (s *RESTStorage) list(ctx context.Context, options *pediainternal.ListOptions) (runtime.Object, error) {
+func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (runtime.Object, error) {
 	requestInfo, ok := genericrequest.RequestInfoFrom(ctx)
 	if !ok {
 		return nil, errors.New("missing RequestInfo")

@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
@@ -65,7 +65,7 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 	}, nil
 }
 
-func (s *StorageFactory) NewCollectionResourceStorage(cr *pediainternal.CollectionResource) (storage.CollectionResourceStorage, error) {
+func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionResource) (storage.CollectionResourceStorage, error) {
 	if _, ok := collectionResources[cr.Name]; !ok {
 		return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
 	}
@@ -118,20 +118,20 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 	return InterpreError(fmt.Sprintf("%s/%s", cluster, gvr), result.Error)
 }
 
-func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*pediainternal.CollectionResource, error) {
-	var crs []*pediainternal.CollectionResource
+func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error) {
+	var crs []*internal.CollectionResource
 	for _, cr := range collectionResources {
 		crs = append(crs, cr.DeepCopy())
 	}
 	return crs, nil
 }
 
-var collectionResources = map[string]pediainternal.CollectionResource{
+var collectionResources = map[string]internal.CollectionResource{
 	"workloads": {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "workloads",
 		},
-		ResourceTypes: []pediainternal.CollectionResourceType{
+		ResourceTypes: []internal.CollectionResourceType{
 			{
 				Group:    "apps",
 				Resource: "deployments",
