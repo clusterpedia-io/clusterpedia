@@ -1,4 +1,4 @@
-package pedia
+package clusterpedia
 
 import (
 	"net/url"
