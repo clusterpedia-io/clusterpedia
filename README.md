@@ -47,9 +47,9 @@ We can search for resources configured in *PediaCluster*, Clusterpedia supports 
 * Search for resources that are compatible with Kubernetes OpenAPI
 * Search for [`Collection Resource`](https://clusterpedia.io/docs/concepts/collection-resource/)
 ```sh
-$ kubectl api-resources | grep pedia.clusterpedia.io
-collectionresources     pedia.clusterpedia.io/v1alpha1  false   CollectionResource
-resources               pedia.clusterpedia.io/v1alpha1  false   Resources
+$ kubectl api-resources | grep clusterpedia.io
+collectionresources     clusterpedia.io/v1beta1  false   CollectionResource
+resources               clusterpedia.io/v1beta1  false   Resources
 ```
 
 ### Search Label and URL Query
