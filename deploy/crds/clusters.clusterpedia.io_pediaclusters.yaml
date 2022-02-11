@@ -17,8 +17,8 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.apiserverURL
-      name: APIServer URL
+    - jsonPath: .spec.apiserver
+      name: APIServer
       type: string
     - jsonPath: .status.version
       name: Version

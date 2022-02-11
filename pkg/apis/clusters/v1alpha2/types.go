@@ -17,7 +17,7 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
-// +kubebuilder:printcolumn:name="APIServer URL",type=string,JSONPath=".spec.apiserverURL"
+// +kubebuilder:printcolumn:name="APIServer",type=string,JSONPath=".spec.apiserver"
 // +kubebuilder:printcolumn:name="Version",type=string,JSONPath=".status.version"
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=".status.conditions[?(@.type == 'Ready')].reason"
 type PediaCluster struct {
