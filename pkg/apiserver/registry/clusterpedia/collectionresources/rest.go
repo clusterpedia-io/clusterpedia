@@ -14,9 +14,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
-	pediascheme "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/scheme"
-	pediav1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
@@ -24,7 +24,7 @@ import (
 )
 
 type REST struct {
-	list     *pedia.CollectionResourceList
+	list     *internal.CollectionResourceList
 	storages map[string]storage.CollectionResourceStorage
 }
 
@@ -38,7 +38,7 @@ func NewREST(factory storage.StorageFactory) *REST {
 		klog.Fatal(err)
 	}
 
-	list := &pedia.CollectionResourceList{}
+	list := &internal.CollectionResourceList{}
 	storages := make(map[string]storage.CollectionResourceStorage, len(crs))
 	configFactory := storageconfig.NewStorageConfigFactory()
 	for _, cr := range crs {
@@ -49,7 +49,7 @@ func NewREST(factory storage.StorageFactory) *REST {
 				continue
 			}
 
-			*rt = pedia.CollectionResourceType{
+			*rt = internal.CollectionResourceType{
 				Group:    config.StorageGroupResource.Group,
 				Version:  config.StorageVersion.Version,
 				Resource: config.StorageGroupResource.Resource,
@@ -68,11 +68,11 @@ func NewREST(factory storage.StorageFactory) *REST {
 }
 
 func (s *REST) New() runtime.Object {
-	return &pedia.CollectionResource{}
+	return &internal.CollectionResource{}
 }
 
 func (s *REST) NewList() runtime.Object {
-	return &pedia.CollectionResourceList{}
+	return &internal.CollectionResourceList{}
 }
 
 func (s *REST) NamespaceScoped() bool {
@@ -84,9 +84,9 @@ func (s *REST) List(ctx context.Context, options *metainternal.ListOptions) (run
 }
 
 func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
-	var opts pedia.ListOptions
+	var opts internal.ListOptions
 	query := request.RequestQueryFrom(ctx)
-	pediascheme.ParameterCodec.DecodeParameters(query, pediav1alpha1.SchemeGroupVersion, &opts)
+	scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts)
 
 	// collection resources don't support with remaining count
 	// ignore opts.WithRemainingCount
@@ -117,7 +117,7 @@ func (s *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 
 	table := &metav1.Table{}
 	switch obj := object.(type) {
-	case *pedia.CollectionResource:
+	case *internal.CollectionResource:
 		var rows []metav1.TableRow
 		for _, obj := range obj.Items {
 			m, err := meta.Accessor(obj)
@@ -141,7 +141,7 @@ func (s *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 
 		table.Rows = rows
 		table.ColumnDefinitions = resourceColumnDefinition
-	case *pedia.CollectionResourceList:
+	case *internal.CollectionResourceList:
 		var rows []metav1.TableRow
 		for _, item := range obj.Items {
 			name := item.Name

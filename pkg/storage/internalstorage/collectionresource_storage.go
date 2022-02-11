@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
 var caseSensitiveJSONIterator = json.CaseSensitiveJSONIterator()
@@ -17,12 +17,12 @@ var caseSensitiveJSONIterator = json.CaseSensitiveJSONIterator()
 type CollectionResourceStorage struct {
 	db *gorm.DB
 
-	collectionResource *pediainternal.CollectionResource
+	collectionResource *internal.CollectionResource
 }
 
-func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal.ListOptions) (*pediainternal.CollectionResource, error) {
+func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error) {
 	cr := s.collectionResource.DeepCopy()
-	types := make(map[schema.GroupResource]*pediainternal.CollectionResourceType, len(cr.ResourceTypes))
+	types := make(map[schema.GroupResource]*internal.CollectionResourceType, len(cr.ResourceTypes))
 
 	var typesQuery = s.db
 	for i, rt := range cr.ResourceTypes {
@@ -63,6 +63,6 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *pediainternal
 }
 
 // TODO(iceber): support with remaining count and continue
-func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *pediainternal.ListOptions) (int64, *gorm.DB, error) {
+func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *internal.ListOptions) (int64, *gorm.DB, error) {
 	return applyListOptionsToQuery(query, opts, nil)
 }

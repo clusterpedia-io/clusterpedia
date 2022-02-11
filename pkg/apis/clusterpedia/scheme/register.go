@@ -4,7 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/install"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/install"
 )
 
 var scheme = runtime.NewScheme()

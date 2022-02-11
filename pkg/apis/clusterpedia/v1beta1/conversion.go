@@ -1,4 +1,4 @@
-package v1alpha1
+package v1beta1
 
 import (
 	"errors"
@@ -13,11 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
 )
 
-func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *pedia.ListOptions, s conversion.Scope) error {
+func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, out *clusterpedia.ListOptions, s conversion.Scope) error {
 	fieldSelector := in.FieldSelector
 	defer func() {
 		in.FieldSelector = fieldSelector
@@ -48,7 +48,7 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 	if err := convert_String_To_Slice_string(&in.OrderBy, &orderbys, s); err != nil {
 		return err
 	}
-	if err := convert_Slice_string_To_pedia_Slice_orderby(&orderbys, &out.OrderBy, " ", s); err != nil {
+	if err := convert_Slice_string_To_clusterpedia_Slice_orderby(&orderbys, &out.OrderBy, " ", s); err != nil {
 		return err
 	}
 
@@ -65,29 +65,29 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 			for _, require := range requirements {
 				values := require.Values().UnsortedList()
 				switch require.Key() {
-				case pedia.SearchLabelOwner:
+				case clusterpedia.SearchLabelOwner:
 					if len(out.Owner) == 0 && len(values) != 0 {
 						out.Owner = values[0]
 					}
-				case pedia.SearchLabelNames:
+				case clusterpedia.SearchLabelNames:
 					if len(out.Names) == 0 && len(values) != 0 {
 						out.Names = values
 					}
-				case pedia.SearchLabelClusters:
+				case clusterpedia.SearchLabelClusters:
 					if len(out.ClusterNames) == 0 && len(values) != 0 {
 						out.ClusterNames = values
 					}
-				case pedia.SearchLabelNamespaces:
+				case clusterpedia.SearchLabelNamespaces:
 					if len(out.Namespaces) == 0 && len(values) != 0 {
 						out.Namespaces = values
 					}
-				case pedia.SearchLabelOrderBy:
+				case clusterpedia.SearchLabelOrderBy:
 					if len(out.OrderBy) == 0 && len(values) != 0 {
-						if err := convert_Slice_string_To_pedia_Slice_orderby(&values, &out.OrderBy, "_", s); err != nil {
+						if err := convert_Slice_string_To_clusterpedia_Slice_orderby(&values, &out.OrderBy, "_", s); err != nil {
 							return err
 						}
 					}
-				case pedia.SearchLabelLimit:
+				case clusterpedia.SearchLabelLimit:
 					if out.Limit == 0 && len(values) != 0 {
 						limit, err := strconv.ParseInt(values[0], 10, 64)
 						if err != nil {
@@ -95,7 +95,7 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 						}
 						out.Limit = limit
 					}
-				case pedia.SearchLabelOffset:
+				case clusterpedia.SearchLabelOffset:
 					if out.Continue == "" && len(values) != 0 {
 						out.Continue = values[0]
 					}
@@ -106,13 +106,13 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 							return fmt.Errorf("Invalid Query Offset(%s): %w", out.Continue, err)
 						}
 					}
-				case pedia.SearchLabelWithContinue:
+				case clusterpedia.SearchLabelWithContinue:
 					if in.WithContinue == nil && len(values) != 0 {
 						if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithContinue, s); err != nil {
 							return err
 						}
 					}
-				case pedia.SearchLabelWithRemainingCount:
+				case clusterpedia.SearchLabelWithRemainingCount:
 					if in.WithRemainingCount == nil && len(values) != 0 {
 						if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithRemainingCount, s); err != nil {
 							return err
@@ -139,7 +139,7 @@ func Convert_v1alpha1_ListOptions_To_pedia_ListOptions(in *ListOptions, out *ped
 	return nil
 }
 
-func Convert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions, out *ListOptions, s conversion.Scope) error {
+func Convert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedia.ListOptions, out *ListOptions, s conversion.Scope) error {
 	if err := metainternal.Convert_internalversion_ListOptions_To_v1_ListOptions(&in.ListOptions, &out.ListOptions, s); err != nil {
 		return err
 	}
@@ -174,12 +174,12 @@ func Convert_pedia_ListOptions_To_v1alpha1_ListOptions(in *pedia.ListOptions, ou
 	return nil
 }
 
-func Convert_url_Values_To_v1alpha1_ListOptions(in *url.Values, out *ListOptions, s conversion.Scope) error {
+func Convert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOptions, s conversion.Scope) error {
 	if err := metav1.Convert_url_Values_To_v1_ListOptions(in, &out.ListOptions, s); err != nil {
 		return err
 	}
 
-	return autoConvert_url_Values_To_v1alpha1_ListOptions(in, out, s)
+	return autoConvert_url_Values_To_v1beta1_ListOptions(in, out, s)
 }
 
 func convert_String_To_Slice_string(in *string, out *[]string, scope conversion.Scope) error {
@@ -202,7 +202,7 @@ func convert_Slice_string_To_String(in *[]string, out *string, scope conversion.
 	return nil
 }
 
-func convert_Slice_string_To_pedia_Slice_orderby(in *[]string, out *[]pedia.OrderBy, descSep string, s conversion.Scope) error {
+func convert_Slice_string_To_clusterpedia_Slice_orderby(in *[]string, out *[]clusterpedia.OrderBy, descSep string, s conversion.Scope) error {
 	if len(*in) == 0 {
 		return nil
 	}
@@ -213,7 +213,7 @@ func convert_Slice_string_To_pedia_Slice_orderby(in *[]string, out *[]pedia.Orde
 		case 0:
 			continue
 		case 1:
-			*out = append(*out, pedia.OrderBy{Field: sli[0]})
+			*out = append(*out, clusterpedia.OrderBy{Field: sli[0]})
 			continue
 		default:
 		}
@@ -231,12 +231,12 @@ func convert_Slice_string_To_pedia_Slice_orderby(in *[]string, out *[]pedia.Orde
 		}
 
 		field := strings.Join(sli, descSep)
-		*out = append(*out, pedia.OrderBy{Field: field, Desc: desc})
+		*out = append(*out, clusterpedia.OrderBy{Field: field, Desc: desc})
 	}
 	return nil
 }
 
-func convert_pedia_Slice_orderby_To_String(in *[]pedia.OrderBy, out *string, s conversion.Scope) error {
+func convert_pedia_Slice_orderby_To_String(in *[]clusterpedia.OrderBy, out *string, s conversion.Scope) error {
 	if len(*in) == 0 {
 		return nil
 	}

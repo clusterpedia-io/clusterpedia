@@ -1,20 +1,13 @@
-package v1alpha1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type Resources struct {
-	metav1.TypeMeta `json:",line"`
-}
-
 // +k8s:conversion-gen:explicit-from=net/url.Values
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// TODO(iceber): move to storage.clusterpedia.io/v1alpha1
 type ListOptions struct {
 	metav1.ListOptions `json:",inline"`
 
@@ -38,6 +31,12 @@ type ListOptions struct {
 
 	// +optional
 	WithRemainingCount *bool `json:"withRemainingCount,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Resources struct {
+	metav1.TypeMeta `json:",line"`
 }
 
 // +genclient

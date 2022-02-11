@@ -1,4 +1,4 @@
-package v1alpha1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -6,10 +6,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
-var SchemeGroupVersion = schema.GroupVersion{Group: pedia.GroupName, Version: "v1alpha1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: internal.GroupName, Version: "v1beta1"}
 
 var (
 	SchemeBuilder      runtime.SchemeBuilder

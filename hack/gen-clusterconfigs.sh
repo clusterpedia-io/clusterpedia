@@ -42,7 +42,7 @@ fi
 echo
 
 server=${server%/}
-pediaserver=$server/apis/pedia.clusterpedia.io
+pediaserver=$server/apis/clusterpedia.io
 
 set_cluster(){
     local cluster=$1
@@ -66,7 +66,7 @@ set_cluster(){
     fi
 }
 
-set_cluster "clusterpedia" $pediaserver/v1alpha1/resources
+set_cluster "clusterpedia" $pediaserver/v1beta1/resources
 
 for cluster in $(kubectl get pediaclusters -o name)
 do
@@ -79,6 +79,6 @@ do
         continue
     fi
 
-    clusterserver=$pediaserver/v1alpha1/resources/clusters/$cluster
+    clusterserver=$pediaserver/v1beta1/resources/clusters/$cluster
     set_cluster $cluster $clusterserver
 done

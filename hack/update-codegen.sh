@@ -21,18 +21,18 @@ deepcopy-gen \
     --output-file-base=zz_generated.deepcopy
 deepcopy-gen \
     --go-header-file hack/boilerplate.go.txt \
-    --input-dirs=./pkg/apis/pedia/v1alpha1 \
+    --input-dirs=./pkg/apis/clusterpedia/v1beta1 \
     --output-file-base=zz_generated.deepcopy
 deepcopy-gen \
     --go-header-file hack/boilerplate.go.txt \
-    --input-dirs=./pkg/apis/pedia \
+    --input-dirs=./pkg/apis/clusterpedia \
     --output-file-base=zz_generated.deepcopy
 
 echo "Generating with conversion-gen"
 GO111MODULE=on go install k8s.io/code-generator/cmd/conversion-gen
 conversion-gen \
     --go-header-file hack/boilerplate.go.txt \
-    --input-dirs=./pkg/apis/pedia/v1alpha1 \
+    --input-dirs=./pkg/apis/clusterpedia/v1beta1 \
     --output-file-base=zz_generated.conversion
 
 echo "Generating with client-gen"

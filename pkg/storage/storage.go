@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
 type StorageFactory interface {
@@ -15,16 +15,16 @@ type StorageFactory interface {
 	CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error
 
 	NewResourceStorage(config *ResourceStorageConfig) (ResourceStorage, error)
-	NewCollectionResourceStorage(cr *pediainternal.CollectionResource) (CollectionResourceStorage, error)
+	NewCollectionResourceStorage(cr *internal.CollectionResource) (CollectionResourceStorage, error)
 
-	GetCollectionResources(ctx context.Context) ([]*pediainternal.CollectionResource, error)
+	GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error)
 }
 
 type ResourceStorage interface {
 	GetStorageConfig() *ResourceStorageConfig
 
 	Get(ctx context.Context, cluster, namespace, name string, obj runtime.Object) error
-	List(ctx context.Context, listObj runtime.Object, opts *pediainternal.ListOptions) error
+	List(ctx context.Context, listObj runtime.Object, opts *internal.ListOptions) error
 
 	Create(ctx context.Context, cluster string, obj runtime.Object) error
 	Update(ctx context.Context, cluster string, obj runtime.Object) error
@@ -32,7 +32,7 @@ type ResourceStorage interface {
 }
 
 type CollectionResourceStorage interface {
-	Get(ctx context.Context, opts *pediainternal.ListOptions) (*pediainternal.CollectionResource, error)
+	Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error)
 }
 
 type ResourceStorageConfig struct {

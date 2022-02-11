@@ -15,14 +15,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
-	pediainternal "github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia"
+	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
 var (
 	supportedOrderByFields = sets.NewString("cluster", "namespace", "name", "created_at", "resource_version")
 )
 
-func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, applyFn func(query *gorm.DB, opts *pediainternal.ListOptions) (*gorm.DB, error)) (int64, *gorm.DB, error) {
+func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error)) (int64, *gorm.DB, error) {
 	switch len(opts.ClusterNames) {
 	case 0:
 	case 1:
@@ -87,7 +87,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *pediainternal.ListOptions, ap
 				}
 
 				if len(fieldErrors) != 0 {
-					return 0, nil, apierrors.NewInvalid(schema.GroupKind{Group: pediainternal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
+					return 0, nil, apierrors.NewInvalid(schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
 				}
 
 				values := requirement.Values().List()
