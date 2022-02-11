@@ -22,7 +22,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
-	clustersv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha1"
+	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -30,7 +30,7 @@ import (
 )
 
 type ClusterStatusUpdater interface {
-	UpdateClusterStatus(ctx context.Context, name string, status *clustersv1alpha1.ClusterStatus) error
+	UpdateClusterStatus(ctx context.Context, name string, status *clustersv1alpha2.ClusterStatus) error
 }
 
 type ClusterSynchro struct {
@@ -66,7 +66,7 @@ type ClusterSynchro struct {
 	resourceSynchros      atomic.Value // map[schema.GroupVersionResource]*ResourceSynchro
 
 	sortedGroupResources atomic.Value // []schema.GroupResource
-	resourceStatuses     atomic.Value // map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus
+	resourceStatuses     atomic.Value // map[schema.GroupResource]*clustersv1alpha2.ClusterResourceStatus
 
 	version        atomic.Value // version.Info
 	readyCondition atomic.Value // metav1.Condition
@@ -120,12 +120,12 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	}
 	synchro.version.Store(*version)
 	synchro.sortedGroupResources.Store([]schema.GroupResource{})
-	synchro.resourceStatuses.Store(map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{})
+	synchro.resourceStatuses.Store(map[schema.GroupResource]*clustersv1alpha2.ClusterResourceStatus{})
 
 	synchro.resourceSynchros.Store(map[schema.GroupVersionResource]*ResourceSynchro{})
 
 	condition := metav1.Condition{
-		Type:               clustersv1alpha1.ClusterConditionReady,
+		Type:               clustersv1alpha2.ClusterConditionReady,
 		Status:             metav1.ConditionFalse,
 		Reason:             "Pending",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
@@ -159,13 +159,13 @@ type syncConfig struct {
 	storageConfig   *storage.ResourceStorageConfig
 }
 
-func (s *ClusterSynchro) SetResources(syncResources []clustersv1alpha1.ClusterGroupResources) {
+func (s *ClusterSynchro) SetResources(syncResources []clustersv1alpha2.ClusterGroupResources) {
 	var (
 		// syncConfigs key is resource's storage gvr
 		syncConfigs = map[schema.GroupVersionResource]*syncConfig{}
 
 		sortedGroupResources = []schema.GroupResource{}
-		resourceStatuses     = map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus{}
+		resourceStatuses     = map[schema.GroupResource]*clustersv1alpha2.ClusterResourceStatus{}
 	)
 
 	for _, groupResources := range syncResources {
@@ -189,7 +189,7 @@ func (s *ClusterSynchro) SetResources(syncResources []clustersv1alpha1.ClusterGr
 				continue
 			}
 
-			info := &clustersv1alpha1.ClusterResourceStatus{
+			info := &clustersv1alpha2.ClusterResourceStatus{
 				Kind:       mapper.GroupVersionKind.Kind,
 				Resource:   gr.Resource,
 				Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
@@ -223,10 +223,10 @@ func (s *ClusterSynchro) SetResources(syncResources []clustersv1alpha1.ClusterGr
 					syncConfigs[storageResource] = config
 				}
 
-				syncCondition := clustersv1alpha1.ClusterResourceSyncCondition{
+				syncCondition := clustersv1alpha2.ClusterResourceSyncCondition{
 					Version:        version,
 					StorageVersion: storageConfig.StorageVersion.Version,
-					Status:         clustersv1alpha1.SyncStatusPending,
+					Status:         clustersv1alpha2.SyncStatusPending,
 					Reason:         "SynchroCreating",
 				}
 				if gr != storageConfig.StorageGroupResource {
@@ -357,7 +357,7 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 			message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
 		}
 		condition := metav1.Condition{
-			Type:               clustersv1alpha1.ClusterConditionReady,
+			Type:               clustersv1alpha2.ClusterConditionReady,
 			Status:             metav1.ConditionUnknown,
 			Reason:             "ClusterSynchroStop",
 			Message:            message,
@@ -372,13 +372,13 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 	<-s.closed
 }
 
-func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
+func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha2.ClusterStatus {
 	sortedGroupResources := s.sortedGroupResources.Load().([]schema.GroupResource)
-	resourceStatuses := s.resourceStatuses.Load().(map[schema.GroupResource]*clustersv1alpha1.ClusterResourceStatus)
+	resourceStatuses := s.resourceStatuses.Load().(map[schema.GroupResource]*clustersv1alpha2.ClusterResourceStatus)
 	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
 
-	groups := make(map[string]*clustersv1alpha1.ClusterGroupResourcesStatus)
-	groupStatuses := make([]clustersv1alpha1.ClusterGroupResourcesStatus, 0)
+	groups := make(map[string]*clustersv1alpha2.ClusterGroupResourcesStatus)
+	groupStatuses := make([]clustersv1alpha2.ClusterGroupResourcesStatus, 0)
 	for _, gr := range sortedGroupResources {
 		resourceStatus, ok := resourceStatuses[gr]
 		if !ok {
@@ -387,7 +387,7 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 
 		groupStatus, ok := groups[gr.Group]
 		if !ok {
-			groupStatuses = append(groupStatuses, clustersv1alpha1.ClusterGroupResourcesStatus{})
+			groupStatuses = append(groupStatuses, clustersv1alpha2.ClusterGroupResourcesStatus{})
 			groupStatus = &groupStatuses[len(groupStatuses)-1]
 			groups[gr.Group] = groupStatus
 		}
@@ -409,7 +409,7 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 				cond.LastTransitionTime = status.LastTransitionTime
 			} else {
 				if cond.Status == "" {
-					cond.Status = clustersv1alpha1.SyncStatusPending
+					cond.Status = clustersv1alpha2.SyncStatusPending
 				}
 				if cond.Reason == "" {
 					cond.Reason = "SynchroNotFound"
@@ -431,7 +431,7 @@ func (s *ClusterSynchro) genClusterStatus() *clustersv1alpha1.ClusterStatus {
 
 	version := s.version.Load().(version.Info).GitVersion
 	readyCondition := s.readyCondition.Load().(metav1.Condition)
-	return &clustersv1alpha1.ClusterStatus{
+	return &clustersv1alpha2.ClusterStatus{
 		Version:       version,
 		Conditions:    []metav1.Condition{readyCondition},
 		SyncResources: groupStatuses,
@@ -536,7 +536,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 
 		if lastReadyCondition.Status != metav1.ConditionTrue {
 			condition := metav1.Condition{
-				Type:               clustersv1alpha1.ClusterConditionReady,
+				Type:               clustersv1alpha2.ClusterConditionReady,
 				Status:             metav1.ConditionTrue,
 				Reason:             "Healthy",
 				LastTransitionTime: metav1.Now().Rfc3339Copy(),
@@ -558,7 +558,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	}
 
 	condition := metav1.Condition{
-		Type:   clustersv1alpha1.ClusterConditionReady,
+		Type:   clustersv1alpha2.ClusterConditionReady,
 		Status: metav1.ConditionFalse,
 	}
 	if err == nil {
