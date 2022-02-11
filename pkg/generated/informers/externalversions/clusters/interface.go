@@ -3,14 +3,14 @@
 package clusters
 
 import (
-	v1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/clusters/v1alpha1"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/clusters/v1alpha2"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.
 type Interface interface {
-	// V1alpha1 provides access to shared informers for resources in V1alpha1.
-	V1alpha1() v1alpha1.Interface
+	// V1alpha2 provides access to shared informers for resources in V1alpha2.
+	V1alpha2() v1alpha2.Interface
 }
 
 type group struct {
@@ -24,7 +24,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &group{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// V1alpha1 returns a new v1alpha1.Interface.
-func (g *group) V1alpha1() v1alpha1.Interface {
-	return v1alpha1.New(g.factory, g.namespace, g.tweakListOptions)
+// V1alpha2 returns a new v1alpha2.Interface.
+func (g *group) V1alpha2() v1alpha2.Interface {
+	return v1alpha2.New(g.factory, g.namespace, g.tweakListOptions)
 }

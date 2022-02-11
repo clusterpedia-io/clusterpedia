@@ -5,7 +5,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha1"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -36,9 +36,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=clusters.clusterpedia.io, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("pediaclusters"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Clusters().V1alpha1().PediaClusters().Informer()}, nil
+	// Group=clusters.clusterpedia.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("pediaclusters"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Clusters().V1alpha2().PediaClusters().Informer()}, nil
 
 	}
 
