@@ -20,25 +20,33 @@ func JSONQuery(column string, keys ...string) *JSONQueryExpression {
 	return &JSONQueryExpression{column: column, keys: keys}
 }
 
+func (jsonQuery *JSONQueryExpression) Exist() *JSONQueryExpression {
+	jsonQuery.not = false
+	return jsonQuery
+}
+
+func (jsonQuery *JSONQueryExpression) NotExist() *JSONQueryExpression {
+	jsonQuery.not = true
+	return jsonQuery
+}
+
 func (jsonQuery *JSONQueryExpression) Equal(value string) *JSONQueryExpression {
-	jsonQuery.values = []string{value}
+	jsonQuery.not, jsonQuery.values = false, []string{value}
 	return jsonQuery
 }
 
 func (jsonQuery *JSONQueryExpression) NotEqual(value string) *JSONQueryExpression {
-	jsonQuery.not = true
-	jsonQuery.values = []string{value}
+	jsonQuery.not, jsonQuery.values = true, []string{value}
 	return jsonQuery
 }
 
 func (jsonQuery *JSONQueryExpression) In(values ...string) *JSONQueryExpression {
-	jsonQuery.values = values
+	jsonQuery.not, jsonQuery.values = false, values
 	return jsonQuery
 }
 
 func (jsonQuery *JSONQueryExpression) NotIn(values ...string) *JSONQueryExpression {
-	jsonQuery.not = true
-	jsonQuery.values = values
+	jsonQuery.not, jsonQuery.values = true, values
 	return jsonQuery
 }
 
@@ -56,7 +64,11 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 			switch len(jsonQuery.values) {
 			case 0:
-				builder.WriteString(" IS NOT NULL")
+				if jsonQuery.not {
+					builder.WriteString(" IS NULL")
+				} else {
+					builder.WriteString(" IS NOT NULL")
+				}
 			case 1:
 				if jsonQuery.not {
 					builder.WriteString(" != ")
@@ -78,15 +90,17 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 				stmt.WriteString(" -> ")
 				stmt.AddVar(builder, key)
 			}
+			stmt.WriteString(" ->> ")
+			stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
 
 			switch len(jsonQuery.values) {
 			case 0:
-				stmt.WriteString(" ? ")
-				stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
+				if jsonQuery.not {
+					stmt.WriteString(" IS NULL")
+				} else {
+					stmt.WriteString(" IS NOT NULL")
+				}
 			case 1:
-				stmt.WriteString(" ->> ")
-				stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
-
 				if jsonQuery.not {
 					stmt.WriteString(" != ")
 				} else {
@@ -94,9 +108,6 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 				}
 				builder.AddVar(builder, jsonQuery.values[0])
 			default:
-				stmt.WriteString(" ->> ")
-				stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
-
 				if jsonQuery.not {
 					builder.WriteString(" NOT IN ")
 				} else {

@@ -54,6 +54,9 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 				jsonQuery := JSONQuery("object", "metadata", "labels", requirement.Key())
 				switch requirement.Operator() {
 				case selection.Exists:
+					jsonQuery.Exist()
+				case selection.DoesNotExist:
+					jsonQuery.NotExist()
 				case selection.Equals, selection.DoubleEquals:
 					jsonQuery.Equal(values[0])
 				case selection.NotEquals:
@@ -94,6 +97,9 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 				jsonQuery := JSONQuery("object", fields...)
 				switch requirement.Operator() {
 				case selection.Exists:
+					jsonQuery.Exist()
+				case selection.DoesNotExist:
+					jsonQuery.NotExist()
 				case selection.Equals, selection.DoubleEquals:
 					jsonQuery.Equal(values[0])
 				case selection.NotEquals:
