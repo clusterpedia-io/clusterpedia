@@ -89,11 +89,11 @@ type ClusterGroupResourcesStatus struct {
 type ClusterResourceStatus struct {
 	// +required
 	// +kubebuilder:validation:Required
-	Kind string `json:"kind"`
+	Name string `json:"name"`
 
 	// +required
 	// +kubebuilder:validation:Required
-	Resource string `json:"resource"`
+	Kind string `json:"kind"`
 
 	// +required
 	// +kubebuilder:validation:Required
