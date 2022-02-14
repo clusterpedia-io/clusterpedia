@@ -6,10 +6,10 @@ import (
 	"context"
 	time "time"
 
-	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/clusters/v1alpha2"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -45,16 +45,16 @@ func NewFilteredPediaClusterInformer(client versioned.Interface, resyncPeriod ti
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ClustersV1alpha2().PediaClusters().List(context.TODO(), options)
+				return client.ClusterV1alpha2().PediaClusters().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ClustersV1alpha2().PediaClusters().Watch(context.TODO(), options)
+				return client.ClusterV1alpha2().PediaClusters().Watch(context.TODO(), options)
 			},
 		},
-		&clustersv1alpha2.PediaCluster{},
+		&clusterv1alpha2.PediaCluster{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,7 +65,7 @@ func (f *pediaClusterInformer) defaultInformer(client versioned.Interface, resyn
 }
 
 func (f *pediaClusterInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&clustersv1alpha2.PediaCluster{}, f.defaultInformer)
+	return f.factory.InformerFor(&clusterv1alpha2.PediaCluster{}, f.defaultInformer)
 }
 
 func (f *pediaClusterInformer) Lister() v1alpha2.PediaClusterLister {

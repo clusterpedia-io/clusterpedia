@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: pediaclusters.clusters.clusterpedia.io
+  name: pediaclusters.cluster.clusterpedia.io
 spec:
-  group: clusters.clusterpedia.io
+  group: cluster.clusterpedia.io
   names:
     kind: PediaCluster
     listKind: PediaClusterList

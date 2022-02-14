@@ -5,7 +5,7 @@ package fake
 import (
 	"context"
 
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -16,12 +16,12 @@ import (
 
 // FakePediaClusters implements PediaClusterInterface
 type FakePediaClusters struct {
-	Fake *FakeClustersV1alpha2
+	Fake *FakeClusterV1alpha2
 }
 
-var pediaclustersResource = schema.GroupVersionResource{Group: "clusters.clusterpedia.io", Version: "v1alpha2", Resource: "pediaclusters"}
+var pediaclustersResource = schema.GroupVersionResource{Group: "cluster.clusterpedia.io", Version: "v1alpha2", Resource: "pediaclusters"}
 
-var pediaclustersKind = schema.GroupVersionKind{Group: "clusters.clusterpedia.io", Version: "v1alpha2", Kind: "PediaCluster"}
+var pediaclustersKind = schema.GroupVersionKind{Group: "cluster.clusterpedia.io", Version: "v1alpha2", Kind: "PediaCluster"}
 
 // Get takes name of the pediaCluster, and returns the corresponding pediaCluster object, and an error if there is any.
 func (c *FakePediaClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.PediaCluster, err error) {

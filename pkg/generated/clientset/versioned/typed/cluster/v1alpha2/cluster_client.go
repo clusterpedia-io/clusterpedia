@@ -3,27 +3,27 @@
 package v1alpha2
 
 import (
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
-type ClustersV1alpha2Interface interface {
+type ClusterV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	PediaClustersGetter
 }
 
-// ClustersV1alpha2Client is used to interact with features provided by the clusters.clusterpedia.io group.
-type ClustersV1alpha2Client struct {
+// ClusterV1alpha2Client is used to interact with features provided by the cluster.clusterpedia.io group.
+type ClusterV1alpha2Client struct {
 	restClient rest.Interface
 }
 
-func (c *ClustersV1alpha2Client) PediaClusters() PediaClusterInterface {
+func (c *ClusterV1alpha2Client) PediaClusters() PediaClusterInterface {
 	return newPediaClusters(c)
 }
 
-// NewForConfig creates a new ClustersV1alpha2Client for the given config.
-func NewForConfig(c *rest.Config) (*ClustersV1alpha2Client, error) {
+// NewForConfig creates a new ClusterV1alpha2Client for the given config.
+func NewForConfig(c *rest.Config) (*ClusterV1alpha2Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -32,12 +32,12 @@ func NewForConfig(c *rest.Config) (*ClustersV1alpha2Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ClustersV1alpha2Client{client}, nil
+	return &ClusterV1alpha2Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new ClustersV1alpha2Client for the given config and
+// NewForConfigOrDie creates a new ClusterV1alpha2Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *ClustersV1alpha2Client {
+func NewForConfigOrDie(c *rest.Config) *ClusterV1alpha2Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -45,9 +45,9 @@ func NewForConfigOrDie(c *rest.Config) *ClustersV1alpha2Client {
 	return client
 }
 
-// New creates a new ClustersV1alpha2Client for the given RESTClient.
-func New(c rest.Interface) *ClustersV1alpha2Client {
-	return &ClustersV1alpha2Client{c}
+// New creates a new ClusterV1alpha2Client for the given RESTClient.
+func New(c rest.Interface) *ClusterV1alpha2Client {
+	return &ClusterV1alpha2Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -65,7 +65,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ClustersV1alpha2Client) RESTClient() rest.Interface {
+func (c *ClusterV1alpha2Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

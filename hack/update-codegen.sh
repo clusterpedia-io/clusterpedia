@@ -11,13 +11,13 @@ cd "${REPO_ROOT}"
 #GO111MODULE=on go install k8s.io/code-generator/cmd/register-gen
 #register-gen \
 #    --go-header-file hack/boilerplate.go.txt \
-#    --input-dirs ./pkg/apis/clusters/v1alpha1 \
+#    --input-dirs ./pkg/apis/cluster/v1alpha1 \
 
 echo "Generating with deepcopy-gen"
 GO111MODULE=on go install k8s.io/code-generator/cmd/deepcopy-gen
 deepcopy-gen \
     --go-header-file hack/boilerplate.go.txt \
-    --input-dirs=./pkg/apis/clusters/v1alpha2 \
+    --input-dirs=./pkg/apis/cluster/v1alpha2 \
     --output-file-base=zz_generated.deepcopy
 deepcopy-gen \
     --go-header-file hack/boilerplate.go.txt \
@@ -40,7 +40,7 @@ GO111MODULE=on go install k8s.io/code-generator/cmd/client-gen
 client-gen \
     --go-header-file hack/boilerplate.go.txt \
     --input-base="" \
-    --input=github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2 \
+    --input=github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2 \
     --output-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset \
     --clientset-name=versioned
 
@@ -48,14 +48,14 @@ echo "Generating with lister-gen"
 GO111MODULE=on go install k8s.io/code-generator/cmd/lister-gen
 lister-gen \
   --go-header-file hack/boilerplate.go.txt \
-  --input-dirs=github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2 \
+  --input-dirs=github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2 \
   --output-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/listers
 
 echo "Generating with informer-gen"
 eO111MODULE=on go install k8s.io/code-generator/cmd/informer-gen
 informer-gen \
   --go-header-file hack/boilerplate.go.txt \
-  --input-dirs=github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2 \
+  --input-dirs=github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2 \
   --versioned-clientset-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned \
   --listers-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/listers \
   --output-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/informers
