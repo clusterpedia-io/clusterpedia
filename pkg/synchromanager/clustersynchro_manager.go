@@ -18,10 +18,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
-	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/clusters/v1alpha2"
+	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 )
@@ -48,7 +48,7 @@ type Manager struct {
 
 func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, storage storage.StorageFactory) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
-	clusterinformer := factory.Clusters().V1alpha2().PediaClusters()
+	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 
 	manager := &Manager{
 		informerFactory:    factory,
@@ -120,8 +120,8 @@ func (manager *Manager) addCluster(obj interface{}) {
 }
 
 func (manager *Manager) updateCluster(older, newer interface{}) {
-	oldObj := older.(*clustersv1alpha2.PediaCluster)
-	newObj := newer.(*clustersv1alpha2.PediaCluster)
+	oldObj := older.(*clusterv1alpha2.PediaCluster)
+	newObj := newer.(*clusterv1alpha2.PediaCluster)
 	if newObj.DeletionTimestamp.IsZero() && equality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
 		return
 	}
@@ -189,7 +189,7 @@ func (manager *Manager) processNextCluster() (continued bool) {
 }
 
 // if err returned is not nil, cluster will be requeued
-func (manager *Manager) reconcileCluster(cluster *clustersv1alpha2.PediaCluster) (err error) {
+func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) (err error) {
 	if !cluster.DeletionTimestamp.IsZero() {
 		klog.InfoS("remove cluster", "cluster", cluster.Name)
 		if err := manager.removeCluster(cluster.Name); err != nil {
@@ -203,7 +203,7 @@ func (manager *Manager) reconcileCluster(cluster *clustersv1alpha2.PediaCluster)
 
 		// remove finalizer
 		controllerutil.RemoveFinalizer(cluster, ClusterSynchroControllerFinalizer)
-		if _, err := manager.clusterpediaclient.ClustersV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
+		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to remove finializer", "cluster", cluster.Name)
 			return err
 		}
@@ -213,7 +213,7 @@ func (manager *Manager) reconcileCluster(cluster *clustersv1alpha2.PediaCluster)
 	// ensure finalizer
 	if !controllerutil.ContainsFinalizer(cluster, ClusterSynchroControllerFinalizer) {
 		controllerutil.AddFinalizer(cluster, ClusterSynchroControllerFinalizer)
-		cluster, err = manager.clusterpediaclient.ClustersV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+		cluster, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
 		if err != nil {
 			klog.ErrorS(err, "Failed to add finializer", "cluster", cluster.Name)
 			return err
@@ -282,7 +282,7 @@ func (manager *Manager) cleanCluster(name string) error {
 	return manager.storage.CleanCluster(context.TODO(), name)
 }
 
-func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, status *clustersv1alpha2.ClusterStatus) error {
+func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error {
 	cluster, err := manager.clusterlister.Get(name)
 	if err != nil {
 		return err
@@ -294,7 +294,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 
 	cluster = cluster.DeepCopy()
 	cluster.Status = *status
-	_, err = manager.clusterpediaclient.ClustersV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
+	_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -303,7 +303,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 	return nil
 }
 
-func buildClusterConfig(cluster *clustersv1alpha2.PediaCluster) (*rest.Config, error) {
+func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {
 	if cluster.Spec.APIServer == "" {
 		return nil, errors.New("Cluster APIServer Endpoint is required")
 	}

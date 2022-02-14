@@ -3,22 +3,22 @@
 package fake
 
 import (
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/clusters/v1alpha2"
+	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/cluster/v1alpha2"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeClustersV1alpha2 struct {
+type FakeClusterV1alpha2 struct {
 	*testing.Fake
 }
 
-func (c *FakeClustersV1alpha2) PediaClusters() v1alpha2.PediaClusterInterface {
+func (c *FakeClusterV1alpha2) PediaClusters() v1alpha2.PediaClusterInterface {
 	return &FakePediaClusters{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeClustersV1alpha2) RESTClient() rest.Interface {
+func (c *FakeClusterV1alpha2) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

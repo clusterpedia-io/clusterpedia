@@ -15,8 +15,8 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/klog/v2"
 
-	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
-	clusterslister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/clusters/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
+	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
@@ -27,7 +27,7 @@ type ResourceHandler struct {
 
 	rest          *RESTManager
 	discovery     *discovery.DiscoveryManager
-	clusterLister clusterslister.PediaClusterLister
+	clusterLister clusterlister.PediaClusterLister
 }
 
 func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -85,7 +85,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		var msg string
-		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clustersv1alpha2.ClusterConditionReady)
+		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterConditionReady)
 		switch {
 		case readyCondition == nil:
 			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", clusterName)
