@@ -190,8 +190,8 @@ func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGro
 			}
 
 			info := &clusterv1alpha2.ClusterResourceStatus{
+				Name:       gr.Resource,
 				Kind:       mapper.GroupVersionKind.Kind,
-				Resource:   gr.Resource,
 				Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
 			}
 

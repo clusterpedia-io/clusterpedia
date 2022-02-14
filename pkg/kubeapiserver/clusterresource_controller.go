@@ -69,7 +69,7 @@ func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alp
 				versions.Insert(cond.Version)
 			}
 
-			gr := schema.GroupResource{Group: groupResources.Group, Resource: resource.Resource}
+			gr := schema.GroupResource{Group: groupResources.Group, Resource: resource.Name}
 			resources[gr] = resourceInfo{
 				Namespaced: resource.Namespaced,
 				Kind:       resource.Kind,
