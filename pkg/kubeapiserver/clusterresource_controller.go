@@ -7,9 +7,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 
-	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
-	clusterinformer "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/clusters/v1alpha2"
-	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/clusters/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
+	clusterinformer "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/cluster/v1alpha2"
+	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 )
 
@@ -33,16 +33,16 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			controller.updateClusterResources(obj.(*clustersv1alpha2.PediaCluster))
+			controller.updateClusterResources(obj.(*clusterv1alpha2.PediaCluster))
 		},
 		UpdateFunc: func(_, obj interface{}) {
-			cluster := obj.(*clustersv1alpha2.PediaCluster)
+			cluster := obj.(*clusterv1alpha2.PediaCluster)
 			if !cluster.DeletionTimestamp.IsZero() {
 				controller.removeCluster(cluster.Name)
 				return
 			}
 
-			controller.updateClusterResources(obj.(*clustersv1alpha2.PediaCluster))
+			controller.updateClusterResources(obj.(*clusterv1alpha2.PediaCluster))
 		},
 		DeleteFunc: func(obj interface{}) {
 			clusterName, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -56,7 +56,7 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 	return controller
 }
 
-func (c *ClusterResourceController) updateClusterResources(cluster *clustersv1alpha2.PediaCluster) {
+func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alpha2.PediaCluster) {
 	resources := ResourceInfoMap{}
 	for _, groupResources := range cluster.Status.SyncResources {
 		for _, resource := range groupResources.Resources {

@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	clustersv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusters/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
@@ -40,7 +40,7 @@ type ResourceSynchro struct {
 	storage        storage.ResourceStorage
 	convertor      runtime.ObjectConvertor
 
-	status atomic.Value // clustersv1alpha2.ClusterResourceSyncCondition
+	status atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
 
 	runlock sync.Mutex
 	stoped  chan struct{}
@@ -79,8 +79,8 @@ func newResourceSynchro(cluster string, syncKind schema.GroupVersionKind, lw cac
 	}
 	close(synchro.stoped)
 
-	status := clustersv1alpha2.ClusterResourceSyncCondition{
-		Status:             clustersv1alpha2.SyncStatusPending,
+	status := clusterv1alpha2.ClusterResourceSyncCondition{
+		Status:             clusterv1alpha2.SyncStatusPending,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -143,8 +143,8 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 		close(informerStopCh)
 	}()
 
-	status := clustersv1alpha2.ClusterResourceSyncCondition{
-		Status:             clustersv1alpha2.SyncStatusSyncing,
+	status := clusterv1alpha2.ClusterResourceSyncCondition{
+		Status:             clusterv1alpha2.SyncStatusSyncing,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -159,8 +159,8 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 		synchro,
 	).Run(informerStopCh)
 
-	status = clustersv1alpha2.ClusterResourceSyncCondition{
-		Status:             clustersv1alpha2.SyncStatusStop,
+	status = clusterv1alpha2.ClusterResourceSyncCondition{
+		Status:             clusterv1alpha2.SyncStatusStop,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -363,6 +363,6 @@ func (synchro *ResourceSynchro) deleteResource(obj runtime.Object) error {
 	return synchro.storage.Delete(synchro.ctx, synchro.cluster, obj)
 }
 
-func (synchro *ResourceSynchro) Status() clustersv1alpha2.ClusterResourceSyncCondition {
-	return synchro.status.Load().(clustersv1alpha2.ClusterResourceSyncCondition)
+func (synchro *ResourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
+	return synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
 }

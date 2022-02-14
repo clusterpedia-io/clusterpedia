@@ -127,12 +127,12 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		delegate:      delegate,
 		rest:          restManager,
 		discovery:     discoveryManager,
-		clusterLister: c.ExtraConfig.InformerFactory.Clusters().V1alpha2().PediaClusters().Lister(),
+		clusterLister: c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters().Lister(),
 	}
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
 
-	_ = NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Clusters().V1alpha2().PediaClusters())
+	_ = NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
 	return genericserver, nil
 }
 
