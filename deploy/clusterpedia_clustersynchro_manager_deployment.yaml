@@ -22,7 +22,7 @@ spec:
         app: clusterpedia-clustersynchro-manager
     spec:
       containers:
-      - name: clusterpedia-server
+      - name: manager
         image: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager:v0.0.9-alpha
         command:
         - /usr/local/bin/clustersynchro-manager
