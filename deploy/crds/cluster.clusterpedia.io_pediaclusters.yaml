@@ -162,10 +162,10 @@ spec:
                         properties:
                           kind:
                             type: string
+                          name:
+                            type: string
                           namespaced:
                             type: boolean
-                          resource:
-                            type: string
                           syncConditions:
                             items:
                               properties:
@@ -196,8 +196,8 @@ spec:
                             type: array
                         required:
                         - kind
+                        - name
                         - namespaced
-                        - resource
                         - syncConditions
                         type: object
                       type: array
