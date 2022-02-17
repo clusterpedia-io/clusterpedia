@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question (GitHub Discussions)
+    url: https://github.com/clusterpedia-io/clusterpedia/discussions
+    about: |
+      Please do not submit "a bug report" for asking a question.
+      In most cases, GitHub Discussions is the best place to ask a question.
+      If you are not sure whether you are going to report a bug or ask a question,
+      please consider asking in GitHub Discussions first.

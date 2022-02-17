@@ -1,0 +1,68 @@
+name: Bug Report
+description: Report a bug encountered while operating Clusterpedia
+labels: kind/bug
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: |
+        Please provide as much info as possible. Not doing so may result in your bug not being addressed in a timely manner.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How can we reproduce it (as minimally and precisely as possible)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else we need to know?
+
+  - type: textarea
+    id: clusterpediaVersion
+    attributes:
+      label: Clusterpedia Version
+      value: |
+        <details>
+
+        ```console
+        # replace the pod name of clusterpedia apiserver
+        $ kubectl -n clusterpedia-system exec {clusterpedia-apiserver-pod-name} -- apiserver --version=raw
+        # paste output here
+        
+        # replace the pod name of clusterpedia clustersynchro-manager
+        $ kubectl -n clusterpedia-system exec {clustersynchro-manager-pod-name} -- clustersynchro-manager --version=raw
+        # paste output here
+        ```
+
+        </details>
+    validations:
+      required: true
+
+  - type: textarea
+    id: hostKubeVersion
+    attributes:
+      label: Host Kubernetes version
+      value: |
+        <details>
+
+        ```console
+        $ kubectl version
+        # paste output here
+        ```
+
+        </details>
+    validations:
+      required: true
