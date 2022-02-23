@@ -47,12 +47,26 @@ vendor:
 	go mod tidy
 	go mod vendor
 
+.PHONY: lint
+lint: golangci-lint
+	$(GOLANGLINT_BIN) run
+
+.PHONY: test
+test:
+	go test -race -v ./pkg/...
+
+.PHONY: clean
+clean: clean-images
+	rm -rf bin
+
+.PHONY: apiserver
 apiserver:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 			   -ldflags $(LDFLAGS) \
 			   -o bin/apiserver \
 			   cmd/apiserver/main.go
 
+.PHONY: clustersynchro-manager
 clustersynchro-manager:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 			   -ldflags $(LDFLAGS) \
@@ -137,6 +151,11 @@ clean-clustersynchro-manager-manifest:
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:$(VERSION) 2>/dev/null;\
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:latest 2>/dev/null; exit 0
 
-.PHONY: clean
-clean: clean-images
-	rm -rf bin
+.PHONY: golangci-lint
+golangci-lint:
+ifeq (, $(shell which golangci-lint))
+	GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.0
+GOLANGLINT_BIN=$(shell go env GOPATH)/bin/golangci-lint
+else
+GOLANGLINT_BIN=$(shell which golangci-lint)
+endif
