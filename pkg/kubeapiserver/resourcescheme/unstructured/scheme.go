@@ -21,7 +21,7 @@ func (s *Scheme) New(kind schema.GroupVersionKind) (runtime.Object, error) {
 	return obj, nil
 }
 
-func (s *Scheme) Default(_ runtime.Object) { return }
+func (s *Scheme) Default(_ runtime.Object) {}
 
 // ObjectKinds returns a slice of one element with the group,version,kind of the
 // provided object, or an error if the object is not runtime.Unstructured or

@@ -242,11 +242,12 @@ func convert_pedia_Slice_orderby_To_String(in *[]clusterpedia.OrderBy, out *stri
 	}
 
 	sliOrderBy := make([]string, len(*in))
-	for _, orderby := range *in {
+	for i, orderby := range *in {
 		str := orderby.Field
 		if orderby.Desc {
 			str += " desc"
 		}
+		sliOrderBy[i] = str
 	}
 
 	if err := convert_Slice_string_To_String(&sliOrderBy, out, s); err != nil {
@@ -254,8 +255,6 @@ func convert_pedia_Slice_orderby_To_String(in *[]clusterpedia.OrderBy, out *stri
 	}
 	return nil
 }
-
-func compileErrorOnMissingConversion() {}
 
 func convert_string_To_fields_Selector(in *string, out *fields.Selector, s conversion.Scope) error {
 	selector, err := fields.Parse(*in)
@@ -273,3 +272,6 @@ func convert_fields_Selector_To_string(in *fields.Selector, out *string, s conve
 	*out = (*in).String()
 	return nil
 }
+
+// nolint:unused
+func compileErrorOnMissingConversion() {}

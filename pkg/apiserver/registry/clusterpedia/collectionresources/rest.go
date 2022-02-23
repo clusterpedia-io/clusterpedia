@@ -86,7 +86,9 @@ func (s *REST) List(ctx context.Context, options *metainternal.ListOptions) (run
 func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
 	var opts internal.ListOptions
 	query := request.RequestQueryFrom(ctx)
-	scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts)
+	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts); err != nil {
+		return nil, err
+	}
 
 	// collection resources don't support with remaining count
 	// ignore opts.WithRemainingCount

@@ -102,7 +102,9 @@ func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	mysql.RegisterTLSConfig(cfg.SSLMode, tlsConfig)
+	if err := mysql.RegisterTLSConfig(cfg.SSLMode, tlsConfig); err != nil {
+		return nil, err
+	}
 
 	mysqlconfig := mysql.NewConfig()
 	mysqlconfig.User = cfg.User

@@ -144,7 +144,7 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 	resourceVersionCaches := make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage, len(resourceversions))
 	for gvr, rvs := range resourceversions {
 		cache := informer.NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc)
-		cache.Replace(rvs)
+		_ = cache.Replace(rvs)
 		resourceVersionCaches[gvr] = cache
 	}
 

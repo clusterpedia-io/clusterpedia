@@ -145,7 +145,6 @@ func buildAPIGroups(groups sets.String, groupversions map[schema.GroupVersion]st
 				},
 			)
 		}
-
 	}
 
 	apiGroups := make(map[string]metav1.APIGroup, len(groups))
