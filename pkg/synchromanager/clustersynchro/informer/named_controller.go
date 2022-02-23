@@ -61,7 +61,7 @@ func (c *controller) processLoop() {
 			}
 			if c.config.RetryOnError {
 				// This is the safe way to re-enqueue.
-				c.config.Queue.AddIfNotPresent(obj)
+				_ = c.config.Queue.AddIfNotPresent(obj)
 			}
 		}
 	}

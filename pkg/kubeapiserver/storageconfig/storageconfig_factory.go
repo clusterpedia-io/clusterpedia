@@ -44,11 +44,13 @@ func NewStorageConfigFactory() *StorageConfigFactory {
 	return factory
 }
 
+/*
 func (f *StorageConfigFactory) addCohabitatingResources(groupResources ...schema.GroupResource) {
 	for _, groupResource := range groupResources {
 		f.cohabitatingResources[groupResource] = groupResources
 	}
 }
+*/
 
 func (g *StorageConfigFactory) GetStorageGroupResource(groupResource schema.GroupResource) schema.GroupResource {
 	if len(g.cohabitatingResources[groupResource]) != 0 {

@@ -43,8 +43,6 @@ func GetKubeVersion() apimachineryversion.Info {
 	// k3s-io/kubernetes/staging/src/k8s.io/component-base/version.gitVersion is "v0.0.0-k3s1"
 	// remove suffix '-k3s1'
 	version := componentbaseversion.Get()
-	if strings.HasSuffix(version.GitVersion, "-k3s1") {
-		version.GitVersion = strings.TrimSuffix(version.GitVersion, "-k3s1")
-	}
+	version.GitVersion = strings.TrimSuffix(version.GitVersion, "-k3s1")
 	return version
 }

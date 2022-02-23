@@ -58,60 +58,60 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 		switch stmt.Dialector.Name() {
 		case "mysql", "sqlite":
-			builder.WriteString("JSON_UNQUOTE(JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
+			writeString(builder, "JSON_UNQUOTE(JSON_EXTRACT("+stmt.Quote(jsonQuery.column)+",")
 			builder.AddVar(stmt, fmt.Sprintf(`$."%s"`, strings.Join(jsonQuery.keys, `"."`)))
-			builder.WriteString("))")
+			writeString(builder, "))")
 
 			switch len(jsonQuery.values) {
 			case 0:
 				if jsonQuery.not {
-					builder.WriteString(" IS NULL")
+					writeString(builder, " IS NULL")
 				} else {
-					builder.WriteString(" IS NOT NULL")
+					writeString(builder, " IS NOT NULL")
 				}
 			case 1:
 				if jsonQuery.not {
-					builder.WriteString(" != ")
+					writeString(builder, " != ")
 				} else {
-					builder.WriteString(" = ")
+					writeString(builder, " = ")
 				}
 				builder.AddVar(builder, jsonQuery.values[0])
 			default:
 				if jsonQuery.not {
-					builder.WriteString(" NOT IN ")
+					writeString(builder, " NOT IN ")
 				} else {
-					builder.WriteString(" IN ")
+					writeString(builder, " IN ")
 				}
 				builder.AddVar(builder, jsonQuery.values)
 			}
 		case "postgres":
 			stmt.WriteQuoted(jsonQuery.column)
 			for _, key := range jsonQuery.keys[0 : len(jsonQuery.keys)-1] {
-				stmt.WriteString(" -> ")
+				writeString(stmt, " -> ")
 				stmt.AddVar(builder, key)
 			}
-			stmt.WriteString(" ->> ")
+			writeString(stmt, " ->> ")
 			stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
 
 			switch len(jsonQuery.values) {
 			case 0:
 				if jsonQuery.not {
-					stmt.WriteString(" IS NULL")
+					writeString(stmt, " IS NULL")
 				} else {
-					stmt.WriteString(" IS NOT NULL")
+					writeString(stmt, " IS NOT NULL")
 				}
 			case 1:
 				if jsonQuery.not {
-					stmt.WriteString(" != ")
+					writeString(stmt, " != ")
 				} else {
-					stmt.WriteString(" = ")
+					writeString(stmt, " = ")
 				}
 				builder.AddVar(builder, jsonQuery.values[0])
 			default:
 				if jsonQuery.not {
-					builder.WriteString(" NOT IN ")
+					writeString(builder, " NOT IN ")
 				} else {
-					builder.WriteString(" IN ")
+					writeString(builder, " IN ")
 				}
 				builder.AddVar(builder, jsonQuery.values)
 			}
@@ -130,4 +130,8 @@ func buildParentOwner(db *gorm.DB, cluster, owner string, seniority int) interfa
 		return ownerQuery.Where("owner_uid = ?", parentOwner)
 	}
 	return ownerQuery.Where("owner_uid IN (?)", parentOwner)
+}
+
+func writeString(builder clause.Writer, str string) {
+	_, _ = builder.WriteString(str)
 }

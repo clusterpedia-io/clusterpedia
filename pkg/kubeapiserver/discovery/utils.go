@@ -54,9 +54,3 @@ func sortAPIGroupByName(groups []metav1.APIGroup) {
 		return groups[i].Name < groups[j].Name
 	})
 }
-
-func sortAPIReosurceByName(resources []metav1.APIResource) {
-	sort.Slice(resources, func(i, j int) bool {
-		return resources[i].Name < resources[j].Name
-	})
-}

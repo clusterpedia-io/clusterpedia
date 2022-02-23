@@ -46,7 +46,7 @@ func init() {
 	// we need to add the options to empty v1
 	// TODO fix the server code to avoid this
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
-	metainternal.AddToScheme(Scheme)
+	_ = metainternal.AddToScheme(Scheme)
 
 	// TODO: keep the generic API server from wanting this
 	unversioned := schema.GroupVersion{Group: "", Version: "v1"}

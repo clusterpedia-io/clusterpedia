@@ -212,7 +212,7 @@ func (synchro *ResourceSynchro) OnAdd(obj interface{}) {
 	// https://github.com/clusterpedia-io/clusterpedia/issues/4
 	synchro.pruneObject(obj.(*unstructured.Unstructured))
 
-	synchro.queue.Add(obj)
+	_ = synchro.queue.Add(obj)
 }
 
 func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
@@ -223,11 +223,11 @@ func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
 
 	// https://github.com/clusterpedia-io/clusterpedia/issues/4
 	synchro.pruneObject(obj.(*unstructured.Unstructured))
-	synchro.queue.Update(obj)
+	_ = synchro.queue.Update(obj)
 }
 
 func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
-	synchro.queue.Delete(obj)
+	_ = synchro.queue.Delete(obj)
 }
 
 func (synchro *ResourceSynchro) OnSync(obj interface{}) {
@@ -272,7 +272,7 @@ func (synchro *ResourceSynchro) processResources() {
 }
 
 func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
-	defer synchro.queue.Done(event)
+	defer func() { _ = synchro.queue.Done(event) }()
 
 	if d, ok := event.Object.(cache.DeletedFinalStateUnknown); ok {
 		namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
@@ -287,7 +287,15 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 			},
 		}
 
-		synchro.deleteResource(obj)
+		if err := synchro.deleteResource(obj); err != nil {
+			klog.ErrorS(err, "Failed to handler resource",
+				"cluster", synchro.cluster,
+				"action", event.Action,
+				"resource", synchro.storageResource,
+				"namespace", namespace,
+				"name", name,
+			)
+		}
 		return
 	}
 

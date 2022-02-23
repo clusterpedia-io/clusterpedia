@@ -2,7 +2,9 @@ package request
 
 import "context"
 
-const clusterNameKey = "cluster-name"
+type clusterKeyType int
+
+const clusterNameKey clusterKeyType = iota
 
 func WithClusterName(parent context.Context, name string) context.Context {
 	return context.WithValue(parent, clusterNameKey, name)

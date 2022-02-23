@@ -45,11 +45,12 @@ func pressureEvents(older *Event, newer *Event) *Event {
 			return newer
 		}
 
-		if older.Action == Updated {
-			// TODO(clusterpedia-io)
-			// 正常来说 Updated -> Added 之间，会存在一个 Deleted 事件
-		}
-
+		/*
+			if older.Action == Updated {
+				// TODO(iceber)
+				// 正常来说 Updated -> Added 之间，会存在一个 Deleted 事件
+			}
+		*/
 		return newer
 	}
 
