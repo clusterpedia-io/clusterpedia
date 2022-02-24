@@ -9,15 +9,16 @@ jobs:
   images:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v2
         with:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
-      - name: Setup go
+      - name: Install Go
         uses: actions/setup-go@v1
         with:
           go-version: 1.16
+          check-latest: true
       - name: Login registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
