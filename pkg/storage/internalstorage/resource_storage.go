@@ -135,7 +135,7 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	var resource Resource
+	var object []byte
 	result := s.db.WithContext(ctx).Select("object").Where(map[string]interface{}{
 		"cluster":   cluster,
 		"group":     s.storageGroupResource.Group,
@@ -143,12 +143,12 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 		"resource":  s.storageGroupResource.Resource,
 		"namespace": namespace,
 		"name":      name,
-	}).First(&resource)
+	}).First(&object)
 	if result.Error != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, result.Error)
 	}
 
-	obj, _, err := s.codec.Decode(resource.Object, nil, into)
+	obj, _, err := s.codec.Decode(object, nil, into)
 	if err != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, err)
 	}
@@ -160,7 +160,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 }
 
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
-	query := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
+	query := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
@@ -170,8 +170,8 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		return err
 	}
 
-	var resources []Resource
-	result := query.Find(&resources)
+	var objects [][]byte
+	result := query.Find(&objects)
 	if result.Error != nil {
 		return InterpreError(s.storageGroupResource.String(), result.Error)
 	}
@@ -182,13 +182,13 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	}
 
 	if opts.WithContinue != nil && *opts.WithContinue {
-		if int64(len(resources)) == opts.Limit {
+		if int64(len(objects)) == opts.Limit {
 			list.SetContinue(strconv.FormatInt(offset+opts.Limit, 10))
 		}
 	}
 
 	if amount != nil {
-		remain := *amount - offset - int64(len(resources))
+		remain := *amount - offset - int64(len(objects))
 		if remain < 0 {
 			remain = 0
 		}
@@ -206,8 +206,8 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	}
 
 	newItemFunc := getNewItemFunc(listObject, v)
-	for _, resource := range resources {
-		if err := appendListItem(v, resource.Object, s.codec, newItemFunc); err != nil {
+	for _, object := range objects {
+		if err := appendListItem(v, object, s.codec, newItemFunc); err != nil {
 			return InterpreError(s.storageGroupResource.String(), fmt.Errorf("need ptr to slice: %v", err))
 		}
 	}
