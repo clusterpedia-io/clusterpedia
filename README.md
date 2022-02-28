@@ -4,6 +4,8 @@
 </p>
 
 # Clusterpedia
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fclusterpedia-io%2Fclusterpedia.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fclusterpedia-io%2Fclusterpedia?ref=badge_shield)
+
 This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources. 
 
 Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
@@ -252,3 +254,7 @@ Clusterpedia does not actually solve the problem of network connectivity in a mu
 ## Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
 * [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-11smmdntu-Im1YjOahqvHhJFqNzLELOA)
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fclusterpedia-io%2Fclusterpedia.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fclusterpedia-io%2Fclusterpedia?ref=badge_large)
