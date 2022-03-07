@@ -123,6 +123,7 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 		*out = make([]OrderBy, len(*in))
 		copy(*out, *in)
 	}
+	out.OwnerGroupResource = in.OwnerGroupResource
 	if in.WithContinue != nil {
 		in, out := &in.WithContinue, &out.WithContinue
 		*out = new(bool)

@@ -189,10 +189,13 @@ func autoConvert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions
 	// FIXME: Provide conversion function to convert v1.ListOptions to internalversion.ListOptions
 	compileErrorOnMissingConversion()
 	// WARNING: in.Names requires manual conversion: inconvertible types (string vs []string)
-	out.Owner = in.Owner
 	// WARNING: in.ClusterNames requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.Namespaces requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types (string vs []github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia.OrderBy)
+	out.OwnerUID = in.OwnerUID
+	out.OwnerName = in.OwnerName
+	// WARNING: in.OwnerGroupResource requires manual conversion: inconvertible types (string vs k8s.io/apimachinery/pkg/runtime/schema.GroupResource)
+	out.OwnerSeniority = in.OwnerSeniority
 	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
 	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
 	return nil
@@ -204,7 +207,6 @@ func autoConvert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedi
 	if err := runtime.Convert_Slice_string_To_string(&in.Names, &out.Names, s); err != nil {
 		return err
 	}
-	out.Owner = in.Owner
 	if err := runtime.Convert_Slice_string_To_string(&in.ClusterNames, &out.ClusterNames, s); err != nil {
 		return err
 	}
@@ -212,6 +214,10 @@ func autoConvert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedi
 		return err
 	}
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types ([]github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia.OrderBy vs string)
+	out.OwnerName = in.OwnerName
+	out.OwnerUID = in.OwnerUID
+	// WARNING: in.OwnerGroupResource requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/runtime/schema.GroupResource vs string)
+	out.OwnerSeniority = in.OwnerSeniority
 	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
 	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
 	// WARNING: in.EnhancedFieldSelector requires manual conversion: does not exist in peer-type
@@ -229,13 +235,6 @@ func autoConvert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOpti
 		}
 	} else {
 		out.Names = ""
-	}
-	if values, ok := map[string][]string(*in)["owner"]; ok && len(values) > 0 {
-		if err := runtime.Convert_Slice_string_To_string(&values, &out.Owner, s); err != nil {
-			return err
-		}
-	} else {
-		out.Owner = ""
 	}
 	if values, ok := map[string][]string(*in)["clusters"]; ok && len(values) > 0 {
 		if err := runtime.Convert_Slice_string_To_string(&values, &out.ClusterNames, s); err != nil {
@@ -257,6 +256,34 @@ func autoConvert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOpti
 		}
 	} else {
 		out.OrderBy = ""
+	}
+	if values, ok := map[string][]string(*in)["ownerUID"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.OwnerUID, s); err != nil {
+			return err
+		}
+	} else {
+		out.OwnerUID = ""
+	}
+	if values, ok := map[string][]string(*in)["ownerName"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.OwnerName, s); err != nil {
+			return err
+		}
+	} else {
+		out.OwnerName = ""
+	}
+	if values, ok := map[string][]string(*in)["ownerGR"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.OwnerGroupResource, s); err != nil {
+			return err
+		}
+	} else {
+		out.OwnerGroupResource = ""
+	}
+	if values, ok := map[string][]string(*in)["ownerSeniority"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_int(&values, &out.OwnerSeniority, s); err != nil {
+			return err
+		}
+	} else {
+		out.OwnerSeniority = 0
 	}
 	if values, ok := map[string][]string(*in)["withContinue"]; ok && len(values) > 0 {
 		if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithContinue, s); err != nil {

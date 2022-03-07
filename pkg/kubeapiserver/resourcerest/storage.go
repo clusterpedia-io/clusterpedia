@@ -66,9 +66,6 @@ func (s *RESTStorage) List(ctx context.Context, _ *metainternalversion.ListOptio
 	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts); err != nil {
 		return nil, apierrors.NewBadRequest(err.Error())
 	}
-
-	// TODO(iceber): validate *internal.ListOptions
-
 	return s.list(ctx, &opts)
 }
 
@@ -84,6 +81,10 @@ func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (
 
 	if cluster := request.ClusterNameValue(ctx); cluster != "" {
 		options.ClusterNames = []string{cluster}
+	}
+
+	if (options.OwnerUID != "" || options.OwnerName != "") && len(options.ClusterNames) != 1 {
+		return nil, apierrors.NewBadRequest("If searching by owner uid or name, then the cluster must be specified")
 	}
 
 	/*

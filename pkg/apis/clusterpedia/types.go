@@ -13,11 +13,15 @@ import (
 )
 
 const (
-	SearchLabelOwner      = "search.clusterpedia.io/owner"
 	SearchLabelNames      = "search.clusterpedia.io/names"
 	SearchLabelClusters   = "search.clusterpedia.io/clusters"
 	SearchLabelNamespaces = "search.clusterpedia.io/namespaces"
 	SearchLabelOrderBy    = "search.clusterpedia.io/orderby"
+
+	SearchLabelOwnerUID           = "search.clusterpedia.io/owner-uid"
+	SearchLabelOwnerName          = "search.clusterpedia.io/owner-name"
+	SearchLabelOwnerGroupResource = "search.clusterpedia.io/owner-gr"
+	SearchLabelOwnerSeniority     = "search.clusterpedia.io/owner-seniority"
 
 	SearchLabelWithContinue       = "search.clusterpedia.io/with-continue"
 	SearchLabelWithRemainingCount = "search.clusterpedia.io/with-remaining-count"
@@ -39,10 +43,14 @@ type ListOptions struct {
 	metainternal.ListOptions
 
 	Names        []string
-	Owner        string
 	ClusterNames []string
 	Namespaces   []string
 	OrderBy      []OrderBy
+
+	OwnerName          string
+	OwnerUID           string
+	OwnerGroupResource schema.GroupResource
+	OwnerSeniority     int
 
 	WithContinue       *bool
 	WithRemainingCount *bool
