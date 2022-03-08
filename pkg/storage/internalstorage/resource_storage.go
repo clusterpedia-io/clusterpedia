@@ -135,20 +135,20 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	var object []byte
-	result := s.db.WithContext(ctx).Select("object").Where(map[string]interface{}{
+	var objects [][]byte
+	result := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
 		"cluster":   cluster,
 		"group":     s.storageGroupResource.Group,
 		"version":   s.storageVersion.Version,
 		"resource":  s.storageGroupResource.Resource,
 		"namespace": namespace,
 		"name":      name,
-	}).First(&object)
+	}).First(&objects)
 	if result.Error != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, result.Error)
 	}
 
-	obj, _, err := s.codec.Decode(object, nil, into)
+	obj, _, err := s.codec.Decode(objects[0], nil, into)
 	if err != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, err)
 	}
