@@ -5,7 +5,8 @@
 package v1alpha2
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -126,6 +127,26 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = make([]byte, len(*in))
 		copy(*out, *in)
 	}
+	if in.CARef != nil {
+		in, out := &in.CARef, &out.CARef
+		*out = new(v1.ObjectReference)
+		**out = **in
+	}
+	if in.TokenRef != nil {
+		in, out := &in.TokenRef, &out.TokenRef
+		*out = new(v1.ObjectReference)
+		**out = **in
+	}
+	if in.CertRef != nil {
+		in, out := &in.CertRef, &out.CertRef
+		*out = new(v1.ObjectReference)
+		**out = **in
+	}
+	if in.KeyRef != nil {
+		in, out := &in.KeyRef, &out.KeyRef
+		*out = new(v1.ObjectReference)
+		**out = **in
+	}
 	if in.SyncResources != nil {
 		in, out := &in.SyncResources, &out.SyncResources
 		*out = make([]ClusterGroupResources, len(*in))
@@ -151,7 +172,7 @@ func (in *ClusterStatus) DeepCopyInto(out *ClusterStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

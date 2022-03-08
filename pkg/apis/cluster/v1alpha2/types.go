@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -47,6 +48,18 @@ type ClusterSpec struct {
 
 	// +optional
 	KeyData []byte `json:"keyData,omitempty"`
+
+	// +optional
+	CARef *corev1.ObjectReference `json:"caRef,omitempty"`
+
+	// +optional
+	TokenRef *corev1.ObjectReference `json:"tokenRef,omitempty"`
+
+	// +optional
+	CertRef *corev1.ObjectReference `json:"certRef,omitempty"`
+
+	// +optional
+	KeyRef *corev1.ObjectReference `json:"keyRef,omitempty"`
 
 	// +required
 	SyncResources []ClusterGroupResources `json:"syncResources"`

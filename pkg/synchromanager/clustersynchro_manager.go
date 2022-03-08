@@ -1,19 +1,27 @@
 package synchromanager
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"reflect"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/jsonpath"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -33,6 +41,8 @@ type Manager struct {
 	stopCh  <-chan struct{}
 
 	kubeclient         clientset.Interface
+	dynamicclient      dynamic.Interface
+	restmapper         meta.RESTMapper
 	clusterpediaclient crdclientset.Interface
 	informerFactory    externalversions.SharedInformerFactory
 
@@ -300,6 +310,69 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 	}
 
 	klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "status", status.Conditions[0].Reason)
+	return nil
+}
+
+func (manager *Manager) getReferenceObject(ref corev1.ObjectReference) (*unstructured.Unstructured, error) {
+	gv, err := schema.ParseGroupVersion(ref.APIVersion)
+	if err != nil {
+		return nil, err
+	}
+	gvk := gv.WithKind(ref.Kind)
+
+	mapper, err := manager.restmapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	return manager.dynamicclient.Resource(mapper.Resource).Namespace(ref.Namespace).Get(context.TODO(), ref.Name, metav1.GetOptions{})
+}
+
+func (manager *Manager) getReferenceValue(name string, ref corev1.ObjectReference, buffer io.Writer) error {
+	refObj, err := manager.getReferenceObject(ref)
+	if err != nil {
+	}
+
+	parser := jsonpath.New("cert-ref")
+	if err := parser.Parse(ref.FieldPath); err != nil {
+	}
+
+	if err := parser.Execute(buffer, refObj.UnstructuredContent()); err != nil {
+
+	}
+	return nil
+}
+
+func (manager *Manager) resolveAuthenticationReference(cluster *clusterv1alpha2.PediaCluster) error {
+	var buffer bytes.Buffer
+	if len(cluster.Spec.CertData) == 0 && cluster.Spec.CertRef != nil {
+		buffer.Reset()
+		if err := manager.getReferenceValue("cert-data", *cluster.Spec.CertRef, &buffer); err != nil {
+		}
+		cluster.Spec.TokenData = buffer.Bytes()
+	}
+
+	if len(cluster.Spec.TokenData) == 0 && cluster.Spec.TokenRef != nil {
+		buffer.Reset()
+		if err := manager.getReferenceValue("token-data", *cluster.Spec.TokenRef, &buffer); err != nil {
+		}
+		cluster.Spec.TokenData = buffer.Bytes()
+	}
+
+	if len(cluster.Spec.KeyData) == 0 && cluster.Spec.KeyRef != nil {
+		buffer.Reset()
+		if err := manager.getReferenceValue("key-data", *cluster.Spec.KeyRef, &buffer); err != nil {
+		}
+		cluster.Spec.KeyData = buffer.Bytes()
+	}
+
+	if len(cluster.Spec.CAData) == 0 && cluster.Spec.CARef != nil {
+		buffer.Reset()
+		if err := manager.getReferenceValue("ca-data", *cluster.Spec.CARef, &buffer); err != nil {
+		}
+		cluster.Spec.CAData = buffer.Bytes()
+	}
+
 	return nil
 }
 
