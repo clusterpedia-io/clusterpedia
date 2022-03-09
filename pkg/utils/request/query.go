@@ -10,6 +10,9 @@ type queryKeyType int
 const queryKey queryKeyType = iota
 
 func WithRequestQuery(parent context.Context, query url.Values) context.Context {
+	if query == nil {
+		return parent
+	}
 	return context.WithValue(parent, queryKey, query)
 }
 

@@ -7,6 +7,9 @@ type clusterKeyType int
 const clusterNameKey clusterKeyType = iota
 
 func WithClusterName(parent context.Context, name string) context.Context {
+	if name == "" {
+		return parent
+	}
 	return context.WithValue(parent, clusterNameKey, name)
 }
 
