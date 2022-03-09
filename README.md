@@ -252,3 +252,16 @@ Clusterpedia does not actually solve the problem of network connectivity in a mu
 ## Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
 * [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-11smmdntu-Im1YjOahqvHhJFqNzLELOA)
+
+## Contributors
+
+<a href="https://github.com/clusterpedia-io/clusterpedia/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=clusterpedia-io/clusterpedia" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks).
+
+## License
+Copyright 2022 the Clusterpedia Authors. All rights reserved.
+
+Licensed under the Apache License, Version 2.0.
