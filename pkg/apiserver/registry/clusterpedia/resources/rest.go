@@ -21,28 +21,38 @@ type REST struct {
 	server http.Handler
 }
 
-func (r *REST) NamespaceScoped() bool {
-	return false
-}
+var _ genericrest.Scoper = &REST{}
+var _ genericrest.Storage = &REST{}
+var _ genericrest.Connecter = &REST{}
 
-func (r *REST) New() runtime.Object {
-	return &v1beta1.Resources{}
-}
-
+// NewREST returns a RESTStorage object that will work against API services
 func NewREST(resourceHandler http.Handler) *REST {
 	return &REST{
 		server: resourceHandler,
 	}
 }
 
+// New implements rest.Storage
+func (r *REST) New() runtime.Object {
+	return &v1beta1.Resources{}
+}
+
+// NamespaceScoped returns false because Resources is not namespaced
+func (r *REST) NamespaceScoped() bool {
+	return false
+}
+
+// ConnectMethods returns the list of HTTP methods handled by Connect
 func (r *REST) ConnectMethods() []string {
 	return []string{"GET"}
 }
 
+// NewConnectOptions returns an empty options object that will be used to pass options to the Connect method.
 func (r *REST) NewConnectOptions() (runtime.Object, bool, string) {
 	return nil, true, ""
 }
 
+// Connect returns an http.Handler that will handle the request/response for a given API invocation.
 func (r *REST) Connect(ctx context.Context, prefixPath string, _ runtime.Object, responder genericrest.Responder) (http.Handler, error) {
 	info, ok := genericrequest.RequestInfoFrom(ctx)
 	if !ok {
@@ -56,7 +66,6 @@ func (r *REST) Connect(ctx context.Context, prefixPath string, _ runtime.Object,
 		paths := []string{info.APIPrefix, info.APIGroup, info.APIVersion, info.Resource}
 		if prefixPath == "clusters" {
 			// match /resources/clusters/<cluster name>/*
-
 			if len(info.Parts) < 4 {
 				err := apierrors.NewNotFound(schema.GroupResource{}, "")
 				err.ErrStatus.Message = "the server could not find the requested resource"
