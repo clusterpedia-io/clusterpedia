@@ -15,9 +15,6 @@ type ListOptions struct {
 	Names string `json:"names,omitempty"`
 
 	// +optional
-	Owner string `json:"owner,omitempty"`
-
-	// +optional
 	ClusterNames string `json:"clusters,omitempty"`
 
 	// +optional
@@ -25,6 +22,18 @@ type ListOptions struct {
 
 	// +optional
 	OrderBy string `json:"orderby,omitempty"`
+
+	// +optional
+	OwnerUID string `json:"ownerUID,omitempty"`
+
+	// +optional
+	OwnerName string `json:"ownerName,omitempty"`
+
+	// +optional
+	OwnerGroupResource string `json:"ownerGR,omitempty"`
+
+	// +optional
+	OwnerSeniority int `json:"ownerSeniority,omitempty"`
 
 	// +optional
 	WithContinue *bool `json:"withContinue,omitempty"`

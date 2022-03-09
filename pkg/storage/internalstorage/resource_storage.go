@@ -20,12 +20,6 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
-const (
-	SearchLabelOwnerKey       = "internalstorage.clusterpedia.io/owner-key"
-	SearchLabelOwnerUID       = "internalstorage.clusterpedia.io/owner-uid"
-	SearchLabelOwnerSeniority = "internalstorage.clusterpedia.io/owner-seniority"
-)
-
 type ResourceStorage struct {
 	db    *gorm.DB
 	codec runtime.Codec
@@ -226,7 +220,7 @@ func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	var amount *int64
 	applyFn := func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
-		query, err := applyExtraLabelSelectorToResourceQuery(db, query, opts)
+		query, err := applyOwnerToResourceQuery(db, query, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +239,47 @@ func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal
 	return offset, amount, query, nil
 }
 
-func applyExtraLabelSelectorToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
+func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
+	var ownerQuery interface{}
+	switch {
+	case len(opts.ClusterNames) != 1:
+		return query, nil
+
+	case opts.OwnerUID != "":
+		ownerQuery = buildOwnerQueryByUID(db, opts.ClusterNames[0], opts.OwnerUID, opts.OwnerSeniority)
+
+	case opts.OwnerName != "":
+		var ownerNamespaces []string
+		if len(opts.Namespaces) != 0 {
+			// match namespaced and clustered owner resources
+			ownerNamespaces = append(opts.Namespaces, "")
+		}
+		ownerQuery = buildOwnerQueryByName(db, opts.ClusterNames[0], ownerNamespaces, opts.OwnerGroupResource, opts.OwnerName, opts.OwnerSeniority)
+
+	case opts.ExtraLabelSelector != nil:
+		return applyExtraLabelSelectorToResourceQuery_Owner(db, query, opts)
+
+	default:
+		return query, nil
+	}
+
+	if _, ok := ownerQuery.(string); ok {
+		query = query.Where("owner_uid = ?", ownerQuery)
+	} else {
+		query = query.Where("owner_uid IN (?)", ownerQuery)
+	}
+	return query, nil
+}
+
+// DEPRECATED: The owner search label of internalstorage is deprecated by "search.clusterpedia.io/owner-*"
+const (
+	SearchLabelOwnerKey       = "internalstorage.clusterpedia.io/owner-key"
+	SearchLabelOwnerUID       = "internalstorage.clusterpedia.io/owner-uid"
+	SearchLabelOwnerSeniority = "internalstorage.clusterpedia.io/owner-seniority"
+)
+
+// DEPRECATED
+func applyExtraLabelSelectorToResourceQuery_Owner(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
 	if opts.ExtraLabelSelector == nil {
 		return query, nil
 	}
@@ -264,7 +298,7 @@ func applyExtraLabelSelectorToResourceQuery(db *gorm.DB, query *gorm.DB, opts *i
 		}
 
 		cluster := opts.ClusterNames[0]
-		parent := buildParentOwner(db, cluster, owner, seniority)
+		parent := buildOwnerQueryByUID(db, cluster, owner, seniority)
 		if _, ok := parent.(string); ok {
 			query = query.Where("owner_uid = ?", parent)
 		} else {

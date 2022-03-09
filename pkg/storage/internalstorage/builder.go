@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type JSONQueryExpression struct {
@@ -119,12 +120,16 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 	}
 }
 
-func buildParentOwner(db *gorm.DB, cluster, owner string, seniority int) interface{} {
+func writeString(builder clause.Writer, str string) {
+	_, _ = builder.WriteString(str)
+}
+
+func buildOwnerQueryByUID(db *gorm.DB, cluster, uid string, seniority int) interface{} {
 	if seniority == 0 {
-		return owner
+		return uid
 	}
 
-	parentOwner := buildParentOwner(db, cluster, owner, seniority-1)
+	parentOwner := buildOwnerQueryByUID(db, cluster, uid, seniority-1)
 	ownerQuery := db.Model(Resource{}).Select("uid").Where(map[string]interface{}{"cluster": cluster})
 	if _, ok := parentOwner.(string); ok {
 		return ownerQuery.Where("owner_uid = ?", parentOwner)
@@ -132,6 +137,22 @@ func buildParentOwner(db *gorm.DB, cluster, owner string, seniority int) interfa
 	return ownerQuery.Where("owner_uid IN (?)", parentOwner)
 }
 
-func writeString(builder clause.Writer, str string) {
-	_, _ = builder.WriteString(str)
+func buildOwnerQueryByName(db *gorm.DB, cluster string, namespaces []string, groupResource schema.GroupResource, name string, seniority int) interface{} {
+	ownerQuery := db.Model(Resource{}).Select("uid").Where(map[string]interface{}{"cluster": cluster})
+	if seniority != 0 {
+		parentOwner := buildOwnerQueryByName(db, cluster, namespaces, groupResource, name, seniority-1)
+		return ownerQuery.Where("owner_uid IN (?)", parentOwner)
+	}
+
+	if !groupResource.Empty() {
+		ownerQuery = ownerQuery.Where(map[string]interface{}{"group": groupResource.Group, "resource": groupResource.Resource})
+	}
+	switch len(namespaces) {
+	case 0:
+	case 1:
+		ownerQuery = ownerQuery.Where("namespace = ?", namespaces[0])
+	default:
+		ownerQuery = ownerQuery.Where("namespace IN (?)", namespaces)
+	}
+	return ownerQuery.Where("name = ?", name)
 }

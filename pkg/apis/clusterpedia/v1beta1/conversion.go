@@ -12,6 +12,7 @@ import (
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
@@ -36,7 +37,6 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 	if err := convert_String_To_Slice_string(&in.Names, &out.Names, s); err != nil {
 		return err
 	}
-	out.Owner = in.Owner
 	if err := convert_String_To_Slice_string(&in.ClusterNames, &out.ClusterNames, s); err != nil {
 		return err
 	}
@@ -52,6 +52,13 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 		return err
 	}
 
+	out.OwnerUID = in.OwnerUID
+	out.OwnerName = in.OwnerName
+	if in.OwnerGroupResource != "" {
+		out.OwnerGroupResource = schema.ParseGroupResource(in.OwnerGroupResource)
+	}
+	out.OwnerSeniority = in.OwnerSeniority
+
 	out.WithContinue = in.WithContinue
 	out.WithRemainingCount = in.WithRemainingCount
 
@@ -65,10 +72,6 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 			for _, require := range requirements {
 				values := require.Values().UnsortedList()
 				switch require.Key() {
-				case clusterpedia.SearchLabelOwner:
-					if len(out.Owner) == 0 && len(values) != 0 {
-						out.Owner = values[0]
-					}
 				case clusterpedia.SearchLabelNames:
 					if len(out.Names) == 0 && len(values) != 0 {
 						out.Names = values
@@ -80,6 +83,26 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 				case clusterpedia.SearchLabelNamespaces:
 					if len(out.Namespaces) == 0 && len(values) != 0 {
 						out.Namespaces = values
+					}
+				case clusterpedia.SearchLabelOwnerUID:
+					if out.OwnerUID == "" && len(values) == 1 {
+						out.OwnerUID = values[0]
+					}
+				case clusterpedia.SearchLabelOwnerName:
+					if out.OwnerName == "" && len(values) == 1 {
+						out.OwnerName = values[0]
+					}
+				case clusterpedia.SearchLabelOwnerGroupResource:
+					if out.OwnerGroupResource.Empty() && len(values) == 1 {
+						out.OwnerGroupResource = schema.ParseGroupResource(values[0])
+					}
+				case clusterpedia.SearchLabelOwnerSeniority:
+					if out.OwnerSeniority == 0 && len(values) == 1 {
+						seniority, err := strconv.Atoi(values[0])
+						if err != nil {
+							return fmt.Errorf("Invalid Query Offset(%s): %w", out.Continue, err)
+						}
+						out.OwnerSeniority = seniority
 					}
 				case clusterpedia.SearchLabelOrderBy:
 					if len(out.OrderBy) == 0 && len(values) != 0 {
@@ -155,7 +178,11 @@ func Convert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedia.Li
 		return err
 	}
 
-	out.Owner = in.Owner
+	out.OwnerUID = in.OwnerUID
+	out.OwnerName = in.OwnerName
+	out.OwnerGroupResource = in.OwnerGroupResource.String()
+	out.OwnerSeniority = in.OwnerSeniority
+
 	if err := convert_Slice_string_To_String(&in.Names, &out.Names, s); err != nil {
 		return err
 	}
