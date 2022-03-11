@@ -53,7 +53,7 @@ lint: golangci-lint
 
 .PHONY: test
 test:
-	go test -race -v ./pkg/...
+	go test -race -cover -v ./pkg/...
 
 .PHONY: clean
 clean: clean-images
