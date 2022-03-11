@@ -29,6 +29,15 @@ type ResourceStorage struct {
 	memoryVersion        schema.GroupVersion
 }
 
+func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
+	return &storage.ResourceStorageConfig{
+		Codec:                s.codec,
+		StorageGroupResource: s.storageGroupResource,
+		StorageVersion:       s.storageVersion,
+		MemoryVersion:        s.memoryVersion,
+	}
+}
+
 func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtime.Object) error {
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	if gvk.Kind == "" {
@@ -111,34 +120,43 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
 }
 
-func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {
-	metaobj, err := meta.Accessor(obj)
-	if err != nil {
-		return InterpreError("", err)
-	}
-
-	result := s.db.Where(map[string]interface{}{
-		"cluster":   cluster,
-		"group":     s.storageGroupResource.Group,
-		"version":   s.storageVersion.Version,
-		"resource":  s.storageGroupResource.Resource,
-		"namespace": metaobj.GetNamespace(),
-		"name":      metaobj.GetName(),
-	}).Delete(&Resource{})
-	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
-}
-
-func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	var objects [][]byte
-	result := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
+func (s *ResourceStorage) deleteObject(cluster, namespace, name string) *gorm.DB {
+	return s.db.Model(&Resource{}).Where(map[string]interface{}{
 		"cluster":   cluster,
 		"group":     s.storageGroupResource.Group,
 		"version":   s.storageVersion.Version,
 		"resource":  s.storageGroupResource.Resource,
 		"namespace": namespace,
 		"name":      name,
-	}).First(&objects)
-	if result.Error != nil {
+	}).Delete(&Resource{})
+}
+
+func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {
+	metaobj, err := meta.Accessor(obj)
+	if err != nil {
+		return InterpreError("", err)
+	}
+
+	if result := s.deleteObject(cluster, metaobj.GetNamespace(), metaobj.GetName()); result.Error != nil {
+		return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
+	}
+	return nil
+}
+
+func (s *ResourceStorage) genGetObjectQuery(ctx context.Context, cluster, namespace, name string) *gorm.DB {
+	return s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
+		"cluster":   cluster,
+		"group":     s.storageGroupResource.Group,
+		"version":   s.storageVersion.Version,
+		"resource":  s.storageGroupResource.Resource,
+		"namespace": namespace,
+		"name":      name,
+	})
+}
+
+func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
+	var objects [][]byte
+	if result := s.genGetObjectQuery(ctx, cluster, namespace, name).First(&objects); result.Error != nil {
 		return InterpreResourceError(cluster, namespace+"/"+name, result.Error)
 	}
 
@@ -153,20 +171,23 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	return nil
 }
 
-func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
+func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	query := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
 	})
-	offset, amount, query, err := applyListOptionsToResourceQuery(s.db, query, opts)
+	return applyListOptionsToResourceQuery(s.db, query, opts)
+}
+
+func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
+	offset, amount, query, err := s.genListObjectsQuery(ctx, opts)
 	if err != nil {
 		return err
 	}
 
 	var objects [][]byte
-	result := query.Find(&objects)
-	if result.Error != nil {
+	if result := query.Find(&objects); result.Error != nil {
 		return InterpreError(s.storageGroupResource.String(), result.Error)
 	}
 
@@ -206,15 +227,6 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		}
 	}
 	return nil
-}
-
-func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
-	return &storage.ResourceStorageConfig{
-		Codec:                s.codec,
-		StorageGroupResource: s.storageGroupResource,
-		StorageVersion:       s.storageVersion,
-		MemoryVersion:        s.memoryVersion,
-	}
 }
 
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {

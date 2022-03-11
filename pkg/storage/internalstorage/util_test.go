@@ -20,15 +20,14 @@ type expected struct {
 
 func testApplyListOptionsToQuery(t *testing.T, name string, options *internal.ListOptions, expected expected) {
 	t.Run(fmt.Sprintf("%s postgres", name), func(t *testing.T) {
-		postgreSQL, err := toSQL(postgresDB, options, func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
-			_, query, err := applyListOptionsToQuery(query, options, nil)
-			return query, err
-		},
+		postgreSQL, err := toSQL(postgresDB, options,
+			func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
+				_, query, err := applyListOptionsToQuery(query, options, nil)
+				return query, err
+			},
 		)
-		if err != nil && err.Error() != expected.err {
-			t.Errorf("expected error: %q, but got: %q", err.Error(), expected.err)
-		}
 
+		assertError(t, expected.err, err)
 		if postgreSQL != expected.postgres {
 			t.Errorf("expected sql: %q, but got: %q", expected.postgres, postgreSQL)
 		}
@@ -36,15 +35,14 @@ func testApplyListOptionsToQuery(t *testing.T, name string, options *internal.Li
 
 	for version := range mysqlDBs {
 		t.Run(fmt.Sprintf("%s mysql-%s", name, version), func(t *testing.T) {
-			mysqlSQL, err := toSQL(mysqlDBs[version], options, func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
-				_, query, err := applyListOptionsToQuery(query, options, nil)
-				return query, err
-			},
+			mysqlSQL, err := toSQL(mysqlDBs[version], options,
+				func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
+					_, query, err := applyListOptionsToQuery(query, options, nil)
+					return query, err
+				},
 			)
-			if err != nil && err.Error() != expected.err {
-				t.Errorf("expected error: %q, but got: %q", err.Error(), expected.err)
-			}
 
+			assertError(t, expected.err, err)
 			if mysqlSQL != expected.mysql {
 				t.Errorf("expected sql: %q, but got: %q", expected.mysql, mysqlSQL)
 			}
@@ -503,4 +501,14 @@ func toSQL(db *gorm.DB, options *internal.ListOptions, applyFn func(*gorm.DB, *i
 
 	stmt := query.Find(interface{}(nil)).Statement
 	return db.Dialector.Explain(stmt.SQL.String(), stmt.Vars...), nil
+}
+
+func assertError(t *testing.T, expectedErr string, err error) {
+	if expectedErr != "" {
+		if err == nil || err.Error() != expectedErr {
+			t.Errorf("expected error: %q, but got: %#v", expectedErr, err)
+		}
+	} else if err != nil {
+		t.Errorf("expected nil error, but got: %#v", err)
+	}
 }
