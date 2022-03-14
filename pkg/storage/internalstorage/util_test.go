@@ -3,8 +3,10 @@ package internalstorage
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubefields "k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -53,6 +55,9 @@ func testApplyListOptionsToQuery(t *testing.T, name string, options *internal.Li
 }
 
 func TestApplyListOptionsToQuery_Metadata(t *testing.T) {
+	since, _ := time.Parse("2006-01-02", "2022-03-04")
+	before, _ := time.Parse("2006-01-02", "2022-03-15")
+
 	tests := []struct {
 		name        string
 		listOptions *internal.ListOptions
@@ -125,6 +130,18 @@ func TestApplyListOptionsToQuery_Metadata(t *testing.T) {
 			expected{
 				`SELECT * FROM "resources" WHERE namespace = 'ns-1' AND name IN ('name-1','name-2') `,
 				"SELECT * FROM `resources` WHERE namespace = 'ns-1' AND name IN ('name-1','name-2') ",
+				"",
+			},
+		},
+		{
+			name: "with since and before",
+			listOptions: &internal.ListOptions{
+				Since:  &metav1.Time{Time: since},
+				Before: &metav1.Time{Time: before},
+			},
+			expected: expected{
+				`SELECT * FROM "resources" WHERE created_at >= '2022-03-04 00:00:00' AND created_at < '2022-03-15 00:00:00' `,
+				"SELECT * FROM `resources` WHERE created_at >= '2022-03-04 00:00:00' AND created_at < '2022-03-15 00:00:00' ",
 				"",
 			},
 		},

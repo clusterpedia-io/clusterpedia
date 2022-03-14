@@ -47,6 +47,14 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 		query = query.Where("name IN ?", opts.Names)
 	}
 
+	if opts.Since != nil {
+		query = query.Where("created_at >= ?", opts.Since.Time.UTC())
+	}
+
+	if opts.Before != nil {
+		query = query.Where("created_at < ?", opts.Before.Time.UTC())
+	}
+
 	if opts.LabelSelector != nil {
 		if requirements, selectable := opts.LabelSelector.Requirements(); selectable {
 			for _, requirement := range requirements {

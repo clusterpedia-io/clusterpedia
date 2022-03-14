@@ -194,6 +194,8 @@ func autoConvert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types (string vs []github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia.OrderBy)
 	out.OwnerUID = in.OwnerUID
 	out.OwnerName = in.OwnerName
+	// WARNING: in.Since requires manual conversion: inconvertible types (string vs *k8s.io/apimachinery/pkg/apis/meta/v1.Time)
+	// WARNING: in.Before requires manual conversion: inconvertible types (string vs *k8s.io/apimachinery/pkg/apis/meta/v1.Time)
 	// WARNING: in.OwnerGroupResource requires manual conversion: inconvertible types (string vs k8s.io/apimachinery/pkg/runtime/schema.GroupResource)
 	out.OwnerSeniority = in.OwnerSeniority
 	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
@@ -218,6 +220,8 @@ func autoConvert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedi
 	out.OwnerUID = in.OwnerUID
 	// WARNING: in.OwnerGroupResource requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/runtime/schema.GroupResource vs string)
 	out.OwnerSeniority = in.OwnerSeniority
+	// WARNING: in.Since requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/apis/meta/v1.Time vs string)
+	// WARNING: in.Before requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/apis/meta/v1.Time vs string)
 	out.WithContinue = (*bool)(unsafe.Pointer(in.WithContinue))
 	out.WithRemainingCount = (*bool)(unsafe.Pointer(in.WithRemainingCount))
 	// WARNING: in.EnhancedFieldSelector requires manual conversion: does not exist in peer-type
@@ -270,6 +274,20 @@ func autoConvert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOpti
 		}
 	} else {
 		out.OwnerName = ""
+	}
+	if values, ok := map[string][]string(*in)["since"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.Since, s); err != nil {
+			return err
+		}
+	} else {
+		out.Since = ""
+	}
+	if values, ok := map[string][]string(*in)["before"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.Before, s); err != nil {
+			return err
+		}
+	} else {
+		out.Before = ""
 	}
 	if values, ok := map[string][]string(*in)["ownerGR"]; ok && len(values) > 0 {
 		if err := runtime.Convert_Slice_string_To_string(&values, &out.OwnerGroupResource, s); err != nil {

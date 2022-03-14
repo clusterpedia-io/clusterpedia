@@ -30,6 +30,12 @@ type ListOptions struct {
 	OwnerName string `json:"ownerName,omitempty"`
 
 	// +optional
+	Since string `json:"since,omitempty"`
+
+	// +optional
+	Before string `json:"before,omitempty"`
+
+	// +optional
 	OwnerGroupResource string `json:"ownerGR,omitempty"`
 
 	// +optional
