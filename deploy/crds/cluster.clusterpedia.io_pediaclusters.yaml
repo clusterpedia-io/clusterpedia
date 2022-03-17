@@ -55,6 +55,9 @@ spec:
               keyData:
                 format: byte
                 type: string
+              kubeconfig:
+                format: byte
+                type: string
               syncResources:
                 items:
                   properties:
@@ -78,7 +81,6 @@ spec:
                 format: byte
                 type: string
             required:
-            - apiserver
             - syncResources
             type: object
           status:

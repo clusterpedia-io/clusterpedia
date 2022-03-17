@@ -14,6 +14,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -304,6 +305,14 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 }
 
 func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {
+	if len(cluster.Spec.Kubeconfig) != 0 {
+		clientconfig, err := clientcmd.NewClientConfigFromBytes(cluster.Spec.Kubeconfig)
+		if err != nil {
+			return nil, err
+		}
+		return clientconfig.ClientConfig()
+	}
+
 	if cluster.Spec.APIServer == "" {
 		return nil, errors.New("Cluster APIServer Endpoint is required")
 	}

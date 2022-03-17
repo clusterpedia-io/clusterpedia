@@ -32,9 +32,11 @@ type PediaCluster struct {
 }
 
 type ClusterSpec struct {
-	// +required
-	// +kubebuilder:validation:Required
-	APIServer string `json:"apiserver"`
+	// +optional
+	Kubeconfig []byte `json:"kubeconfig,omitempty"`
+
+	// +optional
+	APIServer string `json:"apiserver,omitempty"`
 
 	// +optional
 	TokenData []byte `json:"tokenData,omitempty"`
