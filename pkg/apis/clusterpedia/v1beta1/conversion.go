@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	metainternal "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +60,14 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 	}
 	out.OwnerSeniority = in.OwnerSeniority
 
+	if err := convert_String_To_Pointer_metav1_Time(&in.Since, &out.Since, nil); err != nil {
+		return err
+	}
+
+	if err := convert_String_To_Pointer_metav1_Time(&in.Before, &out.Before, nil); err != nil {
+		return err
+	}
+
 	out.WithContinue = in.WithContinue
 	out.WithRemainingCount = in.WithRemainingCount
 
@@ -100,9 +109,21 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 					if out.OwnerSeniority == 0 && len(values) == 1 {
 						seniority, err := strconv.Atoi(values[0])
 						if err != nil {
-							return fmt.Errorf("Invalid Query Offset(%s): %w", out.Continue, err)
+							return fmt.Errorf("Invalid Query OwnerSeniority(%s): %w", values[0], err)
 						}
 						out.OwnerSeniority = seniority
+					}
+				case clusterpedia.SearchLabelSince:
+					if out.Since == nil && len(values) == 1 {
+						if err := convert_String_To_Pointer_metav1_Time(&values[0], &out.Since, nil); err != nil {
+							return fmt.Errorf("Invalid Query Since(%s): %w", values[0], err)
+						}
+					}
+				case clusterpedia.SearchLabelBefore:
+					if out.Before == nil && len(values) == 1 {
+						if err := convert_String_To_Pointer_metav1_Time(&values[0], &out.Before, nil); err != nil {
+							return fmt.Errorf("Invalid Query Before(%s): %w", values[0], err)
+						}
 					}
 				case clusterpedia.SearchLabelOrderBy:
 					if len(out.OrderBy) == 0 && len(values) != 0 {
@@ -158,6 +179,9 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 		if len(extraLabelRequest) != 0 {
 			out.ExtraLabelSelector = labels.NewSelector().Add(extraLabelRequest...)
 		}
+	}
+	if out.Before.Before(out.Since) {
+		return fmt.Errorf("Invalid Query, Since is after Before")
 	}
 	return nil
 }
@@ -226,6 +250,46 @@ func convert_Slice_string_To_String(in *[]string, out *string, scope conversion.
 		return nil
 	}
 	*out = strings.Join(*in, ",")
+	return nil
+}
+
+func convert_String_To_Pointer_metav1_Time(in *string, out **metav1.Time, scope conversion.Scope) error {
+	str := strings.TrimSpace(*in)
+	if len(str) == 0 {
+		return nil
+	}
+
+	var err error
+	var t time.Time
+	switch {
+	case strings.Contains(str, "T"):
+		// If the query parameter contains "+", it will be parsed into " ".
+		// The query parameter need to be encoded.
+		t, err = time.Parse(time.RFC3339, *in)
+	case strings.Contains(str, " "):
+		t, err = time.Parse("2006-01-02 15:04:05", *in)
+	case strings.Contains(str, "-"):
+		t, err = time.Parse("2006-01-02", *in)
+	default:
+		var timestamp int64
+		timestamp, err = strconv.ParseInt(*in, 10, 64)
+		if err != nil {
+			break
+		}
+
+		switch len(str) {
+		case 10:
+			t = time.Unix(timestamp, 0)
+		case 13:
+			t = time.Unix(timestamp/1e3, (timestamp%1e3)*1e6)
+		default:
+			return errors.New("Invalid timestamp: only timestamps with string lengths of 10(as s) and 13(as ms) are supported")
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("Invalid datetime: %s, a valid datetime format: RFC3339, Datetime(2006-01-02 15:04:05), Date(2006-01-02), Unix Timestamp", *in)
+	}
+	*out = &metav1.Time{Time: t}
 	return nil
 }
 

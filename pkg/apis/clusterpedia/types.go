@@ -29,6 +29,9 @@ const (
 	SearchLabelLimit  = "search.clusterpedia.io/limit"
 	SearchLabelOffset = "search.clusterpedia.io/offset"
 
+	SearchLabelSince  = "search.clusterpedia.io/since"
+	SearchLabelBefore = "search.clusterpedia.io/before"
+
 	ShadowAnnotationClusterName          = "shadow.clusterpedia.io/cluster-name"
 	ShadowAnnotationGroupVersionResource = "shadow.clusterpedia.io/gvr"
 )
@@ -51,6 +54,9 @@ type ListOptions struct {
 	OwnerUID           string
 	OwnerGroupResource schema.GroupResource
 	OwnerSeniority     int
+
+	Since  *metav1.Time
+	Before *metav1.Time
 
 	WithContinue       *bool
 	WithRemainingCount *bool

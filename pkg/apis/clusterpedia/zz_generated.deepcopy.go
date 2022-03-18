@@ -124,6 +124,14 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 		copy(*out, *in)
 	}
 	out.OwnerGroupResource = in.OwnerGroupResource
+	if in.Since != nil {
+		in, out := &in.Since, &out.Since
+		*out = (*in).DeepCopy()
+	}
+	if in.Before != nil {
+		in, out := &in.Before, &out.Before
+		*out = (*in).DeepCopy()
+	}
 	if in.WithContinue != nil {
 		in, out := &in.WithContinue, &out.WithContinue
 		*out = new(bool)
