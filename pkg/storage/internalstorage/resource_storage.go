@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -225,6 +226,11 @@ func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal
 			return nil, err
 		}
 
+		query, err = applyExtraLabelSelectorToResourceQuery_FuzzySearch(db, query, opts)
+		if err != nil {
+			return nil, err
+		}
+
 		if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
 			amount = new(int64)
 			query = query.Count(amount)
@@ -276,6 +282,7 @@ const (
 	SearchLabelOwnerKey       = "internalstorage.clusterpedia.io/owner-key"
 	SearchLabelOwnerUID       = "internalstorage.clusterpedia.io/owner-uid"
 	SearchLabelOwnerSeniority = "internalstorage.clusterpedia.io/owner-seniority"
+	SearchLabelFuzzyName      = "internalstorage.clusterpedia.io/fuzzy-name"
 )
 
 // DEPRECATED
@@ -307,6 +314,26 @@ func applyExtraLabelSelectorToResourceQuery_Owner(db *gorm.DB, query *gorm.DB, o
 	}
 
 	// TODO(iceber): support search by owner key(namespace/name)
+
+	return query, nil
+}
+
+func applyExtraLabelSelectorToResourceQuery_FuzzySearch(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
+	if opts.ExtraLabelSelector == nil {
+		return query, nil
+	}
+
+	if requirements, selectable := opts.ExtraLabelSelector.Requirements(); selectable {
+		for _, require := range requirements {
+			switch require.Key() {
+			case SearchLabelFuzzyName:
+				for _, name := range require.Values().List() {
+					name = strings.TrimSpace(name)
+					query = query.Where("name LIKE ?", fmt.Sprintf(`%%%s%%`, name))
+				}
+			}
+		}
+	}
 
 	return query, nil
 }
