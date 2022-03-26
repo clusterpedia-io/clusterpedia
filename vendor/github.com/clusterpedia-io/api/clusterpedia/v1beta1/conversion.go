@@ -10,13 +10,13 @@ import (
 
 	metainternal "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	conversion "k8s.io/apimachinery/pkg/conversion"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
+	"github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/util/fields"
 )
 
 func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, out *clusterpedia.ListOptions, s conversion.Scope) error {

@@ -1,10 +1,9 @@
 package scheme
 
 import (
+	"github.com/clusterpedia-io/api/clusterpedia/install"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/install"
 )
 
 var scheme = runtime.NewScheme()

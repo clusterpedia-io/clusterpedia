@@ -3,7 +3,7 @@
 package v1alpha2
 
 import (
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/apis/cluster/v1alpha2"
+	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )

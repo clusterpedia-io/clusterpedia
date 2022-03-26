@@ -18,6 +18,14 @@ github.com/beorn7/perks/quantile
 github.com/blang/semver
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/clusterpedia-io/api v0.0.0 => ./staging/src/github.com/clusterpedia-io/api
+## explicit
+github.com/clusterpedia-io/api/cluster/v1alpha2
+github.com/clusterpedia-io/api/clusterpedia
+github.com/clusterpedia-io/api/clusterpedia/install
+github.com/clusterpedia-io/api/clusterpedia/scheme
+github.com/clusterpedia-io/api/clusterpedia/util/fields
+github.com/clusterpedia-io/api/clusterpedia/v1beta1
 # github.com/coreos/go-semver v0.3.0
 github.com/coreos/go-semver/semver
 # github.com/coreos/go-systemd/v22 v22.3.2
@@ -921,7 +929,7 @@ k8s.io/client-go/util/flowcontrol
 k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
-# k8s.io/code-generator v0.0.0 => github.com/k3s-io/kubernetes/staging/src/k8s.io/code-generator v1.22.4-k3s1
+# k8s.io/code-generator v0.22.2 => github.com/k3s-io/kubernetes/staging/src/k8s.io/code-generator v1.22.4-k3s1
 ## explicit
 k8s.io/code-generator
 k8s.io/code-generator/cmd/client-gen
@@ -1146,6 +1154,7 @@ sigs.k8s.io/structured-merge-diff/v4/typed
 sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 sigs.k8s.io/yaml
+# github.com/clusterpedia-io/api => ./staging/src/github.com/clusterpedia-io/api
 # k8s.io/api => github.com/k3s-io/kubernetes/staging/src/k8s.io/api v1.22.4-k3s1
 # k8s.io/apiextensions-apiserver => github.com/k3s-io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v1.22.4-k3s1
 # k8s.io/apimachinery => github.com/k3s-io/kubernetes/staging/src/k8s.io/apimachinery v1.22.4-k3s1

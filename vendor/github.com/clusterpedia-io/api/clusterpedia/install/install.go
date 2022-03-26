@@ -1,11 +1,10 @@
 package install
 
 import (
+	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
 )
 
 func Install(scheme *runtime.Scheme) {

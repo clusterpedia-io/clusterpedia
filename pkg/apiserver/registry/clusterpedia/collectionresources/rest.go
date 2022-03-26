@@ -14,9 +14,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/scheme"
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/scheme"
+	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"

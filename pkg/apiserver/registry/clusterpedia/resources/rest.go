@@ -12,7 +12,7 @@ import (
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericrest "k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
+	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 

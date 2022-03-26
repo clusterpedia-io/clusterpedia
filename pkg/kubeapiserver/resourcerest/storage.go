@@ -13,9 +13,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	scheme "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/scheme"
-	v1beta1 "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/v1beta1"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/scheme"
+	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
