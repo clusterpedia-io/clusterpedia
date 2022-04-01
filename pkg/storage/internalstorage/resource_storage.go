@@ -182,10 +182,9 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	}
 
 	if amount != nil {
+		// When offset is too large, the data in the response is empty and the remaining count is negative.
+		// This ensures that `amount = offset + len(objects) + remain`
 		remain := *amount - offset - int64(len(objects))
-		if remain < 0 {
-			remain = 0
-		}
 		list.SetRemainingItemCount(&remain)
 	}
 
