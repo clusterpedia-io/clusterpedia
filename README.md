@@ -58,8 +58,12 @@ resources               clusterpedia.io/v1beta1  false   Resources
 |Filter cluster names|`search.clusterpedia.io/clusters`|`clusters`|
 |Filter namespaces|`search.clusterpedia.io/namespaces`|`namespaces`|
 |Filter resource names|`search.clusterpedia.io/names`|`names`|
-|Specified Owner UID|`internalstorage.clusterpedia.io/owner-uid`|-|
-|Specified Owner Seniority|`internalstorage.clusterpedia.io/owner-seniority`|`ownerSeniority`|
+|Since creation time|`search.clusterpedia.io/since`|`since`|
+|Before creation time|`search.clusterpedia.io/before`|`before`|
+|Specified Owner UID|`search.clusterpedia.io/owner-uid`|`ownerUID`|
+|Specified Owner Seniority|`search.clusterpedia.io/owner-seniority`|`ownerSeniority`|
+|Specified Owner Name|`search.clusterpedia.io/owner-name`|`ownerName`|
+|Specified Owner Group Resource|`search.clusterpedia.io/owner-gr`|`ownerGR`|
 |Order by fields|`search.clusterpedia.io/orderby`|`orderby`|
 |Set page size|`search.clusterpedia.io/size`|`limit`|
 |Set page offset|`search.clusterpedia.io/offset`|`continue`|
@@ -196,6 +200,26 @@ $ kubectl --cluster cluster-1 -n kube-system get deployments coredns -o wide
 CLUSTER     NAME      READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES                                                   SELECTOR
 cluster-1   coredns   2/2     2            2           68d   coredns      registry.aliyuncs.com/google_containers/coredns:v1.8.4   k8s-app=kube-dns
 ```
+
+**Find the related pods by the name of the deployment**
+First view the deployments in default namespace
+```sh
+$ kubectl --cluster cluster-1 get deployments
+NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
+fake-pod                  3/3     3            3           104d
+test-controller-manager   0/0     0            0           7d21h
+```
+
+Use `owner-name` to specify Owner Name and use `owner-seniority` to promote the Owner's seniority.
+```
+$ kubectl --cluster cluster-1 get pods -l "search.clusterpedia.io/owner-name=fake-pod,search.clusterpedia.io/owner-seniority=1" 
+NAME                                                 READY   STATUS      RESTARTS         AGE
+fake-pod-698dfbbd5b-74cjx                            1/1     Running     0                12d
+fake-pod-698dfbbd5b-tmcw7                            1/1     Running     0                3s
+fake-pod-698dfbbd5b-wvtvw                            1/1     Running     0                3s
+```
+
+Lean More About [Search by Parent or Ancestor Owner](https://clusterpedia.io/docs/usage/search/specified-cluster/#search-by-parent-or-ancestor-owner)
 
 ### Search for [Collection Resource](https://clusterpedia.io/docs/concepts/collection-resource/)
 Clusterpedia can also perform more advanced aggregation of resources. For example, you can use `Collection Resource` to get a set of different resources at once.
