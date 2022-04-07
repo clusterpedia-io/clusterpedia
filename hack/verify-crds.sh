@@ -6,8 +6,8 @@ set -o pipefail
 
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
-DIFFROOT="${SCRIPT_ROOT}/deploy/crds"
-TMP_DIFFROOT="${SCRIPT_ROOT}/_tmp/deploy/crds"
+DIFFROOT="${SCRIPT_ROOT}/charts/_crds"
+TMP_DIFFROOT="${SCRIPT_ROOT}/_tmp/crds"
 _tmp="${SCRIPT_ROOT}/_tmp"
 
 cleanup() {
