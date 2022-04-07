@@ -13,7 +13,7 @@ clusterpedia requires CRD resources, which can be installed manually using kubec
 
 **Option 1: install CRDs with `kubectl`**
 ```bash
-$ kubectl apply -f ./_crd
+$ kubectl apply -f ./_crds
 ```
 
 **Option 2: install CRDs as part of the Helm release**
@@ -58,5 +58,5 @@ $ helm --namespace clusterpedia-system uinstall clusterpedia
 
 If the CRDs is not managed through Helm, then you need to delete the crd manually:
 ```bash
-$ kubectl delete -f ./_crd
+$ kubectl delete -f ./_crds
 ```
