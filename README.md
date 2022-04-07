@@ -58,6 +58,7 @@ resources               clusterpedia.io/v1beta1  false   Resources
 |Filter cluster names|`search.clusterpedia.io/clusters`|`clusters`|
 |Filter namespaces|`search.clusterpedia.io/namespaces`|`namespaces`|
 |Filter resource names|`search.clusterpedia.io/names`|`names`|
+|Fuzzy Search by resource name|`internalstorage.clusterpedia.io/fuzzy-name`|-|
 |Since creation time|`search.clusterpedia.io/since`|`since`|
 |Before creation time|`search.clusterpedia.io/before`|`before`|
 |Specified Owner UID|`search.clusterpedia.io/owner-uid`|`ownerUID`|
@@ -202,6 +203,7 @@ cluster-1   coredns   2/2     2            2           68d   coredns      regist
 ```
 
 **Find the related pods by the name of the deployment**
+
 First view the deployments in default namespace
 ```sh
 $ kubectl --cluster cluster-1 get deployments
