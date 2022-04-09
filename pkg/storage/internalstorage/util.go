@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
 )
 
 var (

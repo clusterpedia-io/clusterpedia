@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/clusterpedia-io/api v0.0.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/jackc/pgconn v1.10.0
 	github.com/jackc/pgerrcode v0.0.0-20201024163028-a0d42d470451
@@ -20,7 +21,7 @@ require (
 	k8s.io/apimachinery v0.22.4
 	k8s.io/apiserver v0.0.0
 	k8s.io/client-go v0.22.4
-	k8s.io/code-generator v0.0.0
+	k8s.io/code-generator v0.22.2
 	k8s.io/component-base v0.22.4
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubernetes v1.22.4
@@ -29,6 +30,7 @@ require (
 )
 
 replace (
+	github.com/clusterpedia-io/api => ./staging/src/github.com/clusterpedia-io/api
 	k8s.io/api => github.com/k3s-io/kubernetes/staging/src/k8s.io/api v1.22.4-k3s1
 	k8s.io/apiextensions-apiserver => github.com/k3s-io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v1.22.4-k3s1
 	k8s.io/apimachinery => github.com/k3s-io/kubernetes/staging/src/k8s.io/apimachinery v1.22.4-k3s1

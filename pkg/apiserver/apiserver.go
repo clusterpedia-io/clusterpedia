@@ -18,8 +18,8 @@ import (
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia/install"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/install"
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/collectionresources"
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/resources"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"

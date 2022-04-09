@@ -9,7 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
 )
 
 func testApplyListOptionsToResourceQuery(t *testing.T, name string, options *internal.ListOptions, expected expected) {

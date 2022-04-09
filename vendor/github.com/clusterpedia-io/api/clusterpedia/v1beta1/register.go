@@ -1,12 +1,11 @@
 package v1beta1
 
 import (
+	internal "github.com/clusterpedia-io/api/clusterpedia"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
 )
 
 var SchemeGroupVersion = schema.GroupVersion{Group: internal.GroupName, Version: "v1beta1"}

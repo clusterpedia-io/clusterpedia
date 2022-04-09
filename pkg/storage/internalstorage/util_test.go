@@ -10,8 +10,8 @@ import (
 	kubefields "k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/utils/fields"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/api/clusterpedia/util/fields"
 )
 
 type expected struct {

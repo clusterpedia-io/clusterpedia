@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	internal "github.com/clusterpedia-io/clusterpedia/pkg/apis/clusterpedia"
+	internal "github.com/clusterpedia-io/api/clusterpedia"
 )
 
 type StorageFactory interface {
