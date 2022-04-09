@@ -44,8 +44,7 @@ codegen:
 
 .PHONY: vendor
 vendor:
-	go mod tidy
-	go mod vendor
+	./hack/update-vendor.sh
 
 .PHONY: lint
 lint: golangci-lint
