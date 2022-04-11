@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/api/clusterpedia/util/fields"
+	"github.com/clusterpedia-io/api/clusterpedia/fields"
 )
 
 func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, out *clusterpedia.ListOptions, s conversion.Scope) error {

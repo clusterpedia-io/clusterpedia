@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/api/clusterpedia/util/fields"
+	"github.com/clusterpedia-io/api/clusterpedia/fields"
 )
 
 type expected struct {

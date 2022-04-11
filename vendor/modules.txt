@@ -22,9 +22,9 @@ github.com/cespare/xxhash/v2
 ## explicit
 github.com/clusterpedia-io/api/cluster/v1alpha2
 github.com/clusterpedia-io/api/clusterpedia
+github.com/clusterpedia-io/api/clusterpedia/fields
 github.com/clusterpedia-io/api/clusterpedia/install
 github.com/clusterpedia-io/api/clusterpedia/scheme
-github.com/clusterpedia-io/api/clusterpedia/util/fields
 github.com/clusterpedia-io/api/clusterpedia/v1beta1
 # github.com/coreos/go-semver v0.3.0
 github.com/coreos/go-semver/semver
