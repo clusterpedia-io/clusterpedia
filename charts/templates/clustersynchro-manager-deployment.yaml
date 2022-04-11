@@ -29,6 +29,25 @@ spec:
         {{- end }}
     spec:
       {{- include "clusterpedia.clustersynchroManager.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+      - name: init-storage
+        image: {{ include "clusterpedia.storage.image" . }}
+        command: 
+          - /bin/sh
+          - -ec
+          {{- if eq (include "clusterpedia.storage.type" .) "postgres" }}
+          - exec pg_isready -U {{ include "clusterpedia.storage.user" . }} -d "dbname={{ include "clusterpedia.storage.database" . }}" -h {{ include "clusterpedia.storage.host" . }} -p {{ include "clusterpedia.storage.port" . }}
+          {{- else if eq (include "clusterpedia.storage.type" .) "mysql" }}
+          - mysqladmin status --host={{ include "clusterpedia.storage.host" . }} --port={{ include "clusterpedia.storage.port" . }} -u{{ include "clusterpedia.storage.user" . }} -p"${DB_PASSWORD}"
+          {{- end }}
+      {{- if eq (include "clusterpedia.storage.type" .) "mysql" }}
+        env:
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clusterpedia.internalstorage.fullname" . }}
+                key: password
+      {{- end }}
       containers:
       - name: {{ include "clusterpedia.clustersynchroManager.fullname" . }}
         image: {{ template "clusterpedia.clustersynchroManager.image" . }}
