@@ -7,16 +7,20 @@ set -o pipefail
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
 DIFFROOT="${SCRIPT_ROOT}/vendor"
-TMP_DIFFROOT="${SCRIPT_ROOT}/_tmp/vendor"
+# The vendor contains soft links,
+# which need to be in the same level as the vendor in order to avoid link failure
+TMP_DIFFROOT="${SCRIPT_ROOT}/_tmp_vendor"
 _tmp="${SCRIPT_ROOT}/_tmp"
 
 cleanup() {
+  rm -rf "${TMP_DIFFROOT}"
   rm -rf "${_tmp}"
 }
 trap "cleanup" EXIT SIGINT
 
 cleanup
 
+mkdir -p "${_tmp}"
 mkdir -p "${TMP_DIFFROOT}"
 cp -a "${DIFFROOT}"/* "${TMP_DIFFROOT}"
 cp "${SCRIPT_ROOT}"/go.mod "$_tmp"/go.mod
@@ -32,7 +36,8 @@ diff -Naupr "${SCRIPT_ROOT}"/go.mod "${_tmp}"/go.mod || gomod=$?
 gosum=0
 diff -Naupr "${SCRIPT_ROOT}"/go.sum "${_tmp}"/go.sum || gosum=$?
 
-cp -a "${TMP_DIFFROOT}"/* "${DIFFROOT}"
+rm -rf "${DIFFROOT}"
+mv "${TMP_DIFFROOT}" "${DIFFROOT}"
 cp "${_tmp}"/go.mod "${SCRIPT_ROOT}"/go.mod
 cp "${_tmp}"/go.sum "${SCRIPT_ROOT}"/go.sum
 if [[ $govendor -eq 0 && $gomod -eq 0 && $gosum -eq 0 ]]
