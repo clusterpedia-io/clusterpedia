@@ -188,6 +188,12 @@ spec:
                                 storrageResource:
                                   description: optional
                                   type: string
+                                syncResource:
+                                  description: optional
+                                  type: string
+                                syncVersion:
+                                  description: optional
+                                  type: string
                                 version:
                                   type: string
                               required:

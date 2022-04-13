@@ -28,17 +28,17 @@ import (
 type ResourceSynchro struct {
 	cluster string
 
-	syncKind        schema.GroupVersionKind
-	storageResource schema.GroupResource
+	example         runtime.Object
+	syncResource    schema.GroupVersionResource
+	storageResource schema.GroupVersionResource
 
 	queue         queue.EventQueue
 	listerWatcher cache.ListerWatcher
 	cache         *informer.ResourceVersionStorage
 
-	memoryVersion  schema.GroupVersion
-	storageVersion schema.GroupVersion
-	storage        storage.ResourceStorage
-	convertor      runtime.ObjectConvertor
+	memoryVersion schema.GroupVersion
+	storage       storage.ResourceStorage
+	convertor     runtime.ObjectConvertor
 
 	status atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
 
@@ -52,23 +52,23 @@ type ResourceSynchro struct {
 	closed    chan struct{}
 }
 
-func newResourceSynchro(cluster string, syncKind schema.GroupVersionKind, lw cache.ListerWatcher, rvcache *informer.ResourceVersionStorage,
+func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvcache *informer.ResourceVersionStorage,
 	convertor runtime.ObjectConvertor, storage storage.ResourceStorage,
 ) *ResourceSynchro {
+	storageConfig := storage.GetStorageConfig()
 	ctx, cancel := context.WithCancel(context.Background())
 	synchro := &ResourceSynchro{
 		cluster:         cluster,
-		syncKind:        syncKind,
-		storageResource: storage.GetStorageConfig().StorageGroupResource,
+		syncResource:    syncResource,
+		storageResource: storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version),
 
 		listerWatcher: lw,
 		cache:         rvcache,
 		queue:         queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
 
-		storage:        storage,
-		convertor:      convertor,
-		memoryVersion:  storage.GetStorageConfig().MemoryVersion,
-		storageVersion: storage.GetStorageConfig().StorageVersion,
+		storage:       storage,
+		convertor:     convertor,
+		memoryVersion: storageConfig.MemoryVersion,
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -79,21 +79,16 @@ func newResourceSynchro(cluster string, syncKind schema.GroupVersionKind, lw cac
 	}
 	close(synchro.stoped)
 
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
+	synchro.example = example
+
 	status := clusterv1alpha2.ClusterResourceSyncCondition{
 		Status:             clusterv1alpha2.SyncStatusPending,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
 	return synchro
-}
-
-func (synchro *ResourceSynchro) runStorager(shutdown <-chan struct{}) {
-	go func() {
-		<-shutdown
-		synchro.Close()
-	}()
-
-	synchro.storager(1)
 }
 
 func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
@@ -149,13 +144,11 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 	}
 	synchro.status.Store(status)
 
-	exampleObj := &unstructured.Unstructured{}
-	exampleObj.SetGroupVersionKind(synchro.syncKind)
 	informer.NewResourceVersionInformer(
 		synchro.cluster,
 		synchro.listerWatcher,
 		synchro.cache,
-		exampleObj,
+		synchro.example,
 		synchro,
 	).Run(informerStopCh)
 
@@ -166,15 +159,12 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 	synchro.status.Store(status)
 }
 
-func (synchro *ResourceSynchro) Close() {
+func (synchro *ResourceSynchro) Close() <-chan struct{} {
 	synchro.closeOnce.Do(func() {
 		close(synchro.closer)
 		synchro.queue.Close()
 		synchro.cancel()
 	})
-}
-
-func (synchro *ResourceSynchro) Closed() <-chan struct{} {
 	return synchro.closed
 }
 
@@ -231,6 +221,18 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 }
 
 func (synchro *ResourceSynchro) OnSync(obj interface{}) {
+}
+
+func (synchro *ResourceSynchro) runStorager(shutdown <-chan struct{}) {
+	go func() {
+		select {
+		case <-shutdown:
+			synchro.Close()
+		case <-synchro.closer:
+		}
+	}()
+
+	synchro.storager(1)
 }
 
 func (synchro *ResourceSynchro) storager(worker int) {
@@ -339,12 +341,12 @@ func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (run
 		return nil, err
 	}
 
-	if synchro.memoryVersion == synchro.storageVersion {
+	if synchro.memoryVersion == synchro.storageResource.GroupVersion() {
 		return obj, nil
 	}
 
 	// convert to storage version
-	obj, err = synchro.convertor.ConvertToVersion(obj, synchro.storageVersion)
+	obj, err = synchro.convertor.ConvertToVersion(obj, synchro.storageResource.GroupVersion())
 	if err != nil {
 		return nil, err
 	}

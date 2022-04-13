@@ -2,36 +2,24 @@ package clustersynchro
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 )
-
-type ClusterStatusUpdater interface {
-	UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error
-}
 
 type ClusterSynchro struct {
 	name string
@@ -39,46 +27,41 @@ type ClusterSynchro struct {
 	RESTConfig           *rest.Config
 	ClusterStatusUpdater ClusterStatusUpdater
 
-	restmapper           meta.RESTMapper
+	storage              storage.StorageFactory
 	clusterclient        kubernetes.Interface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
-
-	storage               storage.StorageFactory
-	resourceStorageConfig *storageconfig.StorageConfigFactory
 
 	closeOnce sync.Once
 	closer    chan struct{}
 	closed    chan struct{}
 
-	status chan struct{}
-
+	updateStatusCh        chan struct{}
 	runResourceSynchroCh  chan struct{}
 	stopResourceSynchroCh chan struct{}
 
 	waitGroup                wait.Group
 	resourceSynchroWaitGroup wait.Group
 
-	resourcelock  sync.RWMutex
-	handlerStopCh chan struct{}
+	resourceSynchroLock sync.RWMutex
+	handlerStopCh       chan struct{}
 	// Key is the storage resource.
 	// Sometimes the synchronized resource and the storage resource are different
-	resourceVersionCaches map[schema.GroupVersionResource]*informer.ResourceVersionStorage
-	resourceSynchros      atomic.Value // map[schema.GroupVersionResource]*ResourceSynchro
+	storageResourceVersionCaches map[schema.GroupVersionResource]*informer.ResourceVersionStorage
+	storageResourceSynchros      sync.Map
 
-	sortedGroupResources atomic.Value // []schema.GroupResource
-	resourceStatuses     atomic.Value // map[schema.GroupResource]*clusterv1alpha2.ClusterResourceStatus
+	resourceNegotiator  *ResourceNegotiator
+	groupResourceStatus atomic.Value // *GroupResourceStatus
 
 	version        atomic.Value // version.Info
 	readyCondition atomic.Value // metav1.Condition
 }
 
+type ClusterStatusUpdater interface {
+	UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error
+}
+
 func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
 	clusterclient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	dynamaicclient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +72,11 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	}
 
 	version, err := clusterclient.Discovery().ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	listWatchFactory, err := informer.NewDynamicListerWatcherFactory(config)
 	if err != nil {
 		return nil, err
 	}
@@ -104,25 +92,26 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		ClusterStatusUpdater: updater,
 		storage:              storage,
 
-		restmapper:            mapper,
-		clusterclient:         clusterclient,
-		listerWatcherFactory:  informer.NewDynamicListWatcherFactory(dynamaicclient),
-		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
+		clusterclient:        clusterclient,
+		listerWatcherFactory: listWatchFactory,
 
-		status: make(chan struct{}, 1),
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
 
+		updateStatusCh:        make(chan struct{}, 1),
 		runResourceSynchroCh:  make(chan struct{}),
 		stopResourceSynchroCh: make(chan struct{}),
 
-		resourceVersionCaches: make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage),
+		storageResourceVersionCaches: make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage),
 	}
 	synchro.version.Store(*version)
-	synchro.sortedGroupResources.Store([]schema.GroupResource{})
-	synchro.resourceStatuses.Store(map[schema.GroupResource]*clusterv1alpha2.ClusterResourceStatus{})
 
-	synchro.resourceSynchros.Store(map[schema.GroupVersionResource]*ResourceSynchro{})
+	synchro.resourceNegotiator = &ResourceNegotiator{
+		name:                  name,
+		restmapper:            mapper,
+		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
+	}
+	synchro.groupResourceStatus.Store(NewGroupResourceStatus())
 
 	condition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterConditionReady,
@@ -141,187 +130,18 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 		return
 	}
 
-	resourceVersionCaches := make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage, len(resourceversions))
+	storageResourceVersionCaches := make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage, len(resourceversions))
 	for gvr, rvs := range resourceversions {
-		cache := informer.NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc)
+		cache := informer.NewResourceVersionStorage()
 		_ = cache.Replace(rvs)
-		resourceVersionCaches[gvr] = cache
+		storageResourceVersionCaches[gvr] = cache
 	}
 
-	s.resourceVersionCaches = resourceVersionCaches
-}
-
-type syncConfig struct {
-	kind            string
-	syncResource    schema.GroupVersionResource
-	storageResource schema.GroupVersionResource
-	convertor       runtime.ObjectConvertor
-	storageConfig   *storage.ResourceStorageConfig
-}
-
-func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources) {
-	var (
-		// syncConfigs key is resource's storage gvr
-		syncConfigs = map[schema.GroupVersionResource]*syncConfig{}
-
-		sortedGroupResources = []schema.GroupResource{}
-		resourceStatuses     = map[schema.GroupResource]*clusterv1alpha2.ClusterResourceStatus{}
-	)
-
-	for _, groupResources := range syncResources {
-		for _, resource := range groupResources.Resources {
-			gr := schema.GroupResource{Group: groupResources.Group, Resource: resource}
-			supportedGVKs, err := s.restmapper.KindsFor(gr.WithVersion(""))
-			if err != nil {
-				klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", s.name, "resource", gr)
-				continue
-			}
-
-			syncVersions, isLegacyResource, err := negotiateSyncVersions(groupResources.Versions, supportedGVKs)
-			if err != nil {
-				klog.InfoS("Skip resource sync", "cluster", s.name, "resource", gr, "reason", err)
-				continue
-			}
-
-			mapper, err := s.restmapper.RESTMapping(supportedGVKs[0].GroupKind(), supportedGVKs[0].Version)
-			if err != nil {
-				klog.ErrorS(err, "Skip resource sync", "cluster", s.name, "resource", gr)
-				continue
-			}
-
-			info := &clusterv1alpha2.ClusterResourceStatus{
-				Name:       gr.Resource,
-				Kind:       mapper.GroupVersionKind.Kind,
-				Namespaced: mapper.Scope.Name() == meta.RESTScopeNameNamespace,
-			}
-
-			for _, version := range syncVersions {
-				syncResource := gr.WithVersion(version)
-				storageConfig, err := s.resourceStorageConfig.NewConfig(syncResource)
-				if err != nil {
-					// TODO(iceber): set storage error ?
-					klog.ErrorS(err, "Failed to create resource storage config", "cluster", s.name, "resource", syncResource)
-					continue
-				}
-
-				storageResource := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
-				if _, ok := syncConfigs[storageResource]; !ok {
-					config := &syncConfig{
-						kind:            info.Kind,
-						syncResource:    syncResource,
-						storageResource: storageResource,
-						storageConfig:   storageConfig,
-					}
-
-					if syncResource != storageResource {
-						if isLegacyResource {
-							config.convertor = resourcescheme.LegacyResourceScheme
-						} else {
-							config.convertor = resourcescheme.CustomResourceScheme
-						}
-					}
-					syncConfigs[storageResource] = config
-				}
-
-				syncCondition := clusterv1alpha2.ClusterResourceSyncCondition{
-					Version:        version,
-					StorageVersion: storageConfig.StorageVersion.Version,
-					Status:         clusterv1alpha2.SyncStatusPending,
-					Reason:         "SynchroCreating",
-				}
-				if gr != storageConfig.StorageGroupResource {
-					storageResource := storageConfig.StorageGroupResource.String()
-					syncCondition.StorageResource = &storageResource
-				}
-				info.SyncConditions = append(info.SyncConditions, syncCondition)
-			}
-
-			resourceStatuses[gr] = info
-			sortedGroupResources = append(sortedGroupResources, gr)
-		}
-	}
-
-	s.resourcelock.Lock()
-	defer s.resourcelock.Unlock()
-	select {
-	case <-s.closer:
-		return
-	default:
-	}
-
-	s.sortedGroupResources.Store(sortedGroupResources)
-	s.resourceStatuses.Store(resourceStatuses)
-
-	// filter deleted resources
-	deleted := map[schema.GroupVersionResource]struct{}{}
-	for gvr := range s.resourceVersionCaches {
-		if _, ok := syncConfigs[gvr]; !ok {
-			deleted[gvr] = struct{}{}
-		}
-	}
-
-	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
-
-	// remove deleted resource synchro
-	for gvr := range deleted {
-		if handler, ok := synchros[gvr]; ok {
-			handler.Close()
-
-			// ensure that no more data is synchronized to the storage.
-			<-handler.Closed()
-			delete(synchros, gvr)
-		}
-
-		if err := s.storage.CleanClusterResource(context.TODO(), s.name, gvr); err != nil {
-			klog.ErrorS(err, "Failed to clean cluster resource", "cluster", s.name, "resource", gvr)
-			// update resource sync status
-			continue
-		}
-
-		delete(s.resourceVersionCaches, gvr)
-	}
-
-	for gvr, config := range syncConfigs {
-		if _, ok := synchros[gvr]; ok {
-			continue
-		}
-
-		resourceStorage, err := s.storage.NewResourceStorage(config.storageConfig)
-		if err != nil {
-			klog.ErrorS(err, "Failed to create resource storage", "cluster", s.name, "storage resource", config.storageResource)
-			// update resource sync status
-			continue
-		}
-
-		resourceVersionCache, ok := s.resourceVersionCaches[gvr]
-		if !ok {
-			resourceVersionCache = informer.NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc)
-			s.resourceVersionCaches[gvr] = resourceVersionCache
-		}
-
-		syncKind := config.syncResource.GroupVersion().WithKind(config.kind)
-		synchro := newResourceSynchro(s.name, syncKind,
-			s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
-			resourceVersionCache,
-			config.convertor,
-			resourceStorage,
-		)
-		s.resourceSynchroWaitGroup.StartWithChannel(s.closer, synchro.runStorager)
-
-		if s.handlerStopCh != nil {
-			select {
-			case <-s.handlerStopCh:
-			default:
-				go synchro.Run(s.handlerStopCh)
-			}
-		}
-		synchros[gvr] = synchro
-	}
-	s.resourceSynchros.Store(synchros)
+	s.storageResourceVersionCaches = storageResourceVersionCaches
 }
 
 func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
-	s.waitGroup.Start(s.Monitor)
+	s.waitGroup.Start(s.monitor)
 	s.waitGroup.Start(s.resourceSynchroRunner)
 	go s.clusterStatusUpdater()
 
@@ -335,12 +155,9 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 }
 
 func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool) {
-	// ensure that we cannot call SetResource after closing `synchro.closer`
-	s.resourcelock.Lock()
 	s.closeOnce.Do(func() {
 		close(s.closer)
 	})
-	s.resourcelock.Unlock()
 
 	if waitResourceSynchro {
 		// wait for all resource synchros to shutdown,
@@ -368,92 +185,124 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 		s.updateStatus()
 	}
 
-	close(s.status)
+	close(s.updateStatusCh)
 	<-s.closed
 }
 
-func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
-	sortedGroupResources := s.sortedGroupResources.Load().([]schema.GroupResource)
-	resourceStatuses := s.resourceStatuses.Load().(map[schema.GroupResource]*clusterv1alpha2.ClusterResourceStatus)
-	synchros := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
+func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources) {
+	groupResourceStatus, storageResourceSyncConfigs := s.resourceNegotiator.NegotiateSyncResources(syncResources)
 
-	groups := make(map[string]*clusterv1alpha2.ClusterGroupResourcesStatus)
-	groupStatuses := make([]clusterv1alpha2.ClusterGroupResourcesStatus, 0)
-	for _, gr := range sortedGroupResources {
-		resourceStatus, ok := resourceStatuses[gr]
-		if !ok {
+	lastGroupResourceStatus := s.groupResourceStatus.Load().(*GroupResourceStatus)
+	deleted := groupResourceStatus.Merge(lastGroupResourceStatus)
+
+	groupResourceStatus.EnableConcurrent()
+	defer groupResourceStatus.DisableConcurrent()
+	s.groupResourceStatus.Store(groupResourceStatus)
+
+	// multiple resources may match the same storage resource
+	storageGVRToSyncGVRs := groupResourceStatus.GetStorageGVRToSyncGVRs()
+	updateSyncConditions := func(storageGVR schema.GroupVersionResource, status, reason, message string) {
+		for gvr := range storageGVRToSyncGVRs[storageGVR] {
+			groupResourceStatus.UpdateSyncCondition(gvr, status, reason, message)
+		}
+	}
+
+	func() {
+		s.resourceSynchroLock.Lock()
+		defer s.resourceSynchroLock.Unlock()
+
+		for storageGVR, config := range storageResourceSyncConfigs {
+			// TODO: if config is changed, don't update resource synchro
+			if _, ok := s.storageResourceSynchros.Load(storageGVR); ok {
+				continue
+			}
+
+			resourceStorage, err := s.storage.NewResourceStorage(config.storageConfig)
+			if err != nil {
+				klog.ErrorS(err, "Failed to create resource storage", "cluster", s.name, "storage resource", storageGVR)
+				updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource storage failed: %s", err))
+				continue
+			}
+
+			resourceVersionCache, ok := s.storageResourceVersionCaches[storageGVR]
+			if !ok {
+				resourceVersionCache = informer.NewResourceVersionStorage()
+				s.storageResourceVersionCaches[storageGVR] = resourceVersionCache
+			}
+
+			synchro := newResourceSynchro(
+				s.name,
+				config.syncResource,
+				config.kind,
+				s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
+				resourceVersionCache,
+				config.convertor,
+				resourceStorage,
+			)
+			s.resourceSynchroWaitGroup.StartWithChannel(s.closer, synchro.runStorager)
+			s.storageResourceSynchros.Store(storageGVR, synchro)
+
+			// After the synchronizer is successfully created,
+			// clean up the reasons and message initialized in the sync condition
+			updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusUnknown, "", "")
+
+			if s.handlerStopCh != nil {
+				select {
+				case <-s.handlerStopCh:
+				default:
+					go synchro.Run(s.handlerStopCh)
+				}
+			}
+		}
+	}()
+
+	// close unsynced resource synchros
+	removedStorageGVRs := NewGVRSet()
+	s.storageResourceSynchros.Range(func(key, _ interface{}) bool {
+		storageGVR := key.(schema.GroupVersionResource)
+		if _, ok := storageResourceSyncConfigs[storageGVR]; !ok {
+			removedStorageGVRs.Insert(storageGVR)
+		}
+		return true
+	})
+	for storageGVR := range removedStorageGVRs {
+		if synchro, ok := s.storageResourceSynchros.Load(storageGVR); ok {
+			select {
+			case <-synchro.(*ResourceSynchro).Close():
+			case <-s.closer:
+				return
+			}
+
+			updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusStop, "SynchroRemoved", "the resource synchro is moved")
+			s.storageResourceSynchros.Delete(storageGVR)
+		}
+	}
+
+	// clean up unstoraged resources
+	for storageGVR := range s.storageResourceVersionCaches {
+		if _, ok := storageResourceSyncConfigs[storageGVR]; ok {
 			continue
 		}
 
-		groupStatus, ok := groups[gr.Group]
-		if !ok {
-			groupStatuses = append(groupStatuses, clusterv1alpha2.ClusterGroupResourcesStatus{})
-			groupStatus = &groupStatuses[len(groupStatuses)-1]
-			groups[gr.Group] = groupStatus
+		// Whether the storage resource is cleaned successfully or not, it needs to be deleted from `s.storageResourceVersionCaches`
+		delete(s.storageResourceVersionCaches, storageGVR)
+
+		err := s.storage.CleanClusterResource(context.TODO(), s.name, storageGVR)
+		if err == nil {
+			continue
 		}
 
-		resourceStatus = resourceStatus.DeepCopy()
-		for i, cond := range resourceStatus.SyncConditions {
-			var gvr schema.GroupVersionResource
-			if cond.StorageResource != nil {
-				gvr = schema.ParseGroupResource(*cond.StorageResource).WithVersion(cond.StorageVersion)
-			} else {
-				gvr = gr.WithVersion(cond.StorageVersion)
-			}
-
-			if synchro, ok := synchros[gvr]; ok {
-				status := synchro.Status()
-				cond.Status = status.Status
-				cond.Reason = status.Reason
-				cond.Message = status.Message
-				cond.LastTransitionTime = status.LastTransitionTime
-			} else {
-				if cond.Status == "" {
-					cond.Status = clusterv1alpha2.SyncStatusPending
-				}
-				if cond.Reason == "" {
-					cond.Reason = "SynchroNotFound"
-				}
-				if cond.Message == "" {
-					cond.Message = "not found resource synchro"
-				}
-				cond.LastTransitionTime = metav1.Now().Rfc3339Copy()
-			}
-
-			// TODO(iceber): if synchro is closed, set cond.Status == Stop
-
-			resourceStatus.SyncConditions[i] = cond
+		// even if err != nil, the resource may have been cleaned up
+		klog.ErrorS(err, "Failed to clean cluster resource", "cluster", s.name, "storage resource", storageGVR)
+		updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusStop, "CleanResourceFailed", err.Error())
+		for gvr := range storageGVRToSyncGVRs[storageGVR] {
+			// not delete failed gvr
+			delete(deleted, gvr)
 		}
-
-		groupStatus.Group = gr.Group
-		groupStatus.Resources = append(groupStatus.Resources, *resourceStatus)
 	}
 
-	version := s.version.Load().(version.Info).GitVersion
-	readyCondition := s.readyCondition.Load().(metav1.Condition)
-	return &clusterv1alpha2.ClusterStatus{
-		Version:       version,
-		Conditions:    []metav1.Condition{readyCondition},
-		SyncResources: groupStatuses,
-	}
-}
-
-func (s *ClusterSynchro) updateStatus() {
-	select {
-	case s.status <- struct{}{}:
-	default:
-		return
-	}
-}
-
-func (s *ClusterSynchro) clusterStatusUpdater() {
-	defer close(s.closed)
-
-	for range s.status {
-		status := s.genClusterStatus()
-		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
-			klog.ErrorS(err, "Failed to update cluster status", "cluster", s.name, status.Conditions[0].Reason)
-		}
+	for gvr := range deleted {
+		groupResourceStatus.DeleteVersion(gvr)
 	}
 }
 
@@ -473,22 +322,25 @@ func (s *ClusterSynchro) resourceSynchroRunner() {
 		default:
 		}
 
-		s.resourcelock.Lock()
-		s.handlerStopCh = make(chan struct{})
-		go func() {
-			select {
-			case <-s.closer:
-			case <-s.stopResourceSynchroCh:
-			}
+		func() {
+			s.resourceSynchroLock.Lock()
+			defer s.resourceSynchroLock.Unlock()
 
-			close(s.handlerStopCh)
+			s.handlerStopCh = make(chan struct{})
+			go func() {
+				select {
+				case <-s.closer:
+				case <-s.stopResourceSynchroCh:
+				}
+
+				close(s.handlerStopCh)
+			}()
+
+			s.storageResourceSynchros.Range(func(_, value interface{}) bool {
+				go value.(*ResourceSynchro).Run(s.handlerStopCh)
+				return true
+			})
 		}()
-
-		handlers := s.resourceSynchros.Load().(map[schema.GroupVersionResource]*ResourceSynchro)
-		for _, handler := range handlers {
-			go handler.Run(s.handlerStopCh)
-		}
-		s.resourcelock.Unlock()
 
 		<-s.handlerStopCh
 	}
@@ -522,130 +374,69 @@ func (synchro *ClusterSynchro) stopResourceSynchro() {
 	}
 }
 
-func (synchro *ClusterSynchro) Monitor() {
-	klog.V(2).InfoS("Cluster Synchro Monitor Running...", "cluster", synchro.name)
+func (s *ClusterSynchro) clusterStatusUpdater() {
+	defer close(s.closed)
 
-	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, false, synchro.closer)
+	for range s.updateStatusCh {
+		status := s.genClusterStatus()
+		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
+			klog.ErrorS(err, "Failed to update cluster status", "cluster", s.name, status.Conditions[0].Reason)
+		}
+	}
 }
 
-func (synchro *ClusterSynchro) checkClusterHealthy() {
-	lastReadyCondition := synchro.readyCondition.Load().(metav1.Condition)
-	ready, err := checkKubeHealthy(synchro.clusterclient)
-	if ready {
-		synchro.startResourceSynchro()
-
-		if lastReadyCondition.Status != metav1.ConditionTrue {
-			condition := metav1.Condition{
-				Type:               clusterv1alpha2.ClusterConditionReady,
-				Status:             metav1.ConditionTrue,
-				Reason:             "Healthy",
-				LastTransitionTime: metav1.Now().Rfc3339Copy(),
-			}
-
-			version, err := synchro.clusterclient.Discovery().ServerVersion()
-			if err != nil {
-				condition.Message = err.Error()
-				klog.ErrorS(err, "Failed to get cluster version", "cluster", synchro.name)
-			} else {
-				synchro.version.Store(*version)
-			}
-
-			synchro.readyCondition.Store(condition)
-		}
-
-		synchro.updateStatus()
+func (s *ClusterSynchro) updateStatus() {
+	select {
+	case s.updateStatusCh <- struct{}{}:
+	default:
 		return
 	}
-
-	condition := metav1.Condition{
-		Type:   clusterv1alpha2.ClusterConditionReady,
-		Status: metav1.ConditionFalse,
-	}
-	if err == nil {
-		condition.Reason = "Unhealthy"
-		condition.Message = "cluster health responded without ok"
-	} else {
-		condition.Reason = "NotReachable"
-		condition.Message = err.Error()
-	}
-	if lastReadyCondition.Status != condition.Status || lastReadyCondition.Reason != condition.Reason || lastReadyCondition.Message != condition.Message {
-		condition.LastTransitionTime = metav1.Now().Rfc3339Copy()
-		synchro.readyCondition.Store(condition)
-	}
-
-	// if the last status was not ConditionTrue, stop resource synchros
-	if lastReadyCondition.Status != metav1.ConditionTrue {
-		synchro.stopResourceSynchro()
-	}
-
-	synchro.updateStatus()
 }
 
-// TODO(iceber): resolve for more detailed error
-func checkKubeHealthy(client kubernetes.Interface) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
-	defer cancel()
+func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
+	groupResourceStatuses := s.groupResourceStatus.Load().(*GroupResourceStatus)
+	statuses := groupResourceStatuses.LoadGroupResourcesStatuses()
+	for si, status := range statuses {
+		for ri, resource := range status.Resources {
+			for vi, cond := range resource.SyncConditions {
+				gr := schema.GroupResource{Group: status.Group, Resource: resource.Name}
+				storageGVR := cond.StorageGVR(gr)
+				if value, ok := s.storageResourceSynchros.Load(storageGVR); ok {
+					synchro := value.(*ResourceSynchro)
+					if gr != synchro.syncResource.GroupResource() {
+						cond.SyncResource = synchro.syncResource.GroupResource().String()
+					}
+					if cond.Version != synchro.syncResource.Version {
+						cond.SyncVersion = synchro.syncResource.Version
+					}
 
-	_, err := client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(ctx)
-	if apierrors.IsNotFound(err) {
-		_, err = client.Discovery().RESTClient().Get().AbsPath("/healthz").DoRaw(ctx)
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func negotiateSyncVersions(syncVersions []string, supportedGVKs []schema.GroupVersionKind) ([]string, bool, error) {
-	if len(supportedGVKs) == 0 {
-		return nil, false, errors.New("The supported versions are empty, the resource is not supported")
-	}
-
-	knowns := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(supportedGVKs[0].GroupKind())
-	if len(knowns) != 0 {
-		var preferredVersion schema.GroupVersion
-	Loop:
-		for _, gvk := range supportedGVKs {
-			for _, gv := range knowns {
-				if gvk.GroupVersion() == gv {
-					preferredVersion = gv
-					break Loop
+					status := synchro.Status()
+					cond.Status = status.Status
+					cond.Reason = status.Reason
+					cond.Message = status.Message
+					cond.LastTransitionTime = status.LastTransitionTime
+				} else {
+					if cond.Status == "" {
+						cond.Status = clusterv1alpha2.SyncStatusUnknown
+					}
+					if cond.Reason == "" {
+						cond.Reason = "SynchroNotFound"
+					}
+					if cond.Message == "" {
+						cond.Message = "not found resource synchro"
+					}
+					cond.LastTransitionTime = metav1.Now().Rfc3339Copy()
 				}
-			}
-		}
-
-		if preferredVersion.Empty() {
-			// For legacy resources, only known version are synchronized,
-			// and only one version is guaranteed to be synchronized and saved.
-			return nil, true, errors.New("The supported versions do not contain any known versions")
-		}
-		return []string{preferredVersion.Version}, true, nil
-	}
-
-	// For custom resources, if the version to be synchronized is not specified,
-	// then the first three versions available from the cluster are used
-	if len(syncVersions) == 0 {
-		for _, gvk := range supportedGVKs {
-			syncVersions = append(syncVersions, gvk.Version)
-		}
-		if len(syncVersions) > 3 {
-			syncVersions = syncVersions[:3]
-		}
-		return syncVersions, false, nil
-	}
-
-	// Handles custom resources that specify sync versions
-	var filtered []string
-	for _, version := range syncVersions {
-		for _, gvk := range supportedGVKs {
-			if gvk.Version == version {
-				filtered = append(filtered, version)
+				statuses[si].Resources[ri].SyncConditions[vi] = cond
 			}
 		}
 	}
 
-	if len(filtered) == 0 {
-		return nil, false, errors.New("The supported versions do not contain any specified sync version")
+	version := s.version.Load().(version.Info).GitVersion
+	readyCondition := s.readyCondition.Load().(metav1.Condition)
+	return &clusterv1alpha2.ClusterStatus{
+		Version:       version,
+		Conditions:    []metav1.Condition{readyCondition},
+		SyncResources: statuses,
 	}
-	return filtered, false, nil
 }

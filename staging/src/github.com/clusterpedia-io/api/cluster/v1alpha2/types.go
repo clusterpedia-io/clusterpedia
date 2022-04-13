@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
@@ -10,6 +11,7 @@ const (
 	SyncStatusPending = "Pending"
 	SyncStatusSyncing = "Syncing"
 	SyncStatusStop    = "Stop"
+	SyncStatusUnknown = "Unknown"
 )
 
 // +genclient
@@ -112,10 +114,16 @@ type ClusterResourceSyncCondition struct {
 	Version string `json:"version"`
 
 	// optional
+	SyncVersion string `json:"syncVersion,omitempty"`
+
+	// optional
+	SyncResource string `json:"syncResource,omitempty"`
+
+	// optional
 	StorageVersion string `json:"storageVersion,omitempty"`
 
 	// optional
-	StorageResource *string `json:"storrageResource,omitempty"`
+	StorageResource string `json:"storrageResource,omitempty"`
 
 	// +required
 	// +kubebuilder:validation:Required
@@ -132,6 +140,31 @@ type ClusterResourceSyncCondition struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
 	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
+}
+
+func (cond ClusterResourceSyncCondition) SyncGVR(resource schema.GroupResource) schema.GroupVersionResource {
+	if cond.Version == "" || cond.SyncVersion == "" {
+		return schema.GroupVersionResource{}
+	}
+
+	if cond.SyncResource != "" {
+		resource = schema.ParseGroupResource(cond.SyncResource)
+	}
+	if cond.SyncVersion != "" {
+		return resource.WithVersion(cond.StorageVersion)
+	}
+	return resource.WithVersion(cond.Version)
+}
+
+func (cond ClusterResourceSyncCondition) StorageGVR(resource schema.GroupResource) schema.GroupVersionResource {
+	if cond.Version == "" || cond.StorageVersion == "" {
+		return schema.GroupVersionResource{}
+	}
+
+	if cond.StorageResource != "" {
+		return schema.ParseGroupResource(cond.StorageResource).WithVersion(cond.StorageVersion)
+	}
+	return resource.WithVersion(cond.StorageVersion)
 }
 
 // +kubebuilder:object:root=true
