@@ -13,10 +13,10 @@ type ResourceVersionStorage struct {
 
 var _ cache.KeyListerGetter = &ResourceVersionStorage{}
 
-func NewResourceVersionStorage(keyFunc cache.KeyFunc) *ResourceVersionStorage {
+func NewResourceVersionStorage() *ResourceVersionStorage {
 	return &ResourceVersionStorage{
 		cacheStorage: cache.NewThreadSafeStore(cache.Indexers{}, cache.Indices{}),
-		keyFunc:      keyFunc,
+		keyFunc:      cache.DeletionHandlingMetaNamespaceKeyFunc,
 	}
 }
 
