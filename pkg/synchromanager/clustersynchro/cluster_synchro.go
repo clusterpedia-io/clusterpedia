@@ -2,16 +2,19 @@ package clustersynchro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
@@ -49,6 +52,10 @@ type ClusterSynchro struct {
 	storageResourceVersionCaches map[schema.GroupVersionResource]*informer.ResourceVersionStorage
 	storageResourceSynchros      sync.Map
 
+	syncResources            atomic.Value // []clusterv1alpha2.ClusterGroupResources
+	setSyncResourcesCh       chan struct{}
+	customResourceController *CustomResourceController
+
 	resourceNegotiator  *ResourceNegotiator
 	groupResourceStatus atomic.Value // *GroupResourceStatus
 
@@ -69,6 +76,14 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	mapper, err := apiutil.NewDynamicRESTMapper(config)
 	if err != nil {
 		return nil, err
+	}
+
+	crdGVRs, err := mapper.ResourcesFor(schema.GroupVersionResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
+	if err != nil {
+		return nil, err
+	}
+	if len(crdGVRs) == 0 {
+		return nil, errors.New("not match crd version")
 	}
 
 	version, err := clusterclient.Discovery().ServerVersion()
@@ -106,12 +121,22 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	}
 	synchro.version.Store(*version)
 
+	customResourceController, err := NewCustomResourceController(name, config, crdGVRs[0].Version)
+	if err != nil {
+		return nil, err
+	}
+	synchro.customResourceController = customResourceController
+
 	synchro.resourceNegotiator = &ResourceNegotiator{
-		name:                  name,
-		restmapper:            mapper,
-		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
+		name:                     name,
+		restmapper:               mapper,
+		resourceStorageConfig:    storageconfig.NewStorageConfigFactory(),
+		customResourceController: customResourceController,
 	}
 	synchro.groupResourceStatus.Store(NewGroupResourceStatus())
+
+	synchro.syncResources.Store([]clusterv1alpha2.ClusterGroupResources(nil))
+	synchro.setSyncResourcesCh = make(chan struct{}, 1)
 
 	condition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterConditionReady,
@@ -141,17 +166,25 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 }
 
 func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
+	go s.customResourceController.Run(s.closer)
+	go func() {
+		if cache.WaitForNamedCacheSync(s.name+"-CustomResourceController", s.closer, s.customResourceController.HasSynced) {
+			s.customResourceController.SetResourceMutationHandler(s.resetSyncResources)
+			s.resetSyncResources()
+		}
+	}()
+
 	s.waitGroup.Start(s.monitor)
 	s.waitGroup.Start(s.resourceSynchroRunner)
 	go s.clusterStatusUpdater()
+	go s.syncResourcesSetter()
 
 	select {
 	case <-shutdown:
 		s.Shutdown(true, false)
 	case <-s.closer:
-		// clustersynchro.Shutdown has been called, wait for closed.
-		<-s.closed
 	}
+	<-s.closed
 }
 
 func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool) {
@@ -190,6 +223,40 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 }
 
 func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources) {
+	s.syncResources.Store(syncResources)
+	s.resetSyncResources()
+}
+
+func (s *ClusterSynchro) resetSyncResources() {
+	select {
+	case s.setSyncResourcesCh <- struct{}{}:
+	default:
+	}
+}
+
+func (s *ClusterSynchro) syncResourcesSetter() {
+	for {
+		select {
+		case <-s.setSyncResourcesCh:
+			s.setSyncResources()
+		case <-s.closer:
+			return
+		}
+	}
+}
+
+func (s *ClusterSynchro) setSyncResources() {
+	syncResources := s.syncResources.Load().([]clusterv1alpha2.ClusterGroupResources)
+	if syncResources == nil {
+		return
+	}
+
+	// TODO: HasSynced needs to lock the informer.queue, replace it with a more lightweight way
+	if !s.customResourceController.HasSynced() {
+		klog.InfoS("custom resource controller is not synced", "cluster", s.name)
+		return
+	}
+
 	groupResourceStatus, storageResourceSyncConfigs := s.resourceNegotiator.NegotiateSyncResources(syncResources)
 
 	lastGroupResourceStatus := s.groupResourceStatus.Load().(*GroupResourceStatus)
