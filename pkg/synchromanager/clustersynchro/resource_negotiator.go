@@ -23,6 +23,8 @@ type ResourceNegotiator struct {
 	name                  string
 	restmapper            meta.RESTMapper
 	resourceStorageConfig *storageconfig.StorageConfigFactory
+
+	customResourceController *CustomResourceController
 }
 
 type syncConfig struct {
@@ -39,34 +41,8 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	for _, groupResources := range syncResources {
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
-
-			gvks, err := negotiator.restmapper.KindsFor(syncGR.WithVersion(""))
-			if err != nil {
-				klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", negotiator.name, "resource", syncGR)
-				continue
-			}
-			supportedGVKs := make([]schema.GroupVersionKind, 0, len(gvks))
-			for _, gvk := range gvks {
-				// if syncGR.Group == "", gvk.Group maybe not equal to ""
-				if gvk.Group == syncGR.Group {
-					supportedGVKs = append(supportedGVKs, gvk)
-				}
-			}
-
-			syncVersions, isLegacyResource, err := negotiateSyncVersions(groupResources.Versions, supportedGVKs)
-			if err != nil {
-				klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", syncGR, "reason", err)
-				continue
-			}
-			if len(syncVersions) == 0 {
-				klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", syncGR, "reason", "sync versions is empty")
-				continue
-			}
-
-			// add gr and group resource status
-			mapper, err := negotiator.restmapper.RESTMapping(supportedGVKs[0].GroupKind(), supportedGVKs[0].Version)
-			if err != nil {
-				klog.ErrorS(err, "Skip resource sync", "cluster", negotiator.name, "resource", syncGR)
+			mapper, syncVersions, isLegacyResource := negotiator.negotiatorVersions(syncGR, groupResources.Versions)
+			if mapper == nil || len(syncVersions) == 0 {
 				continue
 			}
 
@@ -119,58 +95,91 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	return groupResourceStatus, storageResourceSyncConfigs
 }
 
-func negotiateSyncVersions(syncVersions []string, supportedGVKs []schema.GroupVersionKind) ([]string, bool, error) {
-	if len(supportedGVKs) == 0 {
-		return nil, false, errors.New("The supported versions are empty, the resource is not supported")
+func (negotiator *ResourceNegotiator) negotiatorVersions(resource schema.GroupResource, wantVersions []string) (*meta.RESTMapping, []string, bool) {
+	var mapper *meta.RESTMapping
+	var supportedVersions []string
+	isLegacyResource := resourcescheme.LegacyResourceScheme.IsGroupRegistered(resource.Group)
+	if !isLegacyResource {
+		mapper, supportedVersions = negotiator.customResourceController.GetRESTMappingAndVersions(resource)
 	}
 
-	knowns := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(supportedGVKs[0].GroupKind())
+	if mapper == nil {
+		gvks, err := negotiator.restmapper.KindsFor(resource.WithVersion(""))
+		if err != nil {
+			klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", negotiator.name, "resource", resource)
+			return nil, nil, isLegacyResource
+		}
+
+		var gk schema.GroupKind
+		supportedVersions = make([]string, 0, len(gvks))
+		for _, gvk := range gvks {
+			// if syncGR.Group == "", gvk.Group maybe not equal to ""
+			if gvk.Group == resource.Group {
+				gk = gvk.GroupKind()
+				supportedVersions = append(supportedVersions, gvk.Version)
+			}
+		}
+		if len(supportedVersions) == 0 {
+			klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", "The supported versions are empty")
+			return nil, nil, isLegacyResource
+		}
+
+		mapper, err = negotiator.restmapper.RESTMapping(gk, supportedVersions[0])
+		if err != nil {
+			klog.ErrorS(err, "Skip resource sync", "cluster", negotiator.name, "resource", resource)
+			return nil, nil, isLegacyResource
+		}
+	}
+
+	syncVersions, isLegacyResource, err := negotiateSyncVersions(mapper.GroupVersionKind.GroupKind(), wantVersions, supportedVersions)
+	if err != nil {
+		klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", err)
+		return nil, nil, isLegacyResource
+	}
+	return mapper, syncVersions, isLegacyResource
+}
+
+func negotiateSyncVersions(kind schema.GroupKind, wantVersions []string, supportedVersions []string) ([]string, bool, error) {
+	if len(supportedVersions) == 0 {
+		return nil, false, errors.New("The supported versions are empty")
+	}
+
+	knowns := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(kind)
 	if len(knowns) != 0 {
-		var preferredVersion schema.GroupVersion
-	Loop:
-		for _, gvk := range supportedGVKs {
+		for _, version := range supportedVersions {
 			for _, gv := range knowns {
-				if gvk.GroupVersion() == gv {
-					preferredVersion = gv
-					break Loop
+				if version == gv.Version {
+					// preferred version
+					return []string{version}, true, nil
 				}
 			}
 		}
 
-		if preferredVersion.Empty() {
-			// For legacy resources, only known version are synchronized,
-			// and only one version is guaranteed to be synchronized and saved.
-			return nil, true, errors.New("The supported versions do not contain any known versions")
-		}
-		return []string{preferredVersion.Version}, true, nil
+		// For legacy resources, only known version are synchronized,
+		// and only one version is guaranteed to be synchronized and saved.
+		return nil, true, errors.New("The supported versions do not contain any known versions")
 	}
 
-	// For custom resources, if the version to be synchronized is not specified,
-	// then the first three versions available from the cluster are used
-	if len(syncVersions) == 0 {
-		for _, gvk := range supportedGVKs {
-			syncVersions = append(syncVersions, gvk.Version)
-		}
+	var syncVersions []string
+	if len(wantVersions) == 0 {
+		syncVersions = supportedVersions
 		if len(syncVersions) > 3 {
 			syncVersions = syncVersions[:3]
 		}
 		return syncVersions, false, nil
 	}
 
-	// Handles custom resources that specify sync versions
-	var filtered []string
-	for _, version := range syncVersions {
-		for _, gvk := range supportedGVKs {
-			if gvk.Version == version {
-				filtered = append(filtered, version)
-			}
+	wants := sets.NewString(wantVersions...)
+	for _, version := range supportedVersions {
+		if wants.Has(version) {
+			syncVersions = append(syncVersions, version)
 		}
 	}
 
-	if len(filtered) == 0 {
+	if len(syncVersions) == 0 {
 		return nil, false, errors.New("The supported versions do not contain any specified sync version")
 	}
-	return filtered, false, nil
+	return syncVersions, false, nil
 }
 
 // GroupResourceStatus manages the status of synchronized resources

@@ -156,12 +156,7 @@ func TestNegotiateSyncVersions(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		gvks := make([]schema.GroupVersionKind, 0, len(tc.supportedVersions))
-		for _, v := range tc.supportedVersions {
-			gvks = append(gvks, tc.GroupKind.WithVersion(v))
-		}
-
-		syncVersions, isLegacyResource, err := negotiateSyncVersions(tc.syncVersions, gvks)
+		syncVersions, isLegacyResource, err := negotiateSyncVersions(tc.GroupKind, tc.syncVersions, tc.supportedVersions)
 		assert.Equalf(t, tc.wantErr, (err != nil), "testcases[%v] error: %v", i, err)
 		assert.Equalf(t, tc.wantSyncVersions, syncVersions, "testcases[%v]", i)
 		assert.Equalf(t, tc.wantLegacyResource, isLegacyResource, "testcase[%v]", i)
