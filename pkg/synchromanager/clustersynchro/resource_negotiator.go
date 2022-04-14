@@ -38,6 +38,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
 
+	syncResources = negotiator.customResourceController.HandleSyncResources(syncResources)
 	for _, groupResources := range syncResources {
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}

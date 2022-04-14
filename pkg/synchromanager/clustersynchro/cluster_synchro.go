@@ -222,8 +222,9 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 	<-s.closed
 }
 
-func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources) {
+func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources, syncAllCustomResources bool) {
 	s.syncResources.Store(syncResources)
+	s.customResourceController.SetSyncAllCustomResources(syncAllCustomResources)
 	s.resetSyncResources()
 }
 

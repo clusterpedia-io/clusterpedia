@@ -54,6 +54,9 @@ type ClusterSpec struct {
 
 	// +required
 	SyncResources []ClusterGroupResources `json:"syncResources"`
+
+	// +optional
+	SyncAllCustomResources bool `json:"syncAllCustomResources,omitempty"`
 }
 
 type ClusterGroupResources struct {

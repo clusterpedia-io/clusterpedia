@@ -257,7 +257,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 	}
 
-	synchro.SetResources(cluster.Spec.SyncResources)
+	synchro.SetResources(cluster.Spec.SyncResources, cluster.Spec.SyncAllCustomResources)
 
 	manager.synchrolock.Lock()
 	manager.synchros[cluster.Name] = synchro

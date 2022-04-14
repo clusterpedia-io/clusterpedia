@@ -58,6 +58,8 @@ spec:
               kubeconfig:
                 format: byte
                 type: string
+              syncAllCustomResources:
+                type: boolean
               syncResources:
                 items:
                   properties:
