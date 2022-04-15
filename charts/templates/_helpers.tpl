@@ -129,7 +129,16 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 */}}
 {{- define "clusterpedia.postgresql.fullname" -}}
-{{- printf "%s-%s" .Release.Name "postgresql" | trunc 63 | trimSuffix "-" -}}
+{{- if .Values.postgresql.fullnameOverride -}}
+     {{- .Values.postgresql.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+     {{- $name := default "postgresql" .Values.postgresql.nameOverride -}}
+     {{- if contains $name .Release.Name -}}
+          {{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+     {{- else -}}
+          {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+     {{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -137,7 +146,16 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 */}}
 {{- define "clusterpedia.mysql.fullname" -}}
-{{- printf "%s-%s" .Release.Name "mysql" | trunc 63 | trimSuffix "-" -}}
+{{- if .Values.mysql.fullnameOverride -}}
+     {{- .Values.mysql.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+     {{- $name := default "mysql" .Values.mysql.nameOverride -}}
+     {{- if contains $name .Release.Name -}}
+          {{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+     {{- else -}}
+          {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+     {{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -169,9 +187,9 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
      {{- if or (and .Values.postgresql.enabled .Values.mysql.enabled) (and (not .Values.postgresql.enabled) (not .Values.mysql.enabled)) }}
           {{ required "Please enable the correct storage type!" "" }}
      {{- else if .Values.postgresql.enabled }}
-         {{- "postgres" -}} 
+         {{- "postgres" -}}
      {{- else if .Values.mysql.enabled }}
-          {{- "mysql" -}} 
+          {{- "mysql" -}}
      {{- end -}}
 {{- else -}}
      {{- if or .Values.postgresql.enabled .Values.mysql.enabled -}}
