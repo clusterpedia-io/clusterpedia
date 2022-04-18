@@ -935,6 +935,7 @@ k8s.io/client-go/util/connrotation
 k8s.io/client-go/util/flowcontrol
 k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
+k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/code-generator v0.22.2 => github.com/k3s-io/kubernetes/staging/src/k8s.io/code-generator v1.22.4-k3s1
 ## explicit

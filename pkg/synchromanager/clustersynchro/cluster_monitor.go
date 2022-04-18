@@ -30,7 +30,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		}
 
 		condition := metav1.Condition{
-			Type:    clusterv1alpha2.ClusterConditionReady,
+			Type:    clusterv1alpha2.ClusterReadyCondition,
 			Status:  metav1.ConditionFalse,
 			Reason:  "Unhealthy",
 			Message: "cluster health responded without ok",
@@ -54,7 +54,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	}
 
 	condition := metav1.Condition{
-		Type:               clusterv1alpha2.ClusterConditionReady,
+		Type:               clusterv1alpha2.ClusterReadyCondition,
 		Status:             metav1.ConditionTrue,
 		Reason:             "Healthy",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),

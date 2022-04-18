@@ -6,12 +6,17 @@ import (
 )
 
 const (
-	ClusterConditionReady = "Ready"
+	ClusterReadyCondition   = "Ready"
+	ClusterSynchroCondition = "ClusterSynchroInitialized"
 
 	SyncStatusPending = "Pending"
 	SyncStatusSyncing = "Syncing"
 	SyncStatusStop    = "Stop"
 	SyncStatusUnknown = "Unknown"
+
+	InvalidConfigConditionReason = "InvalidConfig"
+	InitialFailedConditionReason = "InitialFailed"
+	RunningConditionReason       = "Running"
 )
 
 // +genclient
