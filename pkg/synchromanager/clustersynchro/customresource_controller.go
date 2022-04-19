@@ -15,21 +15,28 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type CustomResourceController struct {
 	lock      sync.RWMutex
+	groups    sets.String
 	versions  map[schema.GroupResource][]string
 	resources map[schema.GroupResource]*meta.RESTMapping
 
 	informer                cache.SharedIndexInformer
 	resourceMutationHandler func()
+
+	syncAll bool
 }
 
 func NewCustomResourceController(cluster string, config *rest.Config, version string) (*CustomResourceController, error) {
@@ -53,6 +60,7 @@ func NewCustomResourceController(cluster string, config *rest.Config, version st
 
 	lw := cache.NewListWatchFromClient(getter, "customresourcedefinitions", metav1.NamespaceNone, fields.Nothing())
 	controller := &CustomResourceController{
+		groups:    sets.NewString(),
 		resources: make(map[schema.GroupResource]*meta.RESTMapping),
 		versions:  make(map[schema.GroupResource][]string),
 		informer:  cache.NewSharedIndexInformer(lw, exampleObject, 0, nil),
@@ -67,6 +75,12 @@ func (c *CustomResourceController) Run(stopCh <-chan struct{}) {
 
 func (c *CustomResourceController) HasSynced() bool {
 	return c.informer.HasSynced()
+}
+
+func (c *CustomResourceController) SetSyncAllCustomResources(sync bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.syncAll = sync
 }
 
 func (c *CustomResourceController) SetResourceMutationHandler(handler func()) {
@@ -131,6 +145,7 @@ func (c *CustomResourceController) updateResources(obj interface{}) {
 		return
 	}
 
+	c.groups.Insert(groupResource.Group)
 	c.versions[groupResource] = versions
 	c.resources[groupResource] = mapping
 	c.lock.Unlock()
@@ -173,6 +188,17 @@ func (c *CustomResourceController) removeResource(obj interface{}) {
 	c.lock.Lock()
 	delete(c.versions, groupResource)
 	delete(c.resources, groupResource)
+
+	var foundResource bool
+	for gr := range c.resources {
+		if gr.Group == groupResource.Group {
+			foundResource = true
+			break
+		}
+	}
+	if !foundResource {
+		delete(c.groups, groupResource.Group)
+	}
 	c.lock.Unlock()
 
 	if c.resourceMutationHandler != nil {
@@ -184,4 +210,33 @@ func (c *CustomResourceController) GetRESTMappingAndVersions(gr schema.GroupReso
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.resources[gr], c.versions[gr]
+}
+
+func (c *CustomResourceController) HandleSyncResources(resources []clusterv1alpha2.ClusterGroupResources) []clusterv1alpha2.ClusterGroupResources {
+	if c.syncAll && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
+		return c.AppendAllCustomResources(resources)
+	}
+	return resources
+}
+
+func (c *CustomResourceController) AppendAllCustomResources(resources []clusterv1alpha2.ClusterGroupResources) []clusterv1alpha2.ClusterGroupResources {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	syncResources := make([]clusterv1alpha2.ClusterGroupResources, 0, len(resources)+len(c.versions))
+	for _, resource := range resources {
+		if !c.groups.Has(resource.Group) {
+			syncResources = append(syncResources, resource)
+		}
+	}
+
+	for gr, versions := range c.versions {
+		resource := clusterv1alpha2.ClusterGroupResources{
+			Group:     gr.Group,
+			Versions:  versions,
+			Resources: []string{gr.Resource},
+		}
+		syncResources = append(syncResources, resource)
+	}
+	return syncResources
 }
