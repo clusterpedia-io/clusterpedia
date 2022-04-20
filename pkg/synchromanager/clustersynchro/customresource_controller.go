@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
@@ -28,10 +29,14 @@ import (
 )
 
 type CustomResourceController struct {
-	lock      sync.RWMutex
+	lock sync.RWMutex
+
 	groups    sets.String
 	versions  map[schema.GroupResource][]string
 	resources map[schema.GroupResource]*meta.RESTMapping
+
+	pluralToSingular map[schema.GroupResource]schema.GroupResource
+	singularToPlural map[schema.GroupResource]schema.GroupResource
 
 	informer                cache.SharedIndexInformer
 	resourceMutationHandler func()
@@ -60,10 +65,12 @@ func NewCustomResourceController(cluster string, config *rest.Config, version st
 
 	lw := cache.NewListWatchFromClient(getter, "customresourcedefinitions", metav1.NamespaceNone, fields.Nothing())
 	controller := &CustomResourceController{
-		groups:    sets.NewString(),
-		resources: make(map[schema.GroupResource]*meta.RESTMapping),
-		versions:  make(map[schema.GroupResource][]string),
-		informer:  cache.NewSharedIndexInformer(lw, exampleObject, 0, nil),
+		groups:           sets.NewString(),
+		resources:        make(map[schema.GroupResource]*meta.RESTMapping),
+		versions:         make(map[schema.GroupResource][]string),
+		pluralToSingular: make(map[schema.GroupResource]schema.GroupResource),
+		singularToPlural: make(map[schema.GroupResource]schema.GroupResource),
+		informer:         cache.NewSharedIndexInformer(lw, exampleObject, 0, nil),
 	}
 	controller.informer.AddEventHandler(controller)
 	return controller, nil
@@ -114,6 +121,7 @@ func (c *CustomResourceController) updateResources(obj interface{}) {
 		return
 	}
 
+	singularGR := schema.GroupResource{Group: crd.Spec.Group, Resource: crd.Status.AcceptedNames.Singular}
 	groupResource := schema.GroupResource{Group: crd.Spec.Group, Resource: crd.Status.AcceptedNames.Plural}
 	mapping := &meta.RESTMapping{
 		Resource: groupResource.WithVersion(""),
@@ -140,7 +148,9 @@ func (c *CustomResourceController) updateResources(obj interface{}) {
 
 	c.lock.Lock()
 	if reflect.DeepEqual(c.versions[groupResource], versions) &&
-		reflect.DeepEqual(c.resources[groupResource], mapping) {
+		reflect.DeepEqual(c.resources[groupResource], mapping) &&
+		c.pluralToSingular[groupResource] == singularGR {
+		// skip c.resourceMutationHandler()
 		c.lock.Unlock()
 		return
 	}
@@ -148,6 +158,9 @@ func (c *CustomResourceController) updateResources(obj interface{}) {
 	c.groups.Insert(groupResource.Group)
 	c.versions[groupResource] = versions
 	c.resources[groupResource] = mapping
+
+	c.pluralToSingular[groupResource] = singularGR
+	c.singularToPlural[singularGR] = groupResource
 	c.lock.Unlock()
 
 	if c.resourceMutationHandler != nil {
@@ -189,6 +202,11 @@ func (c *CustomResourceController) removeResource(obj interface{}) {
 	delete(c.versions, groupResource)
 	delete(c.resources, groupResource)
 
+	if singularGR := c.pluralToSingular[groupResource]; !singularGR.Empty() {
+		delete(c.singularToPlural, singularGR)
+	}
+	delete(c.pluralToSingular, groupResource)
+
 	var foundResource bool
 	for gr := range c.resources {
 		if gr.Group == groupResource.Group {
@@ -209,6 +227,13 @@ func (c *CustomResourceController) removeResource(obj interface{}) {
 func (c *CustomResourceController) GetRESTMappingAndVersions(gr schema.GroupResource) (*meta.RESTMapping, []string) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
+
+	// k8s.io/apimachinery/pkg/api/meta/restmapper.go#coerceResourceForMatching
+	gr.Resource = strings.ToLower(gr.Resource)
+	if plural := c.singularToPlural[gr]; !plural.Empty() {
+		gr = plural
+	}
+
 	return c.resources[gr], c.versions[gr]
 }
 
