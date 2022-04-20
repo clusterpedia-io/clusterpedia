@@ -9,11 +9,6 @@ const (
 	ClusterReadyCondition   = "Ready"
 	ClusterSynchroCondition = "ClusterSynchroInitialized"
 
-	SyncStatusPending = "Pending"
-	SyncStatusSyncing = "Syncing"
-	SyncStatusStop    = "Stop"
-	SyncStatusUnknown = "Unknown"
-
 	InvalidConfigConditionReason = "InvalidConfig"
 	InitialFailedConditionReason = "InitialFailed"
 	RunningConditionReason       = "Running"
@@ -23,6 +18,14 @@ const (
 	UnhealthyReason          = "Unhealthy"
 	NotReachableReason       = "NotReachable"
 	ClusterSynchroStopReason = "ClusterSynchroStop"
+	ClusterConditionReady = "Ready"
+	
+	SyncStatusStart       = "Start"
+	SyncStatusPending     = "Pending"
+	SyncStatusSyncing     = "Syncing"
+	SyncStatusSynced      = "Synced"
+	SyncStatusStop        = "Stop"
+	SyncStatusUnknown     = "Unknown"
 )
 
 // +genclient

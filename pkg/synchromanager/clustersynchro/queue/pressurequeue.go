@@ -98,10 +98,10 @@ func (q *pressurequeue) put(key string, event *Event) {
 	q.cond.Broadcast()
 }
 
-func (q *pressurequeue) Done(event *Event) error {
+func (q *pressurequeue) Done(event *Event) (bool, error) {
 	key, err := q.keyFunc(event.Object)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	q.lock.Lock()
@@ -112,7 +112,7 @@ func (q *pressurequeue) Done(event *Event) error {
 		q.queue = append(q.queue, key)
 	}
 	q.cond.Broadcast()
-	return nil
+	return len(q.items) == 0 && len(q.processing) == 0, nil
 }
 
 func (q *pressurequeue) Pop() (*Event, error) {

@@ -10,7 +10,7 @@ type EventQueue interface {
 	Delete(obj interface{}) error
 
 	Pop() (*Event, error)
-	Done(event *Event) error
+	Done(event *Event) (bool, error)
 
 	Close()
 }

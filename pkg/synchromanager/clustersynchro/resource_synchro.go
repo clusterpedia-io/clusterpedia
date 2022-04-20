@@ -199,7 +199,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 	}()
 
 	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.SyncStatusSyncing,
+		Status:             clusterv1alpha2.SyncStatusStart,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -293,13 +293,26 @@ func (synchro *ResourceSynchro) processResources() {
 			continue
 		}
 
+		status := clusterv1alpha2.ClusterResourceSyncCondition{}
+		// before handle the reource event, set the status Syncing to the synchro.
+		if synchro.Status().Status != clusterv1alpha2.SyncStatusSyncing {
+			status.Status = clusterv1alpha2.SyncStatusSyncing
+			status.LastTransitionTime = metav1.Now().Rfc3339Copy()
+			synchro.status.Store(status)
+		}
+
 		synchro.handleResourceEvent(event)
+
+		// if the queue size is empty that represent the resource had be synced by synchronizer.
+		if isEmpty, err := synchro.queue.Done(event); err != nil && isEmpty {
+			status.Status = clusterv1alpha2.SyncStatusSynced
+			status.LastTransitionTime = metav1.Now().Rfc3339Copy()
+			synchro.status.Store(status)
+		}
 	}
 }
 
 func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
-	defer func() { _ = synchro.queue.Done(event) }()
-
 	if d, ok := event.Object.(cache.DeletedFinalStateUnknown); ok {
 		namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
 		if err != nil {
