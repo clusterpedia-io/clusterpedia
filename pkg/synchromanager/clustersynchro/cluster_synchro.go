@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
@@ -70,17 +71,17 @@ type ClusterStatusUpdater interface {
 func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
 	clusterclient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create a cluster client: %v", err)
 	}
 
 	mapper, err := apiutil.NewDynamicRESTMapper(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create restmapper: %v", err)
 	}
 
 	crdGVRs, err := mapper.ResourcesFor(schema.GroupVersionResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list CRD GVRS: %v", err)
 	}
 	if len(crdGVRs) == 0 {
 		return nil, errors.New("not match crd version")
@@ -88,17 +89,17 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 	version, err := clusterclient.Discovery().ServerVersion()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to discovery ServerVersion: %v", err)
 	}
 
 	listWatchFactory, err := informer.NewDynamicListerWatcherFactory(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create watcher: %v", err)
 	}
 
 	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get resource versions: %v", err)
 	}
 
 	synchro := &ClusterSynchro{
@@ -139,7 +140,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	synchro.setSyncResourcesCh = make(chan struct{}, 1)
 
 	condition := metav1.Condition{
-		Type:               clusterv1alpha2.ClusterConditionReady,
+		Type:               clusterv1alpha2.ClusterReadyCondition,
 		Status:             metav1.ConditionFalse,
 		Reason:             "Pending",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
@@ -207,7 +208,7 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool
 			message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
 		}
 		condition := metav1.Condition{
-			Type:               clusterv1alpha2.ClusterConditionReady,
+			Type:               clusterv1alpha2.ClusterReadyCondition,
 			Status:             metav1.ConditionUnknown,
 			Reason:             "ClusterSynchroStop",
 			Message:            message,

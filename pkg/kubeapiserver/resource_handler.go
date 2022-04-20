@@ -85,7 +85,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		var msg string
-		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterConditionReady)
+		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterReadyCondition)
 		switch {
 		case readyCondition == nil:
 			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", clusterName)

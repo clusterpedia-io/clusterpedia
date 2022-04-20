@@ -9,17 +9,20 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
@@ -28,6 +31,8 @@ import (
 )
 
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
+
+const maxClusterSynchroRetry = 5
 
 type Manager struct {
 	runLock sync.Mutex
@@ -182,8 +187,11 @@ func (manager *Manager) processNextCluster() (continued bool) {
 	cluster = cluster.DeepCopy()
 	if err := manager.reconcileCluster(cluster); err != nil {
 		klog.ErrorS(err, "Failed to reconcile cluster", "cluster", name, "num requeues", manager.queue.NumRequeues(key))
-		manager.queue.AddRateLimited(key)
-		return
+		if manager.queue.NumRequeues(key) < maxClusterSynchroRetry {
+			manager.queue.AddRateLimited(key)
+			return
+		}
+		klog.V(2).Infof("Dropping cluster %q out of the queue: %v", key, err)
 	}
 	manager.queue.Forget(key)
 	return
@@ -223,8 +231,8 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	config, err := buildClusterConfig(cluster)
 	if err != nil {
-		// TODO(iceber): update cluster status
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
+		manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidConfigConditionReason, "invalid cluster config: "+err.Error(), metav1.ConditionFalse)
 		return nil
 	}
 
@@ -234,28 +242,30 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if synchro != nil && !reflect.DeepEqual(synchro.RESTConfig, config) {
 		klog.InfoS("cluster config is changed, rebuild cluster synchro", "cluster", cluster.Name)
 
-		synchro.Shutdown(false, false)
+		synchro.Shutdown(true, false)
 		synchro = nil
+
+		manager.synchrolock.Lock()
+		manager.synchros[cluster.Name] = synchro
+		manager.synchrolock.Unlock()
 
 		// manager.cleanCluster(cluster.Name)
 	}
 
 	// create resource synchro
 	if synchro == nil {
-		// TODO(iceber): set the stop sign of the manager to cluster synchro
 		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager)
 		if err != nil {
-			// TODO(iceber): update cluster status
-			// There are many reasons why creating a cluster synchro can fail.
-			// How do you gracefully handle different errors?
-
+			manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InitialFailedConditionReason, err.Error(), metav1.ConditionFalse)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)
-			// Not requeue
-			return nil
+			// requeue
+			return err
 		}
 
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 	}
+
+	manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.RunningConditionReason, "", metav1.ConditionTrue)
 
 	synchro.SetResources(cluster.Spec.SyncResources, cluster.Spec.SyncAllCustomResources)
 
@@ -283,25 +293,51 @@ func (manager *Manager) cleanCluster(name string) error {
 	return manager.storage.CleanCluster(context.TODO(), name)
 }
 
+func (manager *Manager) UpdateClusterSynchroCondition(name, reason, message string, status metav1.ConditionStatus) {
+	synchroCondition := metav1.Condition{
+		Type:    clusterv1alpha2.ClusterSynchroCondition,
+		Reason:  reason,
+		Status:  status,
+		Message: message,
+	}
+
+	clusterStatus := &clusterv1alpha2.ClusterStatus{Conditions: []metav1.Condition{synchroCondition}}
+
+	if err := manager.UpdateClusterStatus(context.TODO(), name, clusterStatus); err != nil {
+		klog.ErrorS(err, "Failed to update cluster status", "cluster", name, clusterStatus.Conditions[0].Reason)
+	}
+}
+
 func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error {
-	cluster, err := manager.clusterlister.Get(name)
-	if err != nil {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		cluster, err := manager.clusterlister.Get(name)
+		if err != nil {
+			return err
+		}
+
+		if equality.Semantic.DeepEqual(&cluster.Status, status) {
+			return nil
+		}
+
+		cluster = cluster.DeepCopy()
+
+		if status.Version != "" {
+			cluster.Status.Version = status.Version
+		}
+		if status.SyncResources != nil {
+			cluster.Status.SyncResources = status.SyncResources
+		}
+		for _, condition := range status.Conditions {
+			meta.SetStatusCondition(&cluster.Status.Conditions, condition)
+		}
+
+		_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
+		if err == nil {
+			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "type", status.Conditions[0].Type, "status", status.Conditions[0].Status, "reason", status.Conditions[0].Reason, "message", status.Conditions[0].Message)
+			return nil
+		}
 		return err
-	}
-
-	if equality.Semantic.DeepEqual(&cluster.Status, status) {
-		return nil
-	}
-
-	cluster = cluster.DeepCopy()
-	cluster.Status = *status
-	_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
-	if err != nil {
-		return err
-	}
-
-	klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "status", status.Conditions[0].Reason)
-	return nil
+	})
 }
 
 func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {
