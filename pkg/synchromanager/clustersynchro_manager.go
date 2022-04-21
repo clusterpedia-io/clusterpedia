@@ -304,7 +304,7 @@ func (manager *Manager) UpdateClusterSynchroCondition(name, reason, message stri
 	clusterStatus := &clusterv1alpha2.ClusterStatus{Conditions: []metav1.Condition{synchroCondition}}
 
 	if err := manager.UpdateClusterStatus(context.TODO(), name, clusterStatus); err != nil {
-		klog.ErrorS(err, "Failed to update cluster status", "cluster", name, clusterStatus.Conditions[0].Reason)
+		klog.ErrorS(err, "Failed to update cluster synchro condition status", "cluster", name, "condition", synchroCondition)
 	}
 }
 
@@ -333,7 +333,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 
 		_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
 		if err == nil {
-			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "type", status.Conditions[0].Type, "status", status.Conditions[0].Status, "reason", status.Conditions[0].Reason, "message", status.Conditions[0].Message)
+			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "conditions", status.Conditions)
 			return nil
 		}
 		return err
