@@ -242,7 +242,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if synchro != nil && !reflect.DeepEqual(synchro.RESTConfig, config) {
 		klog.InfoS("cluster config is changed, rebuild cluster synchro", "cluster", cluster.Name)
 
-		synchro.Shutdown(true, false)
+		synchro.Shutdown(true)
 		synchro = nil
 
 		manager.synchrolock.Lock()
@@ -284,7 +284,7 @@ func (manager *Manager) removeCluster(name string) error {
 	if synchro != nil {
 		// not update removed cluster,
 		// and ensure that no more data is being synchronized to the resource storage
-		synchro.Shutdown(false, true)
+		synchro.Shutdown(false)
 	}
 	return manager.cleanCluster(name)
 }

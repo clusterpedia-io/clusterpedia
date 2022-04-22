@@ -2,6 +2,7 @@ package clustersynchro
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
+	workerNum     int
 	queue         queue.EventQueue
 	listerWatcher cache.ListerWatcher
 	cache         *informer.ResourceVersionStorage
@@ -42,8 +44,8 @@ type ResourceSynchro struct {
 
 	status atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
 
-	runlock sync.Mutex
-	stoped  chan struct{}
+	startlock sync.Mutex
+	stoped    chan struct{}
 
 	closeOnce sync.Once
 	ctx       context.Context
@@ -61,10 +63,10 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 		cluster:         cluster,
 		syncResource:    syncResource,
 		storageResource: storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version),
-
-		listerWatcher: lw,
-		cache:         rvcache,
-		queue:         queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
+		workerNum:       1,
+		listerWatcher:   lw,
+		cache:           rvcache,
+		queue:           queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
 
 		storage:       storage,
 		convertor:     convertor,
@@ -77,7 +79,6 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 
 		stoped: make(chan struct{}),
 	}
-	close(synchro.stoped)
 
 	example := &unstructured.Unstructured{}
 	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
@@ -91,25 +92,75 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	return synchro
 }
 
-func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
+func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
+	go func() {
+		select {
+		case <-shutdown:
+			synchro.Close()
+		case <-synchro.closer:
+		}
+	}()
+
+	// make `synchro.Start` runable
+	close(synchro.stoped)
+
+	var waitGroup sync.WaitGroup
+	for i := 0; i < synchro.workerNum; i++ {
+		waitGroup.Add(1)
+
+		go wait.Until(func() {
+			defer waitGroup.Done()
+			synchro.processResources()
+		}, time.Second, synchro.closer)
+	}
+	waitGroup.Wait()
+
+	synchro.startlock.Lock()
+	<-synchro.stoped
+	synchro.startlock.Unlock()
+
+	status := clusterv1alpha2.ClusterResourceSyncCondition{
+		Status:             clusterv1alpha2.SyncStatusStop,
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	}
+	synchro.status.Store(status)
+
+	close(synchro.closed)
+}
+
+func (synchro *ResourceSynchro) Close() <-chan struct{} {
+	synchro.closeOnce.Do(func() {
+		close(synchro.closer)
+		synchro.queue.Close()
+		synchro.cancel()
+	})
+	return synchro.closed
+}
+
+func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
+	synchro.startlock.Lock()
+	stoped := synchro.stoped // avoid race
+	synchro.startlock.Unlock()
 	for {
 		select {
 		case <-stopCh:
 			return
 		case <-synchro.closer:
 			return
-		case <-synchro.stoped:
+		case <-stoped:
 		}
 
 		var dorun bool
 		func() {
-			synchro.runlock.Lock()
-			defer synchro.runlock.Unlock()
+			synchro.startlock.Lock()
+			defer synchro.startlock.Unlock()
 
 			select {
 			case <-stopCh:
+				stoped = nil
 				return
 			case <-synchro.closer:
+				stoped = nil
 				return
 			default:
 			}
@@ -120,6 +171,8 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 				synchro.stoped = make(chan struct{})
 			default:
 			}
+
+			stoped = synchro.stoped
 		}()
 
 		if dorun {
@@ -128,6 +181,13 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 	}
 
 	defer close(synchro.stoped)
+	select {
+	case <-stopCh:
+		return
+	case <-synchro.closer:
+		return
+	default:
+	}
 
 	informerStopCh := make(chan struct{})
 	go func() {
@@ -154,18 +214,10 @@ func (synchro *ResourceSynchro) Run(stopCh <-chan struct{}) {
 
 	status = clusterv1alpha2.ClusterResourceSyncCondition{
 		Status:             clusterv1alpha2.SyncStatusStop,
+		Reason:             "Pause",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
-}
-
-func (synchro *ResourceSynchro) Close() <-chan struct{} {
-	synchro.closeOnce.Do(func() {
-		close(synchro.closer)
-		synchro.queue.Close()
-		synchro.cancel()
-	})
-	return synchro.closed
 }
 
 const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
@@ -221,34 +273,6 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 }
 
 func (synchro *ResourceSynchro) OnSync(obj interface{}) {
-}
-
-func (synchro *ResourceSynchro) runStorager(shutdown <-chan struct{}) {
-	go func() {
-		select {
-		case <-shutdown:
-			synchro.Close()
-		case <-synchro.closer:
-		}
-	}()
-
-	synchro.storager(1)
-}
-
-func (synchro *ResourceSynchro) storager(worker int) {
-	var waitGroup sync.WaitGroup
-	for i := 0; i < worker; i++ {
-		waitGroup.Add(1)
-
-		go wait.Until(func() {
-			defer waitGroup.Done()
-
-			synchro.processResources()
-		}, time.Second, synchro.closer)
-	}
-
-	waitGroup.Wait()
-	close(synchro.closed)
 }
 
 func (synchro *ResourceSynchro) processResources() {
@@ -322,7 +346,7 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		err = synchro.deleteResource(obj)
 	}
 
-	if err != nil {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		o, _ := meta.Accessor(obj)
 		klog.ErrorS(err, "Failed to handler resource",
 			"cluster", synchro.cluster,
