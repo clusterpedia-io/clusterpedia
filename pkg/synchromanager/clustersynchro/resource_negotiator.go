@@ -46,6 +46,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 			if mapper == nil || len(syncVersions) == 0 {
 				continue
 			}
+			syncGR = mapper.Resource.GroupResource()
 
 			groupResourceStatus.addResource(syncGR, mapper.GroupVersionKind.Kind, mapper.Scope.Name() == meta.RESTScopeNameNamespace)
 			for _, version := range syncVersions {
