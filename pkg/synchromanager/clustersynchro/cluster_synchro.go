@@ -43,8 +43,7 @@ type ClusterSynchro struct {
 	runResourceSynchroCh  chan struct{}
 	stopResourceSynchroCh chan struct{}
 
-	waitGroup                wait.Group
-	resourceSynchroWaitGroup wait.Group
+	waitGroup wait.Group
 
 	resourceSynchroLock sync.RWMutex
 	handlerStopCh       chan struct{}
@@ -182,22 +181,16 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 
 	select {
 	case <-shutdown:
-		s.Shutdown(true, false)
+		s.Shutdown(true)
 	case <-s.closer:
 	}
 	<-s.closed
 }
 
-func (s *ClusterSynchro) Shutdown(updateReadyCondition, waitResourceSynchro bool) {
+func (s *ClusterSynchro) Shutdown(updateReadyCondition bool) {
 	s.closeOnce.Do(func() {
 		close(s.closer)
 	})
-
-	if waitResourceSynchro {
-		// wait for all resource synchros to shutdown,
-		// to ensure that no more data is synchronized to the storage
-		s.resourceSynchroWaitGroup.Wait()
-	}
 
 	s.waitGroup.Wait()
 
@@ -308,7 +301,7 @@ func (s *ClusterSynchro) setSyncResources() {
 				config.convertor,
 				resourceStorage,
 			)
-			s.resourceSynchroWaitGroup.StartWithChannel(s.closer, synchro.runStorager)
+			s.waitGroup.StartWithChannel(s.closer, synchro.Run)
 			s.storageResourceSynchros.Store(storageGVR, synchro)
 
 			// After the synchronizer is successfully created,
@@ -319,7 +312,7 @@ func (s *ClusterSynchro) setSyncResources() {
 				select {
 				case <-s.handlerStopCh:
 				default:
-					go synchro.Run(s.handlerStopCh)
+					go synchro.Start(s.handlerStopCh)
 				}
 			}
 		}
