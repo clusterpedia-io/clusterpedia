@@ -141,7 +141,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	condition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterReadyCondition,
 		Status:             metav1.ConditionFalse,
-		Reason:             "Pending",
+		Reason:             clusterv1alpha2.PendingReason,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.readyCondition.Store(condition)
@@ -202,8 +202,8 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition bool) {
 		}
 		condition := metav1.Condition{
 			Type:               clusterv1alpha2.ClusterReadyCondition,
-			Status:             metav1.ConditionUnknown,
-			Reason:             "ClusterSynchroStop",
+			Status:             metav1.ConditionFalse,
+			Reason:             clusterv1alpha2.ClusterSynchroStopReason,
 			Message:            message,
 			LastTransitionTime: metav1.Now(),
 		}
@@ -442,7 +442,7 @@ func (s *ClusterSynchro) clusterStatusUpdater() {
 	for range s.updateStatusCh {
 		status := s.genClusterStatus()
 		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
-			klog.ErrorS(err, "Failed to update cluster status", "cluster", s.name, status.Conditions[0].Reason)
+			klog.ErrorS(err, "Failed to update cluster ready condition and sync resources status", "cluster", s.name, "conditions", status.Conditions)
 		}
 	}
 }
@@ -496,9 +496,22 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 
 	version := s.version.Load().(version.Info).GitVersion
 	readyCondition := s.readyCondition.Load().(metav1.Condition)
+
+	var conditions []metav1.Condition
+	conditions = append(conditions, readyCondition)
+	if readyCondition.Reason == clusterv1alpha2.ClusterSynchroStopReason {
+		synchroCondition := metav1.Condition{
+			Type:    clusterv1alpha2.ClusterSynchroCondition,
+			Reason:  clusterv1alpha2.ClusterSynchroStopReason,
+			Status:  metav1.ConditionFalse,
+			Message: "",
+		}
+		conditions = append(conditions, synchroCondition)
+	}
+
 	return &clusterv1alpha2.ClusterStatus{
 		Version:       version,
-		Conditions:    []metav1.Condition{readyCondition},
+		Conditions:    conditions,
 		SyncResources: statuses,
 	}
 }

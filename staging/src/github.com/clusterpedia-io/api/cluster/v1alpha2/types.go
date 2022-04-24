@@ -17,6 +17,12 @@ const (
 	InvalidConfigConditionReason = "InvalidConfig"
 	InitialFailedConditionReason = "InitialFailed"
 	RunningConditionReason       = "Running"
+
+	HealthyReason            = "Healthy"
+	PendingReason            = "Pending"
+	UnhealthyReason          = "Unhealthy"
+	NotReachableReason       = "NotReachable"
+	ClusterSynchroStopReason = "ClusterSynchroStop"
 )
 
 // +genclient

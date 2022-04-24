@@ -32,11 +32,11 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		condition := metav1.Condition{
 			Type:    clusterv1alpha2.ClusterReadyCondition,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Unhealthy",
+			Reason:  clusterv1alpha2.UnhealthyReason,
 			Message: "cluster health responded without ok",
 		}
 		if err != nil {
-			condition.Reason = "NotReachable"
+			condition.Reason = clusterv1alpha2.NotReachableReason
 			condition.Message = err.Error()
 		}
 
@@ -56,7 +56,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	condition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterReadyCondition,
 		Status:             metav1.ConditionTrue,
-		Reason:             "Healthy",
+		Reason:             clusterv1alpha2.HealthyReason,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	defer func() {
