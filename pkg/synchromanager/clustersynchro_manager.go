@@ -315,10 +315,7 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 			return err
 		}
 
-		if equality.Semantic.DeepEqual(&cluster.Status, status) {
-			return nil
-		}
-
+		lastStatus := cluster.Status
 		cluster = cluster.DeepCopy()
 
 		if status.Version != "" {
@@ -329,6 +326,10 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 		}
 		for _, condition := range status.Conditions {
 			meta.SetStatusCondition(&cluster.Status.Conditions, condition)
+		}
+
+		if equality.Semantic.DeepEqual(cluster.Status, lastStatus) {
+			return nil
 		}
 
 		_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
