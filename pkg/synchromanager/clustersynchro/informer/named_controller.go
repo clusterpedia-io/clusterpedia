@@ -4,21 +4,63 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 )
 
+type Config struct {
+	// The queue for your objects - has to be a DeltaFIFO due to
+	// assumptions in the implementation. Your Process() function
+	// should accept the output of this Queue's Pop() method.
+	cache.Queue
+
+	// Something that can list and watch your objects.
+	cache.ListerWatcher
+
+	// Something that can process a popped Deltas.
+	Process cache.ProcessFunc
+
+	// ObjectType is an example object of the type this controller is
+	// expected to handle.  Only the type needs to be right, except
+	// that when that is `unstructured.Unstructured` the object's
+	// `"apiVersion"` and `"kind"` must also be right.
+	ObjectType runtime.Object
+
+	// FullResyncPeriod is the period at which ShouldResync is considered.
+	FullResyncPeriod time.Duration
+
+	// ShouldResync is periodically used by the reflector to determine
+	// whether to Resync the Queue. If ShouldResync is `nil` or
+	// returns true, it means the reflector should proceed with the
+	// resync.
+	ShouldResync cache.ShouldResyncFunc
+
+	// If true, when Process() returns an error, re-enqueue the object.
+	// TODO: add interface to let you inject a delay/backoff or drop
+	//       the object completely if desired. Pass the object in
+	//       question to this interface as a parameter.  This is probably moot
+	//       now that this functionality appears at a higher level.
+	RetryOnError bool
+
+	// Called whenever the ListAndWatch drops the connection with an error.
+	WatchErrorHandler WatchErrorHandler
+
+	// WatchListPageSize is the requested chunk size of initial and relist watch lists.
+	WatchListPageSize int64
+}
+
 type controller struct {
 	name   string
-	config cache.Config
+	config Config
 
 	reflectorMutex sync.RWMutex
-	reflector      *cache.Reflector
+	reflector      *Reflector
 	queue          cache.Queue
 }
 
-func NewNamedController(name string, config *cache.Config) cache.Controller {
+func NewNamedController(name string, config *Config) cache.Controller {
 	return &controller{
 		name:   name,
 		config: *config,
@@ -31,13 +73,17 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 		<-stopCh
 		c.config.Queue.Close()
 	}()
-	r := cache.NewNamedReflector(
+
+	r := NewNamedReflector(
 		c.name,
 		c.config.ListerWatcher,
 		c.config.ObjectType,
 		c.config.Queue,
 		c.config.FullResyncPeriod,
 	)
+	if c.config.WatchErrorHandler != nil {
+		r.watchErrorHandler = c.config.WatchErrorHandler
+	}
 	r.ShouldResync = c.config.ShouldResync
 	r.WatchListPageSize = c.config.WatchListPageSize
 

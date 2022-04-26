@@ -19,7 +19,7 @@ type resourceVersionInformer struct {
 	listerWatcher cache.ListerWatcher
 }
 
-func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *ResourceVersionStorage, exampleObject runtime.Object, handler ResourceEventHandler) ResourceVersionInformer {
+func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *ResourceVersionStorage, exampleObject runtime.Object, handler ResourceEventHandler, errorHandler WatchErrorHandler) ResourceVersionInformer {
 	if name == "" {
 		panic("name is required")
 	}
@@ -32,7 +32,7 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		handler:       handler,
 	}
 
-	config := &cache.Config{
+	config := &Config{
 		ListerWatcher: lw,
 		ObjectType:    exampleObject,
 		RetryOnError:  false,
@@ -45,6 +45,7 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 			KnownObjects:          informer.storage,
 			EmitDeltaTypeReplaced: true,
 		}),
+		WatchErrorHandler: errorHandler,
 	}
 	informer.controller = NewNamedController(informer.name, config)
 	return informer
