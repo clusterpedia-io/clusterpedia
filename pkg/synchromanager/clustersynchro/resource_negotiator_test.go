@@ -187,7 +187,7 @@ func TestGroupResourceStatus_LoadGroupResourcesStatuses(t *testing.T) {
 	})
 
 	statuses := status.LoadGroupResourcesStatuses()
-	expired := []clusterv1alpha2.ClusterGroupResourcesStatus{
+	expected := []clusterv1alpha2.ClusterGroupResourcesStatus{
 		{
 			Group: "apps",
 			Resources: []clusterv1alpha2.ClusterResourceStatus{
@@ -214,7 +214,7 @@ func TestGroupResourceStatus_LoadGroupResourcesStatuses(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, statuses, expired)
+	assert.Equal(t, expected, statuses)
 }
 
 func TestGroupResourceStatus_UpdateSyncCondition(t *testing.T) {
@@ -242,7 +242,7 @@ func TestGroupResourceStatus_UpdateSyncCondition(t *testing.T) {
 	status.UpdateSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.SyncStatusStop, "", "")
 
 	statuses := status.LoadGroupResourcesStatuses()
-	expired := []clusterv1alpha2.ClusterGroupResourcesStatus{
+	expected := []clusterv1alpha2.ClusterGroupResourcesStatus{
 		{
 			Group: "apps",
 			Resources: []clusterv1alpha2.ClusterResourceStatus{
@@ -264,7 +264,7 @@ func TestGroupResourceStatus_UpdateSyncCondition(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, statuses, expired)
+	assert.Equal(t, expected, statuses)
 }
 
 func TestGroupResourceStatus_DeleteVersion(t *testing.T) {
@@ -300,7 +300,7 @@ func TestGroupResourceStatus_DeleteVersion(t *testing.T) {
 	status.DeleteVersion(configmapGR.WithVersion("v1"))
 
 	statuses := status.LoadGroupResourcesStatuses()
-	expired := []clusterv1alpha2.ClusterGroupResourcesStatus{
+	expected := []clusterv1alpha2.ClusterGroupResourcesStatus{
 		{
 			Group: "apps",
 			Resources: []clusterv1alpha2.ClusterResourceStatus{
@@ -318,7 +318,7 @@ func TestGroupResourceStatus_DeleteVersion(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, statuses, expired)
+	assert.Equal(t, expected, statuses)
 }
 
 func TestGroupResourceStatus_GetStorageGVRToSyncGVRs(t *testing.T) {
@@ -351,11 +351,11 @@ func TestGroupResourceStatus_GetStorageGVRToSyncGVRs(t *testing.T) {
 	})
 
 	gvrSetMap := status.GetStorageGVRToSyncGVRs()
-	expired := map[schema.GroupVersionResource]GVRSet{
+	expected := map[schema.GroupVersionResource]GVRSet{
 		deploymentGR.WithVersion("v1"): NewGVRSet(deploymentGR.WithVersion("v1"), deploymentGR.WithVersion("v1beta1")),
 		podGR.WithVersion("v1"):        NewGVRSet(podGR.WithVersion("v1")),
 	}
-	assert.Equal(t, gvrSetMap, expired)
+	assert.Equal(t, expected, gvrSetMap)
 }
 
 func TestGroupResourceStatus_Merge(t *testing.T) {
@@ -399,7 +399,7 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 	addition := status.Merge(old)
 
 	statuses := status.LoadGroupResourcesStatuses()
-	expired := []clusterv1alpha2.ClusterGroupResourcesStatus{
+	expected := []clusterv1alpha2.ClusterGroupResourcesStatus{
 		{
 			Group: "apps",
 			Resources: []clusterv1alpha2.ClusterResourceStatus{
@@ -444,8 +444,8 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, statuses, expired)
+	assert.Equal(t, expected, statuses)
 
-	expiredAddition := NewGVRSet(podGR.WithVersion("v1"), deploymentGR.WithVersion("v1beta2"))
-	assert.Equal(t, addition, expiredAddition)
+	expectedAddition := NewGVRSet(podGR.WithVersion("v1"), deploymentGR.WithVersion("v1beta2"))
+	assert.Equal(t, expectedAddition, addition)
 }
