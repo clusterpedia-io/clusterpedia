@@ -61,3 +61,16 @@ jobs:
         with:
           go-version: 1.17
       - run: make test
+  e2e-test:
+    name: E2e test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.17
+      - name: Run e2e test
+        run: ./test/test.sh
