@@ -10,8 +10,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
+	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/rest"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/scheme"
@@ -87,11 +89,11 @@ func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (
 		return nil, apierrors.NewBadRequest("If searching by owner uid or name, then the cluster must be specified")
 	}
 
-	/*
-		TODO(iceber): add feature gates to set default option
-		if options.WithRemainingCount == nil {
+	if options.WithRemainingCount == nil {
+		if enabled := utilfeature.DefaultFeatureGate.Enabled(genericfeatures.RemainingItemCount); enabled {
+			options.WithRemainingCount = &enabled
 		}
-	*/
+	}
 
 	objs := s.NewList()
 	if err := s.Storage.List(ctx, objs, options); err != nil {
