@@ -8,17 +8,22 @@ Currently, it is only a tentative roadmap and the specific schedule depends on t
 * Support for more complex field selector filtering [#40](https://github.com/clusterpedia-io/clusterpedia/issues/40)
 * Support for searching resources by owner [#49](https://github.com/clusterpedia-io/clusterpedia/issues/49)
 * Migrate and sync sub repo to a separate repo [#47](https://github.com/clusterpedia-io/clusterpedia/issues/47)
-* `PediaCluster` supports referencing cluster authentication information from other resources
+* `PediaCluster` supports authentication of cluster via kubeconfig
 * Add CI workloads for pr and pull
 * Deploying with helm
 
 ## Q2 2022
 * E2E tests
+* Support synchronization of all CRD resources [#111](https://github.com/clusterpedia-io/clusterpedia/issues/111)
+* Use the template to configure the pediaCluster resource [#150](https://github.com/clusterpedia-io/clusterpedia/issues/150)
+* The internalstorage allows passing a piece of SQL to support more flexible query requirements [#151](https://github.com/clusterpedia-io/clusterpedia/issues/151)
+* Support for automatic discovery and synchronization (Create, Delete, Update cluster authentication information) of other resources that represent `Cluster`(other multi-cloud projects) to `PediaCluster` [proposal](/README.md#discovery)
 * Support for the plug-in storage layer
-* Support for custom resource columns when accepting data in Table format
-* Support for automatic synchronization (Create, Delete, Update cluster authentication information) of other resources that represent `Cluster` to `PediaCluster` [proposal](/README.md#discovery)
 
-## Others
+## Q3 2022
+* Support for custom resource columns when accepting data in Table format
 * Support for requests with relevant resources
 * The `Default Storage Layer` supports for Custom Collection Resource
+
+## Others
 * Support for [more control over cluster resources](/README.md#complicated), such as watch/create/update/delete operations
