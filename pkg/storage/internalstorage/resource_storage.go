@@ -273,9 +273,6 @@ func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListO
 		}
 		ownerQuery = buildOwnerQueryByName(db, opts.ClusterNames[0], ownerNamespaces, opts.OwnerGroupResource, opts.OwnerName, opts.OwnerSeniority)
 
-	case opts.ExtraLabelSelector != nil:
-		return applyExtraLabelSelectorToResourceQuery_Owner(db, query, opts)
-
 	default:
 		return query, nil
 	}
@@ -288,46 +285,9 @@ func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListO
 	return query, nil
 }
 
-// DEPRECATED: The owner search label of internalstorage is deprecated by "search.clusterpedia.io/owner-*"
 const (
-	SearchLabelOwnerKey       = "internalstorage.clusterpedia.io/owner-key"
-	SearchLabelOwnerUID       = "internalstorage.clusterpedia.io/owner-uid"
-	SearchLabelOwnerSeniority = "internalstorage.clusterpedia.io/owner-seniority"
-	SearchLabelFuzzyName      = "internalstorage.clusterpedia.io/fuzzy-name"
+	SearchLabelFuzzyName = "internalstorage.clusterpedia.io/fuzzy-name"
 )
-
-// DEPRECATED
-func applyExtraLabelSelectorToResourceQuery_Owner(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
-	if opts.ExtraLabelSelector == nil {
-		return query, nil
-	}
-
-	var seniority int
-	if value, found := opts.ExtraLabelSelector.RequiresExactMatch(SearchLabelOwnerSeniority); found {
-		if v, err := strconv.Atoi(value); err == nil {
-			seniority = v
-		}
-	}
-
-	if owner, found := opts.ExtraLabelSelector.RequiresExactMatch(SearchLabelOwnerUID); found {
-		// TODO(iceber): add validate or return error?
-		if len(opts.ClusterNames) != 1 {
-			return query, nil
-		}
-
-		cluster := opts.ClusterNames[0]
-		parent := buildOwnerQueryByUID(db, cluster, owner, seniority)
-		if _, ok := parent.(string); ok {
-			query = query.Where("owner_uid = ?", parent)
-		} else {
-			query = query.Where("owner_uid IN (?)", parent)
-		}
-	}
-
-	// TODO(iceber): support search by owner key(namespace/name)
-
-	return query, nil
-}
 
 func applyExtraLabelSelectorToResourceQuery_FuzzySearch(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
 	if opts.ExtraLabelSelector == nil {
