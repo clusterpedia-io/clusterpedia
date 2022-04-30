@@ -31,9 +31,10 @@ import (
 type CustomResourceController struct {
 	lock sync.RWMutex
 
-	groups    sets.String
-	versions  map[schema.GroupResource][]string
-	resources map[schema.GroupResource]*meta.RESTMapping
+	groups     sets.String
+	versions   map[schema.GroupResource][]string
+	resources  map[schema.GroupResource]*meta.RESTMapping
+	restmapper meta.RESTMapper
 
 	pluralToSingular map[schema.GroupResource]schema.GroupResource
 	singularToPlural map[schema.GroupResource]schema.GroupResource
@@ -44,7 +45,7 @@ type CustomResourceController struct {
 	syncAll bool
 }
 
-func NewCustomResourceController(cluster string, config *rest.Config, version string) (*CustomResourceController, error) {
+func NewCustomResourceController(cluster string, config *rest.Config, version string, restmapper meta.RESTMapper) (*CustomResourceController, error) {
 	client, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return nil, err
@@ -66,6 +67,7 @@ func NewCustomResourceController(cluster string, config *rest.Config, version st
 	lw := cache.NewListWatchFromClient(getter, "customresourcedefinitions", metav1.NamespaceNone, fields.Nothing())
 	controller := &CustomResourceController{
 		groups:           sets.NewString(),
+		restmapper:       restmapper,
 		resources:        make(map[schema.GroupResource]*meta.RESTMapping),
 		versions:         make(map[schema.GroupResource][]string),
 		pluralToSingular: make(map[schema.GroupResource]schema.GroupResource),
@@ -201,6 +203,12 @@ func (c *CustomResourceController) removeResource(obj interface{}) {
 	c.lock.Lock()
 	delete(c.versions, groupResource)
 	delete(c.resources, groupResource)
+
+	// trigger to reload cluster DynamicRESTMapper
+	_, err = c.restmapper.KindsFor(groupResource.WithVersion("NeverExists"))
+	if !meta.IsNoMatchError(err) {
+		klog.ErrorS(err, "Failed to trigger mapper reload", "resource", groupResource.String())
+	}
 
 	if singularGR := c.pluralToSingular[groupResource]; !singularGR.Empty() {
 		delete(c.singularToPlural, singularGR)
