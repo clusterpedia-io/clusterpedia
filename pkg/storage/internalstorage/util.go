@@ -135,9 +135,13 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 	// Due to performance reasons, the default order by is not set.
 	// https://github.com/clusterpedia-io/clusterpedia/pull/44
 	for _, orderby := range opts.OrderBy {
-		if supportedOrderByFields.Has(orderby.Field) {
+		field := orderby.Field
+		if supportedOrderByFields.Has(field) {
+			if field == "resource_version"{
+				field = "CAST(resource_version as decimal)"
+			}
 			column := clause.OrderByColumn{
-				Column: clause.Column{Name: orderby.Field, Raw: true},
+				Column: clause.Column{Name: field, Raw: true},
 				Desc:   orderby.Desc,
 			}
 			query = query.Order(column)
