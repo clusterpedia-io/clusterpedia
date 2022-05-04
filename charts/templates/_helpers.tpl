@@ -68,7 +68,7 @@ Return the proper Docker Image Registry Secret Names
 
 {{- define "clusterpedia.storage.password" -}}
 {{- if eq .Values.storageInstallMode "external" }}
-     {{- required "Please set correct storage password!" .Values.externalStorage.password -}}
+     {{- required "Please set correct storage password!" .Values.externalStorage.password | b64enc -}}
 {{- else -}}
      {{- if eq (include "clusterpedia.storage.type" .) "postgres" }}
           {{- if not (empty .Values.global.postgresql.auth.username) -}}
