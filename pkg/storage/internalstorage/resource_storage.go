@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -237,11 +236,6 @@ func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal
 			return nil, err
 		}
 
-		query, err = applyExtraLabelSelectorToResourceQuery_FuzzySearch(db, query, opts)
-		if err != nil {
-			return nil, err
-		}
-
 		if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
 			amount = new(int64)
 			query = query.Count(amount)
@@ -282,29 +276,5 @@ func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListO
 	} else {
 		query = query.Where("owner_uid IN (?)", ownerQuery)
 	}
-	return query, nil
-}
-
-const (
-	SearchLabelFuzzyName = "internalstorage.clusterpedia.io/fuzzy-name"
-)
-
-func applyExtraLabelSelectorToResourceQuery_FuzzySearch(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
-	if opts.ExtraLabelSelector == nil {
-		return query, nil
-	}
-
-	if requirements, selectable := opts.ExtraLabelSelector.Requirements(); selectable {
-		for _, require := range requirements {
-			switch require.Key() {
-			case SearchLabelFuzzyName:
-				for _, name := range require.Values().List() {
-					name = strings.TrimSpace(name)
-					query = query.Where("name LIKE ?", fmt.Sprintf(`%%%s%%`, name))
-				}
-			}
-		}
-	}
-
 	return query, nil
 }
