@@ -198,21 +198,16 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 		close(informerStopCh)
 	}()
 
-	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.SyncStatusSyncing,
-		LastTransitionTime: metav1.Now().Rfc3339Copy(),
-	}
-	synchro.status.Store(status)
-
 	informer.NewResourceVersionInformer(
 		synchro.cluster,
 		synchro.listerWatcher,
 		synchro.cache,
 		synchro.example,
 		synchro,
+		ErrorHandlerForResourceSynchro(synchro),
 	).Run(informerStopCh)
 
-	status = clusterv1alpha2.ClusterResourceSyncCondition{
+	status := clusterv1alpha2.ClusterResourceSyncCondition{
 		Status:             clusterv1alpha2.SyncStatusStop,
 		Reason:             "Pause",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
@@ -399,4 +394,24 @@ func (synchro *ResourceSynchro) deleteResource(obj runtime.Object) error {
 
 func (synchro *ResourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
 	return synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
+}
+
+func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErrorHandler {
+	return func(r *informer.Reflector, err error) {
+		status := clusterv1alpha2.ClusterResourceSyncCondition{
+			Status:             clusterv1alpha2.SyncStatusSyncing,
+			Reason:             "",
+			LastTransitionTime: metav1.Now().Rfc3339Copy(),
+		}
+		if err != nil {
+			status = clusterv1alpha2.ClusterResourceSyncCondition{
+				Status:             clusterv1alpha2.SyncStatusError,
+				Reason:             "ResourceWatchFailed",
+				Message:            err.Error(),
+				LastTransitionTime: metav1.Now().Rfc3339Copy(),
+			}
+			informer.DefaultWatchErrorHandler(r, err)
+		}
+		synchro.status.Store(status)
+	}
 }

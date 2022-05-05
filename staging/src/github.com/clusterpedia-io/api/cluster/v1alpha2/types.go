@@ -13,6 +13,7 @@ const (
 	SyncStatusSyncing = "Syncing"
 	SyncStatusStop    = "Stop"
 	SyncStatusUnknown = "Unknown"
+	SyncStatusError   = "Error"
 
 	InvalidConfigConditionReason = "InvalidConfig"
 	InitialFailedConditionReason = "InitialFailed"
