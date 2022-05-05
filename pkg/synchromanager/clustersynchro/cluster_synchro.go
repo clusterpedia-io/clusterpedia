@@ -121,7 +121,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	}
 	synchro.version.Store(*version)
 
-	customResourceController, err := NewCustomResourceController(name, config, crdGVRs[0].Version)
+	customResourceController, err := NewCustomResourceController(name, config, crdGVRs[0].Version, mapper)
 	if err != nil {
 		return nil, err
 	}
