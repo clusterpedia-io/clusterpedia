@@ -149,8 +149,8 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 	if in.ExtraLabelSelector != nil {
 		out.ExtraLabelSelector = in.ExtraLabelSelector.DeepCopySelector()
 	}
-	if in.ExtraQuery != nil {
-		in, out := &in.ExtraQuery, &out.ExtraQuery
+	if in.URLQuery != nil {
+		in, out := &in.URLQuery, &out.URLQuery
 		*out = make(url.Values, len(*in))
 		for key, val := range *in {
 			var outVal []string

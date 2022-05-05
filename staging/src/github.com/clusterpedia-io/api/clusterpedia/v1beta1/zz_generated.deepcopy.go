@@ -6,6 +6,8 @@
 package v1beta1
 
 import (
+	url "net/url"
+
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -109,6 +111,21 @@ func (in *ListOptions) DeepCopyInto(out *ListOptions) {
 		in, out := &in.WithRemainingCount, &out.WithRemainingCount
 		*out = new(bool)
 		**out = **in
+	}
+	if in.urlQuery != nil {
+		in, out := &in.urlQuery, &out.urlQuery
+		*out = make(url.Values, len(*in))
+		for key, val := range *in {
+			var outVal []string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
+				*out = make([]string, len(*in))
+				copy(*out, *in)
+			}
+			(*out)[key] = outVal
+		}
 	}
 	return
 }

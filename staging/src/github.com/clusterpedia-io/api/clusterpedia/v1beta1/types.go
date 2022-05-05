@@ -1,6 +1,8 @@
 package v1beta1
 
 import (
+	"net/url"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -46,6 +48,8 @@ type ListOptions struct {
 
 	// +optional
 	WithRemainingCount *bool `json:"withRemainingCount,omitempty"`
+
+	urlQuery url.Values
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
