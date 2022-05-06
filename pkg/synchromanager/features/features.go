@@ -19,12 +19,14 @@ const (
 	//
 	// owner: @iceber
 	// alpha: v0.0.9
+	// beta: v0.3.0
 	PruneManagedFields featuregate.Feature = "PruneManagedFields"
 
 	// PruneLastAppliedConfiguration is a feature gate for the ClusterSynchro to prune `LastAppliedConfiguration` of the resource
 	//
 	// owner: @iceber
 	// alpha: v0.0.9
+	// beta: v0.3.0
 	PruneLastAppliedConfiguration featuregate.Feature = "PruneLastAppliedConfiguration"
 
 	// AllowSyncAllCustomResources is a feature gate for the ClusterSynchro to allow syncing of all custom resources
@@ -41,7 +43,7 @@ func init() {
 // defaultClusterSynchroManagerFeatureGates consists of all known clustersynchro-manager-specific feature keys.
 // To add a new feature, define a key for it above and add it here.
 var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	PruneManagedFields:            {Default: false, PreRelease: featuregate.Alpha},
-	PruneLastAppliedConfiguration: {Default: false, PreRelease: featuregate.Alpha},
+	PruneManagedFields:            {Default: true, PreRelease: featuregate.Beta},
+	PruneLastAppliedConfiguration: {Default: true, PreRelease: featuregate.Beta},
 	AllowSyncAllCustomResources:   {Default: false, PreRelease: featuregate.Alpha},
 }
