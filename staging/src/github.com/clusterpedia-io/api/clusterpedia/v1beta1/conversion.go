@@ -183,6 +183,10 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 	if out.Before.Before(out.Since) {
 		return fmt.Errorf("Invalid Query, Since is after Before")
 	}
+	if len(in.urlQuery) > 0 {
+		// Out URLQuery will not be modified, so deepcopy is not used here.
+		out.URLQuery = in.urlQuery
+	}
 	return nil
 }
 
@@ -229,6 +233,8 @@ func Convert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOptions,
 	if err := metav1.Convert_url_Values_To_v1_ListOptions(in, &out.ListOptions, s); err != nil {
 		return err
 	}
+	// Save the native query parameters for use by listoptions.
+	out.urlQuery = *in
 
 	return autoConvert_url_Values_To_v1beta1_ListOptions(in, out, s)
 }

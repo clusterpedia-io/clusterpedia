@@ -68,7 +68,7 @@ type ListOptions struct {
 	ExtraLabelSelector labels.Selector
 
 	// +k8s:conversion-fn:drop
-	ExtraQuery url.Values
+	URLQuery url.Values
 
 	// RelatedResources []schema.GroupVersionKind
 }

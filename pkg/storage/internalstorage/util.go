@@ -14,8 +14,13 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+)
+
+const (
+	URLQueryWhereSQL = "whereSQL"
 )
 
 var (
@@ -53,6 +58,15 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 
 	if opts.Before != nil {
 		query = query.Where("created_at < ?", opts.Before.Time.UTC())
+	}
+
+	if utilfeature.DefaultMutableFeatureGate.Enabled(AllowRawSQLQuery) {
+		if len(opts.URLQuery[URLQueryWhereSQL]) > 0 {
+			// TODO: prevent SQL injection.
+			// If a string of numbers is passed in from SQL, the query will be taken as ID by default.
+			// If the SQL contains English letter, it will be passed in as column.
+			query = query.Where(opts.URLQuery[URLQueryWhereSQL][0])
+		}
 	}
 
 	if opts.LabelSelector != nil {
@@ -137,7 +151,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 	for _, orderby := range opts.OrderBy {
 		field := orderby.Field
 		if supportedOrderByFields.Has(field) {
-			if field == "resource_version"{
+			if field == "resource_version" {
 				field = "CAST(resource_version as decimal)"
 			}
 			column := clause.OrderByColumn{
