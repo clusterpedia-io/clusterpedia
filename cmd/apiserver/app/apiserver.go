@@ -10,6 +10,7 @@ import (
 	"k8s.io/component-base/term"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
+	_ "github.com/clusterpedia-io/clusterpedia/pkg/storage/internalstorage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
 

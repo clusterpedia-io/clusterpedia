@@ -17,6 +17,7 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
+	_ "github.com/clusterpedia-io/clusterpedia/pkg/storage/internalstorage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
