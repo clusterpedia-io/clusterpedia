@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -20,6 +21,8 @@ import (
 )
 
 const (
+	SearchLabelFuzzyName = "internalstorage.clusterpedia.io/fuzzy-name"
+
 	URLQueryWhereSQL = "whereSQL"
 )
 
@@ -91,6 +94,20 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 					continue
 				}
 				query = query.Where(jsonQuery)
+			}
+		}
+	}
+
+	if opts.ExtraLabelSelector != nil {
+		if requirements, selectable := opts.ExtraLabelSelector.Requirements(); selectable {
+			for _, require := range requirements {
+				switch require.Key() {
+				case SearchLabelFuzzyName:
+					for _, name := range require.Values().List() {
+						name = strings.TrimSpace(name)
+						query = query.Where("name LIKE ?", fmt.Sprintf(`%%%s%%`, name))
+					}
+				}
 			}
 		}
 	}
