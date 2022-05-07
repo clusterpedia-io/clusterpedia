@@ -138,7 +138,7 @@ type ClusterResourceSyncCondition struct {
 	StorageVersion string `json:"storageVersion,omitempty"`
 
 	// optional
-	StorageResource string `json:"storrageResource,omitempty"`
+	StorageResource string `json:"storageResource,omitempty"`
 
 	// +required
 	// +kubebuilder:validation:Required

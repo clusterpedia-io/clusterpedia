@@ -184,10 +184,10 @@ spec:
                                   type: string
                                 status:
                                   type: string
-                                storageVersion:
+                                storageResource:
                                   description: optional
                                   type: string
-                                storrageResource:
+                                storageVersion:
                                   description: optional
                                   type: string
                                 syncResource:
