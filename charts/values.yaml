@@ -41,6 +41,7 @@ commonAnnotations: {}
 ## if PV resources are not required, set it to None!
 ## if defined, will create the pv on the node.
 persistenceMatchNode: ""
+
 ## @param config of clusterpedia log
 log:
   ## @param enabled indicates whether enable log
@@ -130,6 +131,14 @@ apiserver:
   tolerations:
      - key: node-role.kubernetes.io/master
        operator: Exists
+  ## @param featureGate to apiserver
+  featureGates:
+    ## Allow apiservers to show a count of remaining items in the response to a chunking list request.
+    RemainingItemCount: false
+    ## @param AllowRawSQLQuery is a feature gate for the apiserver to allow querying by the raw sql.
+    ## owner: @cleverhu
+    ## alpha: v0.3.0
+    AllowRawSQLQuery: false
 
 ## clustersynchro manager config
 clustersynchroManager:
@@ -180,6 +189,22 @@ clustersynchroManager:
   tolerations:
     - key: node-role.kubernetes.io/master
       operator: Exists
+  ## @param featureGate to clustersynchro
+  featureGates:
+    ## @param PruneManagedFields is a feature gate for ClusterSynchro to prune `ManagedFields` of the resource
+    ## owner: @iceber
+    ## alpha: v0.0.9
+    ## beta: v0.3.0
+    PruneManagedFields: true
+    ## @param PruneLastAppliedConfiguration is a feature gate for the ClusterSynchro to prune `LastAppliedConfiguration` of the resource
+    ## owner: @iceber
+    ## alpha: v0.0.9
+    ## beta: v0.3.0
+    PruneLastAppliedConfiguration: true
+    ## @param AllowSyncAllCustomResources is a feature gate for the ClusterSynchro to allow syncing of all custom resources
+    ## owner: @iceber
+    ## alpha: v0.3.0
+    AllowSyncAllCustomResources: false
 
 ## @section PostgreSQL Parameters
 ##

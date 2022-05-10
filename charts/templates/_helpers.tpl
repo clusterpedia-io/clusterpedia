@@ -46,6 +46,38 @@ Return the proper Docker Image Registry Secret Names
 {{ include "common.images.pullSecrets" (dict "images" (list .Values.clustersynchroManager.image) "global" .Values.global) }}
 {{- end -}}
 
+{{- define "clusterpedia.apiserver.featureGates" -}}
+     {{- if (not (empty .Values.apiserver.featureGates)) }}
+          {{- $featureGatesFlag := "" -}}
+          {{- range $key, $value := .Values.apiserver.featureGates -}}
+               {{- if $value }}
+                    {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value "," -}}
+               {{- end -}}
+          {{- end -}}
+
+          {{- if gt (len $featureGatesFlag) 0 }}
+               {{- $featureGatesFlag := trimSuffix "," $featureGatesFlag  | nospace -}}
+               {{- printf "%s=%s" "--feature-gates" $featureGatesFlag -}}
+          {{- end -}}
+     {{- end -}}
+{{- end -}}
+
+{{- define "clusterpedia.clustersynchroManager.featureGates" -}}
+     {{- if (not (empty .Values.clustersynchroManager.featureGates)) }}
+          {{- $featureGatesFlag := "" -}}
+          {{- range $key, $value := .Values.clustersynchroManager.featureGates -}}
+               {{- if $value }}
+                    {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value ","  -}}
+               {{- end -}}
+          {{- end -}}
+
+          {{- if gt (len $featureGatesFlag) 0 }}
+               {{- $featureGatesFlag := trimSuffix "," $featureGatesFlag  | nospace -}}
+               {{- printf "%s=%s" "--feature-gates" $featureGatesFlag -}}
+          {{- end -}}
+     {{- end -}}
+{{- end -}}
+
 {{- define "clusterpedia.storage.user" -}}
 {{- if eq .Values.storageInstallMode "external" }}
      {{- required "Please set correct storage user!" .Values.externalStorage.user -}}
