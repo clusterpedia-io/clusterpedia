@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -17,14 +16,16 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ResourceNegotiator struct {
-	name                  string
-	restmapper            meta.RESTMapper
-	resourceStorageConfig *storageconfig.StorageConfigFactory
-
-	customResourceController *CustomResourceController
+	name                   string
+	discoveryManager       *discovery.DynamicDiscoveryManager
+	resourceStorageConfig  *storageconfig.StorageConfigFactory
+	syncAllCustomResources bool
 }
 
 type syncConfig struct {
@@ -34,21 +35,41 @@ type syncConfig struct {
 	storageConfig *storage.ResourceStorageConfig
 }
 
+func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
+	negotiator.syncAllCustomResources = sync
+}
+
 func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clusterv1alpha2.ClusterGroupResources) (*GroupResourceStatus, map[schema.GroupVersionResource]syncConfig) {
+	if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
+		syncResources = negotiator.discoveryManager.AttachAllCustomResourcesToSyncResources(syncResources)
+	}
+
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
-
-	syncResources = negotiator.customResourceController.HandleSyncResources(syncResources)
 	for _, groupResources := range syncResources {
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
-			mapper, syncVersions, isLegacyResource := negotiator.negotiatorVersions(syncGR, groupResources.Versions)
-			if mapper == nil || len(syncVersions) == 0 {
+			apiResource, supportedVersions := negotiator.discoveryManager.GetAPIResourceAndVersions(syncGR)
+			if apiResource == nil || len(supportedVersions) == 0 {
 				continue
 			}
-			syncGR = mapper.Resource.GroupResource()
+			if !discovery.HasListAndWatchVerbs(*apiResource) {
+				klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", "not support List and Watch", "verbs", apiResource.Verbs)
+				continue
+			}
 
-			groupResourceStatus.addResource(syncGR, mapper.GroupVersionKind.Kind, mapper.Scope.Name() == meta.RESTScopeNameNamespace)
+			syncGK := schema.GroupKind{Group: syncGR.Group, Kind: apiResource.Kind}
+			syncVersions, unstructured, err := negotiateSyncVersions(syncGK, groupResources.Versions, supportedVersions)
+			if err != nil {
+				klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", err)
+				continue
+			}
+
+			// resource is case-insensitive and can be singular or plural
+			// set syncGR.Resource to plural
+			syncGR.Resource = apiResource.Name
+
+			groupResourceStatus.addResource(syncGR, apiResource.Kind, apiResource.Namespaced)
 			for _, version := range syncVersions {
 				syncGVR := syncGR.WithVersion(version)
 				syncCondition := clusterv1alpha2.ClusterResourceSyncCondition{
@@ -79,14 +100,14 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 
 				var convertor runtime.ObjectConvertor
 				if syncGVR != storageGVR {
-					if isLegacyResource {
+					if unstructured {
 						convertor = resourcescheme.LegacyResourceScheme
 					} else {
 						convertor = resourcescheme.CustomResourceScheme
 					}
 				}
 				storageResourceSyncConfigs[storageGVR] = syncConfig{
-					kind:          mapper.GroupVersionKind.Kind,
+					kind:          apiResource.Kind,
 					syncResource:  syncGVR,
 					storageConfig: storageConfig,
 					convertor:     convertor,
@@ -95,50 +116,6 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 		}
 	}
 	return groupResourceStatus, storageResourceSyncConfigs
-}
-
-func (negotiator *ResourceNegotiator) negotiatorVersions(resource schema.GroupResource, wantVersions []string) (*meta.RESTMapping, []string, bool) {
-	var mapper *meta.RESTMapping
-	var supportedVersions []string
-	isLegacyResource := resourcescheme.LegacyResourceScheme.IsGroupRegistered(resource.Group)
-	if !isLegacyResource {
-		mapper, supportedVersions = negotiator.customResourceController.GetRESTMappingAndVersions(resource)
-	}
-
-	if mapper == nil {
-		gvks, err := negotiator.restmapper.KindsFor(resource.WithVersion(""))
-		if err != nil {
-			klog.ErrorS(fmt.Errorf("Cluster not supported resource: %v", err), "Skip resource sync", "cluster", negotiator.name, "resource", resource)
-			return nil, nil, isLegacyResource
-		}
-
-		var gk schema.GroupKind
-		supportedVersions = make([]string, 0, len(gvks))
-		for _, gvk := range gvks {
-			// if syncGR.Group == "", gvk.Group maybe not equal to ""
-			if gvk.Group == resource.Group {
-				gk = gvk.GroupKind()
-				supportedVersions = append(supportedVersions, gvk.Version)
-			}
-		}
-		if len(supportedVersions) == 0 {
-			klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", "The supported versions are empty")
-			return nil, nil, isLegacyResource
-		}
-
-		mapper, err = negotiator.restmapper.RESTMapping(gk, supportedVersions[0])
-		if err != nil {
-			klog.ErrorS(err, "Skip resource sync", "cluster", negotiator.name, "resource", resource)
-			return nil, nil, isLegacyResource
-		}
-	}
-
-	syncVersions, isLegacyResource, err := negotiateSyncVersions(mapper.GroupVersionKind.GroupKind(), wantVersions, supportedVersions)
-	if err != nil {
-		klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", err)
-		return nil, nil, isLegacyResource
-	}
-	return mapper, syncVersions, isLegacyResource
 }
 
 func negotiateSyncVersions(kind schema.GroupKind, wantVersions []string, supportedVersions []string) ([]string, bool, error) {
