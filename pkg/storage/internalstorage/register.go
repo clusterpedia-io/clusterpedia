@@ -10,6 +10,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4/stdlib"
 	"github.com/jinzhu/configor"
+	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -19,6 +20,7 @@ import (
 )
 
 const StorageName = "internal"
+const defaultLogFileName = "/var/log/clusterpedia/internalstorage.log"
 
 func init() {
 	storage.RegisterStorageFactoryFunc(StorageName, NewStorageFactory)
@@ -86,14 +88,17 @@ func newLogger(cfg *Config) (logger.Interface, error) {
 	if cfg.Log.Stdout {
 		logWriter = os.Stdout
 	} else {
-		if err := os.MkdirAll("/var/log/clusterpedia", 0644); err != nil {
-			return nil, fmt.Errorf("mkdir log dir error: %w", err)
+		lumberjackLogger := cfg.Log.Logger
+		if lumberjackLogger == nil {
+			lumberjackLogger = &lumberjack.Logger{
+				Filename:   defaultLogFileName,
+				MaxSize:    100, // megabytes
+				MaxBackups: 1,
+			}
+		} else if lumberjackLogger.Filename == "" {
+			lumberjackLogger.Filename = defaultLogFileName
 		}
-
-		logWriter, err = os.OpenFile("/var/log/clusterpedia/internalstorage.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-		if err != nil {
-			return nil, fmt.Errorf("open storage log file error: %w", err)
-		}
+		logWriter = lumberjackLogger
 	}
 
 	return logger.New(log.New(logWriter, "", log.LstdFlags), loggerConfig), nil
