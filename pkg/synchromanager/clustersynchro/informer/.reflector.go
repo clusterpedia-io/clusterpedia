@@ -1,4 +1,20 @@
-package informer
+/*
+Copyright 2014 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cache
 
 import (
 	"context"
@@ -22,7 +38,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/pager"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/trace"
@@ -48,9 +63,9 @@ type Reflector struct {
 	// The GVK of the object we expect to place in the store if unstructured.
 	expectedGVK *schema.GroupVersionKind
 	// The destination to sync up with the watch source
-	store cache.Store
+	store Store
 	// listerWatcher is used to perform lists and watches.
-	listerWatcher cache.ListerWatcher
+	listerWatcher ListerWatcher
 
 	// backoff manages backoff of ListWatch
 	backoffManager wait.BackoffManager
@@ -105,7 +120,6 @@ type ResourceVersionUpdater interface {
 // Implementations of this handler may display the error message in other
 // ways. Implementations should return quickly - any expensive processing
 // should be offloaded.
-
 type WatchErrorHandler func(r *Reflector, err error)
 
 // DefaultWatchErrorHandler is the default implementation of WatchErrorHandler
@@ -133,8 +147,8 @@ var (
 
 // NewNamespaceKeyedIndexerAndReflector creates an Indexer and a Reflector
 // The indexer is configured to key on namespace
-func NewNamespaceKeyedIndexerAndReflector(lw cache.ListerWatcher, expectedType interface{}, resyncPeriod time.Duration) (indexer cache.Indexer, reflector *Reflector) {
-	indexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+func NewNamespaceKeyedIndexerAndReflector(lw ListerWatcher, expectedType interface{}, resyncPeriod time.Duration) (indexer Indexer, reflector *Reflector) {
+	indexer = NewIndexer(MetaNamespaceKeyFunc, Indexers{NamespaceIndex: MetaNamespaceIndexFunc})
 	reflector = NewReflector(lw, expectedType, indexer, resyncPeriod)
 	return indexer, reflector
 }
@@ -149,12 +163,12 @@ func NewNamespaceKeyedIndexerAndReflector(lw cache.ListerWatcher, expectedType i
 // "yes".  This enables you to use reflectors to periodically process
 // everything as well as incrementally processing the things that
 // change.
-func NewReflector(lw cache.ListerWatcher, expectedType interface{}, store cache.Store, resyncPeriod time.Duration) *Reflector {
+func NewReflector(lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
 	return NewNamedReflector(naming.GetNameFromCallsite(internalPackages...), lw, expectedType, store, resyncPeriod)
 }
 
 // NewNamedReflector same as NewReflector, but with a specified name for logging
-func NewNamedReflector(name string, lw cache.ListerWatcher, expectedType interface{}, store cache.Store, resyncPeriod time.Duration) *Reflector {
+func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
 	realClock := &clock.RealClock{}
 	r := &Reflector{
 		name:          name,
@@ -244,7 +258,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	options := metav1.ListOptions{ResourceVersion: r.relistResourceVersion()}
 
 	if err := func() error {
-		initTrace := trace.New("Reflector ListAndWatch", trace.Field{Key: "name", Value: r.name})
+		initTrace := trace.New("Reflector ListAndWatch", trace.Field{"name", r.name})
 		defer initTrace.LogIfLong(10 * time.Second)
 		var list runtime.Object
 		var paginatedResult bool
@@ -448,9 +462,6 @@ func (r *Reflector) watchHandler(start time.Time, w watch.Interface, resourceVer
 	// Stopping the watcher should be idempotent and if we return from this function there's no way
 	// we're coming back in with the same watch interface.
 	defer w.Stop()
-
-	// call watchErrorHandler setting ClusterResourceSyncCondition status to Syncing
-	r.watchErrorHandler(r, nil)
 
 loop:
 	for {
