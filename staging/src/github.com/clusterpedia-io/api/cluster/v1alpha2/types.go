@@ -70,6 +70,9 @@ type ClusterSpec struct {
 
 	// +optional
 	SyncAllCustomResources bool `json:"syncAllCustomResources,omitempty"`
+
+	// +optional
+	SyncResourcesRefName string `json:"syncResourcesRefName,omitempty"`
 }
 
 type ClusterGroupResources struct {
@@ -193,4 +196,32 @@ type PediaClusterList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []PediaCluster `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope="Cluster"
+type ClusterSyncResources struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +optional
+	Spec ClusterSyncResourcesSpec `json:"spec,omitempty"`
+}
+
+type ClusterSyncResourcesSpec struct {
+	// +required
+	SyncResources []ClusterGroupResources `json:"syncResources"`
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterSyncResourcesList struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ClusterSyncResources `json:"items"`
 }

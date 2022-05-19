@@ -12,12 +12,17 @@ import (
 
 type ClusterV1alpha2Interface interface {
 	RESTClient() rest.Interface
+	ClusterSyncResourcesGetter
 	PediaClustersGetter
 }
 
 // ClusterV1alpha2Client is used to interact with features provided by the cluster.clusterpedia.io group.
 type ClusterV1alpha2Client struct {
 	restClient rest.Interface
+}
+
+func (c *ClusterV1alpha2Client) ClusterSyncResources() ClusterSyncResourcesInterface {
+	return newClusterSyncResources(c)
 }
 
 func (c *ClusterV1alpha2Client) PediaClusters() PediaClusterInterface {

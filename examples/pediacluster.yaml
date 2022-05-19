@@ -9,9 +9,9 @@ spec:
   certData:
   keyData:
   syncResources:
-  - group: apps
-    resources:
-     - deployments
-  - group: ""
-    resources:
-     - pods
+    - group: apps
+      resources:
+        - deployments
+    - group: ""
+      resources:
+        - pods

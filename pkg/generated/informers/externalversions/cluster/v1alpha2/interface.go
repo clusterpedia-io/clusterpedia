@@ -8,6 +8,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterSyncResources returns a ClusterSyncResourcesInformer.
+	ClusterSyncResources() ClusterSyncResourcesInformer
 	// PediaClusters returns a PediaClusterInformer.
 	PediaClusters() PediaClusterInformer
 }
@@ -21,6 +23,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterSyncResources returns a ClusterSyncResourcesInformer.
+func (v *version) ClusterSyncResources() ClusterSyncResourcesInformer {
+	return &clusterSyncResourcesInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // PediaClusters returns a PediaClusterInformer.

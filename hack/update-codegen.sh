@@ -52,13 +52,15 @@ client-gen \
     --input-base="github.com/clusterpedia-io/api" \
     --input="cluster/v1alpha2" \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset" \
-    --clientset-name="versioned"
+    --clientset-name="versioned" \
+    --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
 
 echo "Generating with lister-gen"
 lister-gen \
     --go-header-file="hack/boilerplate.go.txt" \
     --input-dirs="github.com/clusterpedia-io/api/cluster/v1alpha2" \
-    --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/listers"
+    --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/listers" \
+    --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
 
 echo "Generating with informer-gen"
 informer-gen \
@@ -67,7 +69,8 @@ informer-gen \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers" \
     --versioned-clientset-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned" \
     --listers-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/listers" \
-    --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers"
+    --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers" \
+    --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
 
 #echo "Generating with openapi-gen"
 #openapi-gen \
