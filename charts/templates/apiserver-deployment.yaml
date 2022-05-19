@@ -37,6 +37,9 @@ spec:
         - /usr/local/bin/apiserver
         - --secure-port=443
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        {{- with (include "clusterpedia.apiserver.featureGates" .) }}
+        - {{ . }}
+        {{- end }}
         - -v=3
         {{- if .Values.apiserver.resources }}
         resources: {{- toYaml .Values.apiserver.resources | nindent 12 }}

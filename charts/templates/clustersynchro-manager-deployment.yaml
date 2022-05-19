@@ -37,7 +37,9 @@ spec:
         - /usr/local/bin/clustersynchro-manager
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
         - --leader-elect-resource-namespace={{ .Release.Namespace }}
-        - --feature-gates=PruneManagedFields=true,PruneLastAppliedConfiguration=true
+        {{- with (include "clusterpedia.clustersynchroManager.featureGates" .) }}
+        - {{ . }}
+        {{- end }}
         {{- if .Values.clustersynchroManager.resources }}
         resources: {{- toYaml .Values.clustersynchroManager.resources | nindent 12 }}
         {{- end }}
