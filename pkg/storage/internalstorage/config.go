@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
 )
 
@@ -39,11 +40,12 @@ type Config struct {
 }
 
 type LogConfig struct {
-	Stdout                    bool          `yaml:"stdout"`
-	Level                     string        `yaml:"level"`
-	Colorful                  bool          `yaml:"colorful"`
-	SlowThreshold             time.Duration `yaml:"slowThreshold" default:"200ms"`
-	IgnoreRecordNotFoundError bool          `yaml:"ignoreRecordNotFoundError"`
+	Stdout                    bool               `yaml:"stdout"`
+	Level                     string             `yaml:"level"`
+	Colorful                  bool               `yaml:"colorful"`
+	SlowThreshold             time.Duration      `yaml:"slowThreshold" default:"200ms"`
+	IgnoreRecordNotFoundError bool               `yaml:"ignoreRecordNotFoundError"`
+	Logger                    *lumberjack.Logger `yaml:"logger"`
 }
 
 type MySQLConfig struct {
