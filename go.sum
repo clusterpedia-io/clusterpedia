@@ -489,6 +489,7 @@ github.com/k3s-io/kubernetes/staging/src/k8s.io/component-helpers v1.22.4-k3s1/g
 github.com/k3s-io/kubernetes/staging/src/k8s.io/controller-manager v1.22.4-k3s1/go.mod h1:aPin+82yKPEirDGBtNS/4fcc3a1QVOqdt6zzxOlrfc8=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/cri-api v1.22.4-k3s1/go.mod h1:2XpB3zC24SSO5mhWTzWwBHrO5rO19ncH1bdqS+VuQsI=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/csi-translation-lib v1.22.4-k3s1/go.mod h1:B1gPUSbK2PVSnkxCgw/fmDckzQU6UCuyl670XFbEw6Q=
+github.com/k3s-io/kubernetes/staging/src/k8s.io/kube-aggregator v1.22.4-k3s1 h1:SrNTndYl3oDd76FpfQetCAvb3KS/Q7LYRR4n1sUhxLQ=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/kube-aggregator v1.22.4-k3s1/go.mod h1:E98zh+3BdGMr4K4vdHQ++RDyPm29QUkHh/28KlKUS2M=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/kube-controller-manager v1.22.4-k3s1/go.mod h1:46iKO45TZat/zvPyqe8TjLLrTS/U/nGB92Ft63PEPF0=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/kube-proxy v1.22.4-k3s1/go.mod h1:6mEp02ABsuOeeBuUrrol78v9LYysX7Z8CZOMFlkPOOI=
