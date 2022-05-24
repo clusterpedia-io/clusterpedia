@@ -26,6 +26,7 @@ require (
 	k8s.io/code-generator v0.22.2
 	k8s.io/component-base v0.22.4
 	k8s.io/klog/v2 v2.9.0
+	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kubernetes v1.22.4
 	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/controller-runtime v0.10.3

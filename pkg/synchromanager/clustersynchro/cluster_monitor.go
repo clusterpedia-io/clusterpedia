@@ -63,14 +63,10 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		synchro.readyCondition.Store(condition)
 	}()
 
-	version, err := synchro.clusterclient.Discovery().ServerVersion()
-	if err == nil {
-		synchro.version.Store(*version)
-		return
+	if _, err := synchro.dynamicDiscoveryManager.GetAndFetchServerVersion(); err != nil {
+		condition.Message = err.Error()
+		klog.ErrorS(err, "Failed to get cluster version", "cluster", synchro.name)
 	}
-
-	condition.Message = err.Error()
-	klog.ErrorS(err, "Failed to get cluster version", "cluster", synchro.name)
 }
 
 // TODO(iceber): resolve for more detailed error

@@ -2,7 +2,6 @@ package clustersynchro
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -11,17 +10,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 )
 
@@ -52,14 +50,15 @@ type ClusterSynchro struct {
 	storageResourceVersionCaches map[schema.GroupVersionResource]*informer.ResourceVersionStorage
 	storageResourceSynchros      sync.Map
 
-	syncResources            atomic.Value // []clusterv1alpha2.ClusterGroupResources
-	setSyncResourcesCh       chan struct{}
-	customResourceController *CustomResourceController
+	crdController           *CRDController
+	apiServiceController    *APIServiceController
+	dynamicDiscoveryManager *discovery.DynamicDiscoveryManager
 
+	syncResources       atomic.Value // []clusterv1alpha2.ClusterGroupResources
+	setSyncResourcesCh  chan struct{}
 	resourceNegotiator  *ResourceNegotiator
 	groupResourceStatus atomic.Value // *GroupResourceStatus
 
-	version        atomic.Value // version.Info
 	readyCondition atomic.Value // metav1.Condition
 }
 
@@ -70,35 +69,37 @@ type ClusterStatusUpdater interface {
 func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
 	clusterclient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create a cluster client: %v", err)
+		return nil, fmt.Errorf("failed to create a cluster client: %w", err)
 	}
 
-	mapper, err := apiutil.NewDynamicRESTMapper(config)
+	dynamicDiscoveryManager, err := discovery.NewDynamicDiscoveryManager(name, clusterclient.Discovery())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create restmapper: %v", err)
+		return nil, fmt.Errorf("failed to create dynamic discovery manager: %w", err)
 	}
 
-	crdGVRs, err := mapper.ResourcesFor(schema.GroupVersionResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list CRD GVRS: %v", err)
-	}
-	if len(crdGVRs) == 0 {
-		return nil, errors.New("not match crd version")
+	_, crdVersions := dynamicDiscoveryManager.GetAPIResourceAndVersions(schema.GroupResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
+	if len(crdVersions) == 0 {
+		return nil, fmt.Errorf("not match crd version")
 	}
 
-	version, err := clusterclient.Discovery().ServerVersion()
+	crdController, err := NewCRDController(name, config, crdVersions[0], dynamicDiscoveryManager)
 	if err != nil {
-		return nil, fmt.Errorf("failed to discovery ServerVersion: %v", err)
+		return nil, fmt.Errorf("failed to create crd controller: %w", err)
+	}
+
+	apiServiceController, err := NewAPIServiceController(name, config, dynamicDiscoveryManager)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create apiservice controller: %w", err)
 	}
 
 	listWatchFactory, err := informer.NewDynamicListerWatcherFactory(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create watcher: %v", err)
+		return nil, fmt.Errorf("failed to create lister watcher factory: %w", err)
 	}
 
 	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource versions: %v", err)
+		return nil, fmt.Errorf("failed to get resource versions from storage: %w", err)
 	}
 
 	synchro := &ClusterSynchro{
@@ -110,6 +111,10 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		clusterclient:        clusterclient,
 		listerWatcherFactory: listWatchFactory,
 
+		dynamicDiscoveryManager: dynamicDiscoveryManager,
+		crdController:           crdController,
+		apiServiceController:    apiServiceController,
+
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
 
@@ -119,19 +124,11 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 		storageResourceVersionCaches: make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage),
 	}
-	synchro.version.Store(*version)
-
-	customResourceController, err := NewCustomResourceController(name, config, crdGVRs[0].Version, mapper)
-	if err != nil {
-		return nil, err
-	}
-	synchro.customResourceController = customResourceController
 
 	synchro.resourceNegotiator = &ResourceNegotiator{
-		name:                     name,
-		restmapper:               mapper,
-		resourceStorageConfig:    storageconfig.NewStorageConfigFactory(),
-		customResourceController: customResourceController,
+		name:                  name,
+		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
+		discoveryManager:      dynamicDiscoveryManager,
 	}
 	synchro.groupResourceStatus.Store(NewGroupResourceStatus())
 
@@ -166,18 +163,30 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 }
 
 func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
-	go s.customResourceController.Run(s.closer)
+	// TODO(iceber): The start and stop of dynamicDiscoveryManager, crdController, apiServiceController
+	// should be controlled by cluster healthy.
+	go s.dynamicDiscoveryManager.Run(s.closer)
 	go func() {
-		if cache.WaitForNamedCacheSync(s.name+"-CustomResourceController", s.closer, s.customResourceController.HasSynced) {
-			s.customResourceController.SetResourceMutationHandler(s.resetSyncResources)
-			s.resetSyncResources()
+		// First initialize the information for the custom resources to dynamic discovery manager
+		go s.crdController.Run(s.closer)
+		if !cache.WaitForNamedCacheSync(s.name+"-CRD-Controller", s.closer, s.crdController.HasSynced) {
+			return
 		}
+
+		go s.apiServiceController.Run(s.closer)
+		if !cache.WaitForNamedCacheSync(s.name+"-APIService-Controllers", s.closer, s.apiServiceController.HasSynced) {
+			return
+		}
+
+		s.dynamicDiscoveryManager.SetResourceMutationHandler(s.resetSyncResources)
+		s.resetSyncResources()
+
+		go s.syncResourcesSetter()
 	}()
 
 	s.waitGroup.Start(s.monitor)
 	s.waitGroup.Start(s.resourceSynchroRunner)
 	go s.clusterStatusUpdater()
-	go s.syncResourcesSetter()
 
 	select {
 	case <-shutdown:
@@ -218,7 +227,7 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition bool) {
 
 func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources, syncAllCustomResources bool) {
 	s.syncResources.Store(syncResources)
-	s.customResourceController.SetSyncAllCustomResources(syncAllCustomResources)
+	s.resourceNegotiator.SetSyncAllCustomResources(syncAllCustomResources)
 	s.resetSyncResources()
 }
 
@@ -243,12 +252,6 @@ func (s *ClusterSynchro) syncResourcesSetter() {
 func (s *ClusterSynchro) setSyncResources() {
 	syncResources := s.syncResources.Load().([]clusterv1alpha2.ClusterGroupResources)
 	if syncResources == nil {
-		return
-	}
-
-	// TODO: HasSynced needs to lock the informer.queue, replace it with a more lightweight way
-	if !s.customResourceController.HasSynced() {
-		klog.InfoS("custom resource controller is not synced", "cluster", s.name)
 		return
 	}
 
@@ -494,7 +497,6 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 		}
 	}
 
-	version := s.version.Load().(version.Info).GitVersion
 	readyCondition := s.readyCondition.Load().(metav1.Condition)
 
 	var conditions []metav1.Condition
@@ -510,7 +512,7 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 	}
 
 	return &clusterv1alpha2.ClusterStatus{
-		Version:       version,
+		Version:       s.dynamicDiscoveryManager.StorageVersion().GitVersion,
 		Conditions:    conditions,
 		SyncResources: statuses,
 	}
