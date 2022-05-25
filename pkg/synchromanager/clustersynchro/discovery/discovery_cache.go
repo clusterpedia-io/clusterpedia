@@ -291,6 +291,29 @@ func (c *DynamicDiscoveryManager) getAPIResourceAndVersionsLocked(gr schema.Grou
 	return c.apiResources[gr], c.resourceVersions[gr]
 }
 
+type GroupType int
+
+const (
+	KubeResource GroupType = iota
+	CustomResource
+	AggregatorResource
+	UnknownResource
+)
+
+func (c *DynamicDiscoveryManager) ResolveGroupType(group string) GroupType {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if c.customResourceGroups.Has(group) {
+		return CustomResource
+	} else if c.aggregatorGroups.Has(group) {
+		return AggregatorResource
+	} else if _, ok := c.groupVersions[group]; ok {
+		return KubeResource
+	}
+	return UnknownResource
+}
+
 func (c *DynamicDiscoveryManager) GetAPIResourceAndVersions(resource schema.GroupResource) (*metav1.APIResource, []string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -352,11 +375,36 @@ func (c *DynamicDiscoveryManager) GetAllResourcesAsSyncResources() []clusterv1al
 		resource := clusterv1alpha2.ClusterGroupResources{
 			Group:     gr.Group,
 			Resources: []string{gr.Resource},
-			Versions:  c.resourceVersions[gr],
+			Versions:  []string{"*"},
 		}
 		syncResources = append(syncResources, resource)
 	}
 	return syncResources
+}
+
+func (c *DynamicDiscoveryManager) GetResourcesAsSyncResourcesByGroup(group string) *clusterv1alpha2.ClusterGroupResources {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	sortedResources := make([]schema.GroupResource, 0)
+	for gr := range c.resourceVersions {
+		if gr.Group == group {
+			sortedResources = append(sortedResources, gr)
+		}
+	}
+	if len(sortedResources) == 0 {
+		return nil
+	}
+
+	// not set syncResources.Versions, the caller determines the version of the resource to be synchronized.
+	syncResources := clusterv1alpha2.ClusterGroupResources{
+		Group:     group,
+		Resources: make([]string, 0, len(sortedResources)),
+	}
+	sortGroupResources(sortedResources)
+	for _, gr := range sortedResources {
+		syncResources.Resources = append(syncResources.Resources, gr.Resource)
+	}
+	return &syncResources
 }
 
 func (c *DynamicDiscoveryManager) AttachAllCustomResourcesToSyncResources(resources []clusterv1alpha2.ClusterGroupResources) []clusterv1alpha2.ClusterGroupResources {
@@ -381,8 +429,8 @@ func (c *DynamicDiscoveryManager) AttachAllCustomResourcesToSyncResources(resour
 	for _, gr := range sortedCustomResources {
 		resource := clusterv1alpha2.ClusterGroupResources{
 			Group:     gr.Group,
-			Versions:  c.resourceVersions[gr],
 			Resources: []string{gr.Resource},
+			Versions:  []string{"*"},
 		}
 		syncResources = append(syncResources, resource)
 	}

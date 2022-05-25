@@ -19,11 +19,10 @@ type DynamicDiscoveryManager struct {
 	discovery discovery.DiscoveryInterface
 	version   atomic.Value // version.Info
 
-	watchLock                      sync.Mutex
-	stopCh                         <-chan struct{}
-	versionWatchStopCh             chan struct{}
-	aggregatorResourceWatchStopCh  chan struct{}
-	versionWatchByResurceTypeWatch bool
+	watchLock                     sync.Mutex
+	stopCh                        <-chan struct{}
+	versionWatchStopCh            chan struct{}
+	aggregatorResourceWatchStopCh chan struct{}
 
 	lock          sync.RWMutex
 	groupVersions map[string][]string
@@ -119,68 +118,20 @@ run:
 	<-stopCh
 }
 
-func (c *DynamicDiscoveryManager) SetWatchServerVersion() {
+func (c *DynamicDiscoveryManager) SetWatchServerVersion(watch bool) {
 	c.watchLock.Lock()
 	defer c.watchLock.Unlock()
+	if !watch {
+		c.stopServerVersionWatcher()
+		return
+	}
 
-	c.versionWatchByResurceTypeWatch = false
 	if c.versionWatchStopCh != nil {
 		return
 	}
 
 	c.versionWatchStopCh = make(chan struct{})
 	c.startServerVersionWatcher()
-}
-
-func (c *DynamicDiscoveryManager) StopWatchServerVersion() {
-	c.watchLock.Lock()
-	defer c.watchLock.Unlock()
-
-	if c.versionWatchStopCh == nil {
-		return
-	}
-	if c.versionWatchByResurceTypeWatch {
-		// need stop by StopWatchResourceType
-		return
-	}
-
-	close(c.versionWatchStopCh)
-	c.versionWatchStopCh = nil
-}
-
-func (c *DynamicDiscoveryManager) SetWatchResourceType() {
-	c.watchLock.Lock()
-	defer c.watchLock.Unlock()
-	if c.aggregatorResourceWatchStopCh != nil {
-		return
-	}
-	c.aggregatorResourceWatchStopCh = make(chan struct{})
-	c.startAggregatorResourceWatcher()
-
-	if c.versionWatchStopCh != nil {
-		return
-	}
-	c.versionWatchByResurceTypeWatch = true
-	c.versionWatchStopCh = make(chan struct{})
-	c.startServerVersionWatcher()
-}
-
-func (c *DynamicDiscoveryManager) StopWatchResourceType() {
-	c.watchLock.Lock()
-	defer c.watchLock.Unlock()
-
-	if c.aggregatorResourceWatchStopCh == nil {
-		return
-	}
-
-	close(c.aggregatorResourceWatchStopCh)
-	c.aggregatorResourceWatchStopCh = nil
-
-	if c.versionWatchByResurceTypeWatch {
-		close(c.versionWatchStopCh)
-		c.versionWatchStopCh = nil
-		c.versionWatchByResurceTypeWatch = false
-	}
 }
 
 func (c *DynamicDiscoveryManager) startServerVersionWatcher() {
@@ -205,6 +156,29 @@ func (c *DynamicDiscoveryManager) startServerVersionWatcher() {
 	}, 5*time.Minute, stopCh)
 }
 
+func (c *DynamicDiscoveryManager) stopServerVersionWatcher() {
+	if c.versionWatchStopCh == nil {
+		return
+	}
+	close(c.versionWatchStopCh)
+	c.versionWatchStopCh = nil
+}
+
+func (c *DynamicDiscoveryManager) SetWatchAggregatorResourceTypes(watch bool) {
+	c.watchLock.Lock()
+	defer c.watchLock.Unlock()
+	if !watch {
+		c.stopAggregatorResourceWatcher()
+		return
+	}
+
+	if c.aggregatorResourceWatchStopCh != nil {
+		return
+	}
+	c.aggregatorResourceWatchStopCh = make(chan struct{})
+	c.startAggregatorResourceWatcher()
+}
+
 func (c *DynamicDiscoveryManager) startAggregatorResourceWatcher() {
 	if c.stopCh == nil || c.aggregatorResourceWatchStopCh == nil {
 		return
@@ -223,4 +197,13 @@ func (c *DynamicDiscoveryManager) startAggregatorResourceWatcher() {
 	go wait.Until(func() {
 		_ = c.refetchAggregatorGroups()
 	}, 5*time.Minute, stopCh)
+}
+
+func (c *DynamicDiscoveryManager) stopAggregatorResourceWatcher() {
+	if c.aggregatorResourceWatchStopCh == nil {
+		return
+	}
+
+	close(c.aggregatorResourceWatchStopCh)
+	c.aggregatorResourceWatchStopCh = nil
 }
