@@ -398,20 +398,30 @@ func (synchro *ResourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCond
 
 func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErrorHandler {
 	return func(r *informer.Reflector, err error) {
-		status := clusterv1alpha2.ClusterResourceSyncCondition{
-			Status:             clusterv1alpha2.SyncStatusSyncing,
-			Reason:             "",
-			LastTransitionTime: metav1.Now().Rfc3339Copy(),
-		}
 		if err != nil {
-			status = clusterv1alpha2.ClusterResourceSyncCondition{
+			// TODO(iceber): Use `k8s.io/apimachinery/pkg/api/errors` to resolve the error type and update it to `status.Reason`
+			status := clusterv1alpha2.ClusterResourceSyncCondition{
 				Status:             clusterv1alpha2.SyncStatusError,
 				Reason:             "ResourceWatchFailed",
 				Message:            err.Error(),
 				LastTransitionTime: metav1.Now().Rfc3339Copy(),
 			}
+			synchro.status.Store(status)
+
 			informer.DefaultWatchErrorHandler(r, err)
+			return
 		}
-		synchro.status.Store(status)
+
+		// `reflector` sets a default timeout when watching,
+		// then when re-watching the error handler is called agin and the `err` is nil.
+		// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
+		if status := synchro.Status(); status.Status != clusterv1alpha2.SyncStatusSyncing {
+			status = clusterv1alpha2.ClusterResourceSyncCondition{
+				Status:             clusterv1alpha2.SyncStatusSyncing,
+				Reason:             "",
+				LastTransitionTime: metav1.Now().Rfc3339Copy(),
+			}
+			synchro.status.Store(status)
+		}
 	}
 }
