@@ -2,6 +2,8 @@ package informer
 
 import (
 	"context"
+	"math/rand"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,17 +21,24 @@ type DynamicListerWatcherFactory interface {
 	ForResourceWithOptions(namespace string, gvr schema.GroupVersionResource, optionsFunc TweakListOptionsFunc) cache.ListerWatcher
 }
 
+var defaultMinWatchTimeout = 15 * time.Minute
+
 func NewDynamicListerWatcherFactory(config *rest.Config) (DynamicListerWatcherFactory, error) {
 	// check config
 	if _, err := dynamic.NewForConfig(config); err != nil {
 		return nil, err
 	}
 
-	return &listerWatcherFactory{config}, nil
+	// TODO(iceber): support for setting `minWatchTimeout`
+	return &listerWatcherFactory{
+		config:          config,
+		minWatchTimeout: defaultMinWatchTimeout,
+	}, nil
 }
 
 type listerWatcherFactory struct {
-	config *rest.Config
+	config          *rest.Config
+	minWatchTimeout time.Duration
 }
 
 func (f *listerWatcherFactory) ForResource(namespace string, gvr schema.GroupVersionResource) cache.ListerWatcher {
@@ -39,6 +48,10 @@ func (f *listerWatcherFactory) ForResource(namespace string, gvr schema.GroupVer
 			return client.Resource(gvr).Namespace(namespace).List(context.TODO(), options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			// the minWatchTimeout for reflector is [5m, 10m],
+			// set to [f.minWatchTimeout, 2 * f.minWatchTimeout].
+			timeoutSeconds := int64(f.minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
+			options.TimeoutSeconds = &timeoutSeconds
 			return client.Resource(gvr).Namespace(namespace).Watch(context.TODO(), options)
 		},
 	}
