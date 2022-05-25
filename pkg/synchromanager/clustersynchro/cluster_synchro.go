@@ -130,7 +130,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
 		discoveryManager:      dynamicDiscoveryManager,
 	}
-	synchro.groupResourceStatus.Store(NewGroupResourceStatus())
+	synchro.groupResourceStatus.Store((*GroupResourceStatus)(nil))
 
 	synchro.syncResources.Store([]clusterv1alpha2.ClusterGroupResources(nil))
 	synchro.setSyncResourcesCh = make(chan struct{}, 1)
@@ -459,7 +459,28 @@ func (s *ClusterSynchro) updateStatus() {
 }
 
 func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
+	status := &clusterv1alpha2.ClusterStatus{
+		Version: s.dynamicDiscoveryManager.StorageVersion().GitVersion,
+	}
+
+	readyCondition := s.readyCondition.Load().(metav1.Condition)
+	if readyCondition.Reason == clusterv1alpha2.ClusterSynchroStopReason {
+		synchroCondition := metav1.Condition{
+			Type:    clusterv1alpha2.ClusterSynchroCondition,
+			Reason:  clusterv1alpha2.ClusterSynchroStopReason,
+			Status:  metav1.ConditionFalse,
+			Message: "",
+		}
+		status.Conditions = append(status.Conditions, synchroCondition)
+	}
+	status.Conditions = append(status.Conditions, readyCondition)
+
 	groupResourceStatuses := s.groupResourceStatus.Load().(*GroupResourceStatus)
+	if groupResourceStatuses == nil {
+		// syn resources have not been set, not update sync resources
+		return status
+	}
+
 	statuses := groupResourceStatuses.LoadGroupResourcesStatuses()
 	for si, status := range statuses {
 		for ri, resource := range status.Resources {
@@ -496,24 +517,6 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 			}
 		}
 	}
-
-	readyCondition := s.readyCondition.Load().(metav1.Condition)
-
-	var conditions []metav1.Condition
-	conditions = append(conditions, readyCondition)
-	if readyCondition.Reason == clusterv1alpha2.ClusterSynchroStopReason {
-		synchroCondition := metav1.Condition{
-			Type:    clusterv1alpha2.ClusterSynchroCondition,
-			Reason:  clusterv1alpha2.ClusterSynchroStopReason,
-			Status:  metav1.ConditionFalse,
-			Message: "",
-		}
-		conditions = append(conditions, synchroCondition)
-	}
-
-	return &clusterv1alpha2.ClusterStatus{
-		Version:       s.dynamicDiscoveryManager.StorageVersion().GitVersion,
-		Conditions:    conditions,
-		SyncResources: statuses,
-	}
+	status.SyncResources = statuses
+	return status
 }
