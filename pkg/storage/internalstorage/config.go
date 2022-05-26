@@ -16,6 +16,12 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+const (
+	defaultMaxIdleConns    = 10
+	defaultMaxOpenConns    = 100
+	defaultConnMaxLifetime = time.Hour
+)
+
 type Config struct {
 	Type    string `env:"DB_TYPE" required:"true"`
 	Network string `env:"DB_NETWORK"` // Network type, either tcp or unix, Default is tcp
@@ -30,6 +36,8 @@ type Config struct {
 	CertFile     string `yaml:"sslCertFile"`
 	KeyFile      string `yaml:"sslKeyFile"`
 	RootCertFile string `yaml:"sslRootCertFile"`
+
+	ConnPool ConnPoolConfig `yaml:"connPool"`
 
 	MySQL    *MySQLConfig    `yaml:"mysql"`
 	Postgres *PostgresConfig `yaml:"postgres"`
@@ -72,6 +80,12 @@ type MySQLConfig struct {
 
 type PostgresConfig struct{}
 
+type ConnPoolConfig struct {
+	MaxIdleConns    int           `yaml:"maxIdleConns"`
+	MaxOpenConns    int           `yaml:"maxOpenConns"`
+	ConnMaxLifetime time.Duration `yaml:"connMaxLifetime"`
+}
+
 func (cfg *Config) LoggerConfig() (logger.Config, error) {
 	if cfg.Log == nil {
 		return logger.Config{}, nil
@@ -97,6 +111,29 @@ func (cfg *Config) LoggerConfig() (logger.Config, error) {
 		IgnoreRecordNotFoundError: cfg.Log.IgnoreRecordNotFoundError,
 		Colorful:                  cfg.Log.Colorful,
 	}, nil
+}
+
+func (cfg *Config) getConnPoolConfig() (ConnPoolConfig, error) {
+	connPool := ConnPoolConfig{
+		MaxIdleConns:    cfg.ConnPool.MaxIdleConns,
+		MaxOpenConns:    cfg.ConnPool.MaxOpenConns,
+		ConnMaxLifetime: cfg.ConnPool.ConnMaxLifetime,
+	}
+	if connPool.MaxIdleConns <= 0 {
+		connPool.MaxIdleConns = defaultMaxIdleConns
+	}
+	if connPool.MaxOpenConns <= 0 {
+		connPool.MaxOpenConns = defaultMaxOpenConns
+	}
+	lifeTimeSeconds := connPool.ConnMaxLifetime.Seconds()
+	if lifeTimeSeconds > 0 && lifeTimeSeconds < defaultConnMaxLifetime.Seconds() {
+		connPool.ConnMaxLifetime = defaultConnMaxLifetime
+	}
+
+	if connPool.MaxOpenConns < connPool.MaxIdleConns {
+		return ConnPoolConfig{}, fmt.Errorf("connPool maxIdleConns is bigger than maxOpenConns, config detail: %v, please check the config", connPool)
+	}
+	return connPool, nil
 }
 
 func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
