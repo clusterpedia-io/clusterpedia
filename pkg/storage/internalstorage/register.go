@@ -19,8 +19,10 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
-const StorageName = "internal"
-const defaultLogFileName = "/var/log/clusterpedia/internalstorage.log"
+const (
+	StorageName        = "internal"
+	defaultLogFileName = "/var/log/clusterpedia/internalstorage.log"
+)
 
 func init() {
 	storage.RegisterStorageFactoryFunc(StorageName, NewStorageFactory)
@@ -66,6 +68,17 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	if err != nil {
 		return nil, err
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	connPool, err := cfg.getConnPoolConfig()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxIdleConns(connPool.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
+	sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
 
 	if err := db.AutoMigrate(&Resource{}); err != nil {
 		return nil, err
