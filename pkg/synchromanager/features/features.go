@@ -34,6 +34,12 @@ const (
 	// owner: @iceber
 	// alpha: v0.3.0
 	AllowSyncAllCustomResources featuregate.Feature = "AllowSyncAllCustomResources"
+
+	// AllowSyncAllResources is a feature gate for the ClusterSynchro to allow syncing of all resources
+	//
+	// owner: @iceber
+	// alpha: v0.3.0
+	AllowSyncAllResources featuregate.Feature = "AllowSyncAllResources"
 )
 
 func init() {
@@ -46,4 +52,5 @@ var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featurega
 	PruneManagedFields:            {Default: true, PreRelease: featuregate.Beta},
 	PruneLastAppliedConfiguration: {Default: true, PreRelease: featuregate.Beta},
 	AllowSyncAllCustomResources:   {Default: false, PreRelease: featuregate.Alpha},
+	AllowSyncAllResources:         {Default: false, PreRelease: featuregate.Alpha},
 }

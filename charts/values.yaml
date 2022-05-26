@@ -196,15 +196,22 @@ clustersynchroManager:
     ## alpha: v0.0.9
     ## beta: v0.3.0
     PruneManagedFields: true
+
     ## @param PruneLastAppliedConfiguration is a feature gate for the ClusterSynchro to prune `LastAppliedConfiguration` of the resource
     ## owner: @iceber
     ## alpha: v0.0.9
     ## beta: v0.3.0
     PruneLastAppliedConfiguration: true
+
     ## @param AllowSyncAllCustomResources is a feature gate for the ClusterSynchro to allow syncing of all custom resources
     ## owner: @iceber
     ## alpha: v0.3.0
     AllowSyncAllCustomResources: false
+
+    ## @param AllowSyncAllResources is a feature gate for the ClusterSynchro to allow syncing of all resources
+    ## owner: @iceber
+    ## alpha: v0.3.0
+    AllowSyncAllResources: false
 
 ## @section PostgreSQL Parameters
 ##
