@@ -50,7 +50,7 @@ Return the proper Docker Image Registry Secret Names
      {{- if (not (empty .Values.apiserver.featureGates)) }}
           {{- $featureGatesFlag := "" -}}
           {{- range $key, $value := .Values.apiserver.featureGates -}}
-               {{- if $value }}
+               {{- if not (empty (toString $value)) }}
                     {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value "," -}}
                {{- end -}}
           {{- end -}}
@@ -66,7 +66,7 @@ Return the proper Docker Image Registry Secret Names
      {{- if (not (empty .Values.clustersynchroManager.featureGates)) }}
           {{- $featureGatesFlag := "" -}}
           {{- range $key, $value := .Values.clustersynchroManager.featureGates -}}
-               {{- if $value }}
+               {{- if not (empty (toString $value)) }}
                     {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value ","  -}}
                {{- end -}}
           {{- end -}}
