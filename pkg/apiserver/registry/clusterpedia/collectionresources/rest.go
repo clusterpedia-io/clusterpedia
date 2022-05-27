@@ -44,15 +44,17 @@ func NewREST(factory storage.StorageFactory) *REST {
 	for _, cr := range crs {
 		for irt := range cr.ResourceTypes {
 			rt := &cr.ResourceTypes[irt]
-			config, err := configFactory.NewConfig(rt.GroupResource().WithVersion(""))
-			if err != nil {
-				continue
-			}
+			if rt.Resource != "" {
+				config, err := configFactory.NewConfig(rt.GroupResource().WithVersion(""))
+				if err != nil {
+					continue
+				}
 
-			*rt = internal.CollectionResourceType{
-				Group:    config.StorageGroupResource.Group,
-				Version:  config.StorageVersion.Version,
-				Resource: config.StorageGroupResource.Resource,
+				*rt = internal.CollectionResourceType{
+					Group:    config.StorageGroupResource.Group,
+					Version:  config.StorageVersion.Version,
+					Resource: config.StorageGroupResource.Resource,
+				}
 			}
 		}
 
@@ -149,6 +151,9 @@ func (s *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			name := item.Name
 			var grs []string
 			for _, rt := range item.ResourceTypes {
+				if rt.Resource == "" {
+					rt.Resource = "*"
+				}
 				grs = append(grs, rt.GroupResource().String())
 			}
 

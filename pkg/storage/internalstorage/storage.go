@@ -8,7 +8,6 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -69,11 +68,7 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 	if _, ok := collectionResources[cr.Name]; !ok {
 		return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
 	}
-
-	return &CollectionResourceStorage{
-		db:                 s.db,
-		collectionResource: cr.DeepCopy(),
-	}, nil
+	return NewCollectionResourceStorage(s.db, cr), nil
 }
 
 func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
@@ -124,26 +119,4 @@ func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*interna
 		crs = append(crs, cr.DeepCopy())
 	}
 	return crs, nil
-}
-
-var collectionResources = map[string]internal.CollectionResource{
-	"workloads": {
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "workloads",
-		},
-		ResourceTypes: []internal.CollectionResourceType{
-			{
-				Group:    "apps",
-				Resource: "deployments",
-			},
-			{
-				Group:    "apps",
-				Resource: "daemonsets",
-			},
-			{
-				Group:    "apps",
-				Resource: "statefulsets",
-			},
-		},
-	},
 }
