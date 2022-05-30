@@ -40,9 +40,47 @@ func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
 }
 
 func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clusterv1alpha2.ClusterGroupResources) (*GroupResourceStatus, map[schema.GroupVersionResource]syncConfig) {
-	if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
+	var syncAllResources bool
+	var watchKubeVersion, watchAggregatorResourceTypes bool
+	for i, syncResource := range syncResources {
+		if syncResource.Group == "*" {
+			syncAllResources = true
+			watchKubeVersion, watchAggregatorResourceTypes = true, true
+			break
+		}
+
+		groupType := negotiator.discoveryManager.ResolveGroupType(syncResource.Group)
+		if groupType == discovery.AggregatorResource {
+			watchAggregatorResourceTypes = true
+		}
+
+		for _, resource := range syncResource.Resources {
+			if resource == "*" {
+				syncResourcesByGroup := negotiator.discoveryManager.GetResourcesAsSyncResourcesByGroup(syncResource.Group)
+				if syncResourcesByGroup == nil {
+					syncResources[i].Resources = nil
+					klog.InfoS("Skip resource sync", "cluster", negotiator.name, "group", syncResource.Group, "reason", "not match group")
+				} else {
+					syncResourcesByGroup.Versions = syncResource.Versions
+					syncResources[i] = *syncResourcesByGroup
+					if groupType == discovery.KubeResource {
+						watchKubeVersion = true
+					}
+				}
+				break
+			}
+		}
+	}
+
+	if syncAllResources {
+		syncResources = negotiator.discoveryManager.GetAllResourcesAsSyncResources()
+	} else if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
 		syncResources = negotiator.discoveryManager.AttachAllCustomResourcesToSyncResources(syncResources)
 	}
+
+	// check for changes to the kube native resource types when the cluster version changes
+	negotiator.discoveryManager.SetWatchServerVersion(watchKubeVersion)
+	negotiator.discoveryManager.SetWatchAggregatorResourceTypes(watchAggregatorResourceTypes)
 
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
@@ -149,6 +187,10 @@ func negotiateSyncVersions(kind schema.GroupKind, wantVersions []string, support
 	}
 
 	wants := sets.NewString(wantVersions...)
+	if wants.Has("*") {
+		return supportedVersions, false, nil
+	}
+
 	for _, version := range supportedVersions {
 		if wants.Has(version) {
 			syncVersions = append(syncVersions, version)

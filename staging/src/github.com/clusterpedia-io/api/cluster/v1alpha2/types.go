@@ -15,9 +15,10 @@ const (
 	SyncStatusUnknown = "Unknown"
 	SyncStatusError   = "Error"
 
-	InvalidConfigConditionReason = "InvalidConfig"
-	InitialFailedConditionReason = "InitialFailed"
-	RunningConditionReason       = "Running"
+	InvalidConfigConditionReason       = "InvalidConfig"
+	InvalidSyncResourceConditionReason = "InvalidSyncResources"
+	InitialFailedConditionReason       = "InitialFailed"
+	RunningConditionReason             = "Running"
 
 	HealthyReason            = "Healthy"
 	PendingReason            = "Pending"

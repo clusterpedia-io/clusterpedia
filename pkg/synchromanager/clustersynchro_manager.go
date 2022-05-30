@@ -28,6 +28,8 @@ import (
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
@@ -236,6 +238,22 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		return nil
 	}
 
+	// if `AllowSyncAllResources` is not enabled, then check whether the all-resource wildcard is used
+	if !clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllResources) {
+		for _, groupResources := range cluster.Spec.SyncResources {
+			if groupResources.Group == "*" {
+				// When using the all-resource wildcard without feature gate enabled,
+				// it just updates the condition information and
+				// does not stop it if cluster synchro is already running.
+				//
+				// If have better suggestions can be discussed in the https://github.com/clusterpedia-io/clusterpedia/issues.
+				manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidSyncResourceConditionReason,
+					"ClusterSynchro Manager's feature gate `AllowSyncAllResources` is not enabled, cannot use all-resources wildcard", metav1.ConditionFalse)
+				return nil
+			}
+		}
+	}
+
 	manager.synchrolock.RLock()
 	synchro := manager.synchros[cluster.Name]
 	manager.synchrolock.RUnlock()
@@ -248,8 +266,6 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		manager.synchrolock.Lock()
 		manager.synchros[cluster.Name] = synchro
 		manager.synchrolock.Unlock()
-
-		// manager.cleanCluster(cluster.Name)
 	}
 
 	// create resource synchro
