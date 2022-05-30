@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/duration"
+	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
@@ -24,6 +25,8 @@ import (
 )
 
 type REST struct {
+	serializer runtime.NegotiatedSerializer
+
 	list     *internal.CollectionResourceList
 	storages map[string]storage.CollectionResourceStorage
 }
@@ -32,7 +35,7 @@ var _ rest.Lister = &REST{}
 var _ rest.Scoper = &REST{}
 var _ rest.Getter = &REST{}
 
-func NewREST(factory storage.StorageFactory) *REST {
+func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFactory) *REST {
 	crs, err := factory.GetCollectionResources(context.TODO())
 	if err != nil {
 		klog.Fatal(err)
@@ -66,7 +69,7 @@ func NewREST(factory storage.StorageFactory) *REST {
 		list.Items = append(list.Items, *cr)
 	}
 
-	return &REST{list, storages}
+	return &REST{serializer, list, storages}
 }
 
 func (s *REST) New() runtime.Object {
@@ -90,6 +93,14 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 	query := request.RequestQueryFrom(ctx)
 	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts); err != nil {
 		return nil, err
+	}
+
+	if accept := request.AcceptHeaderFrom(ctx); accept != "" {
+		if mediaType, ok := negotiation.NegotiateMediaTypeOptions(accept, s.serializer.SupportedMediaTypes(), TableEndpointRestrictions); ok {
+			if target := mediaType.Convert; target != nil && target.Kind == "Table" {
+				opts.OnlyMetadata = true
+			}
+		}
 	}
 
 	// collection resources don't support with remaining count
