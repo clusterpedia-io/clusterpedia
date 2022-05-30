@@ -402,7 +402,7 @@ func (s *ClusterSynchro) resourceSynchroRunner() {
 			}()
 
 			s.storageResourceSynchros.Range(func(_, value interface{}) bool {
-				go value.(*ResourceSynchro).Run(s.handlerStopCh)
+				go value.(*ResourceSynchro).Start(s.handlerStopCh)
 				return true
 			})
 		}()
