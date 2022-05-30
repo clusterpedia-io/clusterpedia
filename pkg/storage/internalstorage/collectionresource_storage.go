@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"gorm.io/gorm"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -52,39 +51,49 @@ func NewCollectionResourceStorage(db *gorm.DB, cr *internal.CollectionResource) 
 	}
 }
 
-func (s *CollectionResourceStorage) query(ctx context.Context) *gorm.DB {
-	return s.db.WithContext(ctx).Model(&Resource{}).Where(s.typesQuery)
+func (s *CollectionResourceStorage) query(ctx context.Context, metadata bool) (*gorm.DB, ObjectList) {
+	query := s.db.WithContext(ctx).Model(&Resource{})
+	if !metadata {
+		return query.Where(s.typesQuery), &ResourceList{}
+	}
+
+	switch s.db.Dialector.Name() {
+	case "mysql":
+		query = query.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
+	case "postgres":
+		query = query.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
+	}
+	return query.Where(s.typesQuery), &ResourceMetadataList{}
 }
 
 func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error) {
-	query := s.query(ctx)
+	query, list := s.query(ctx, opts.OnlyMetadata)
 	_, query, err := applyListOptionsToCollectionResourceQuery(query, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	var resources []Resource
-	result := query.Find(&resources)
-	if result.Error != nil {
-		return nil, InterpreError(s.collectionResource.Name, result.Error)
+	if err := list.From(query); err != nil {
+		return nil, InterpreError(s.collectionResource.Name, err)
 	}
 
 	gvrs := make(map[schema.GroupVersionResource]struct{})
 	types := []internal.CollectionResourceType{}
-	objs := make([]runtime.Object, 0, len(resources))
-	for _, resource := range resources {
-		obj := &unstructured.Unstructured{}
-		if err := caseSensitiveJSONIterator.Unmarshal(resource.Object, obj); err != nil {
+	objs := make([]runtime.Object, 0)
+	for _, resource := range list.Items() {
+		obj, err := resource.ConvertToUnstructured()
+		if err != nil {
 			return nil, InterpreError(s.collectionResource.Name, err)
 		}
 		objs = append(objs, obj)
 
-		if _, ok := gvrs[resource.GroupVersionResource()]; !ok {
+		resourceType := resource.GetResourceType()
+		if _, ok := gvrs[resourceType.GroupVersionResource()]; !ok {
 			types = append(types, internal.CollectionResourceType{
-				Group:    resource.Group,
-				Resource: resource.Resource,
-				Version:  resource.Version,
-				Kind:     resource.Kind,
+				Group:    resourceType.Group,
+				Resource: resourceType.Resource,
+				Version:  resourceType.Version,
+				Kind:     resourceType.Kind,
 			})
 		}
 	}

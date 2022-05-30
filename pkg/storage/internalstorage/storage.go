@@ -2,52 +2,14 @@ package internalstorage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"time"
 
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
-
-type Resource struct {
-	ID uint `gorm:"primaryKey"`
-
-	Group    string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
-	Version  string `gorm:"size:15;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
-	Resource string `gorm:"size:63;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
-	Kind     string `gorm:"size:63;not null"`
-
-	Cluster         string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_cluster"`
-	Namespace       string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:50;index:idx_group_version_resource_namespace_name"`
-	Name            string    `gorm:"size:253;not null;uniqueIndex:uni_group_version_resource_cluster_namespace_name,length:100;index:idx_group_version_resource_namespace_name;index:idx_group_version_resource_name"`
-	OwnerUID        types.UID `gorm:"column:owner_uid;size:36;not null;default:''"`
-	UID             types.UID `gorm:"size:36;not null"`
-	ResourceVersion string    `gorm:"size:30;not null"`
-
-	Object datatypes.JSON `gorm:"not null"`
-
-	CreatedAt time.Time `gorm:"not null"`
-	SyncedAt  time.Time `gorm:"not null;autoUpdateTime"`
-	DeletedAt sql.NullTime
-}
-
-// SelectedResource used to select specific fields
-type SelectedResource struct {
-}
-
-func (res Resource) GroupVersionResource() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    res.Group,
-		Version:  res.Version,
-		Resource: res.Resource,
-	}
-}
 
 type StorageFactory struct {
 	db *gorm.DB

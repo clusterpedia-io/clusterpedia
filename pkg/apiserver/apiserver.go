@@ -138,6 +138,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	config.GenericConfig.BuildHandlerChainFunc = func(apiHandler http.Handler, c *genericapiserver.Config) http.Handler {
 		handler := handlerChainFunc(apiHandler, c)
 		handler = filters.WithRequestQuery(handler)
+		handler = filters.WithAcceptHeader(handler)
 		return handler
 	}
 
@@ -148,7 +149,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 
 	v1beta1storage := map[string]rest.Storage{}
 	v1beta1storage["resources"] = resources.NewREST(kubeResourceAPIServer.Handler)
-	v1beta1storage["collectionresources"] = collectionresources.NewREST(config.StorageFactory)
+	v1beta1storage["collectionresources"] = collectionresources.NewREST(config.GenericConfig.Serializer, config.StorageFactory)
 
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(internal.GroupName, Scheme, ParameterCodec, Codecs)
 	apiGroupInfo.VersionedResourcesStorageMap["v1beta1"] = v1beta1storage

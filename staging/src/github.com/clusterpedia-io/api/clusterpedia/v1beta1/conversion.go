@@ -187,6 +187,8 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 		// Out URLQuery will not be modified, so deepcopy is not used here.
 		out.URLQuery = in.urlQuery
 	}
+
+	out.OnlyMetadata = in.OnlyMetadata
 	return nil
 }
 

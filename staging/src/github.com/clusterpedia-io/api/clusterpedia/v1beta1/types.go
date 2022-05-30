@@ -49,6 +49,9 @@ type ListOptions struct {
 	// +optional
 	WithRemainingCount *bool `json:"withRemainingCount,omitempty"`
 
+	// +optional
+	OnlyMetadata bool `json:"onlyMetadata,omitempty"`
+
 	urlQuery url.Values
 }
 
