@@ -1,8 +1,6 @@
 package options
 
 import (
-	"fmt"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -110,7 +108,6 @@ func (o *Options) Config() (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(kubeconfig.ContentConfig.ContentType)
 	kubeconfig.ContentConfig.AcceptContentTypes = o.ClientConnection.AcceptContentTypes
 	kubeconfig.ContentConfig.ContentType = o.ClientConnection.ContentType
 	kubeconfig.QPS = o.ClientConnection.QPS
