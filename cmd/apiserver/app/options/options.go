@@ -6,16 +6,11 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
-	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	utilflowcontrol "k8s.io/apiserver/pkg/util/flowcontrol"
-	"k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
-	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -23,6 +18,9 @@ import (
 )
 
 type ClusterPediaServerOptions struct {
+	MaxRequestsInFlight         int
+	MaxMutatingRequestsInFlight int
+
 	SecureServing  *genericoptions.SecureServingOptionsWithLoopback
 	Authentication *genericoptions.DelegatingAuthenticationOptions
 	Authorization  *genericoptions.DelegatingAuthorizationOptions
@@ -31,7 +29,7 @@ type ClusterPediaServerOptions struct {
 	CoreAPI        *genericoptions.CoreAPIOptions
 	FeatureGate    featuregate.FeatureGate
 	Admission      *genericoptions.AdmissionOptions
-	//	Traces         *genericoptions.TracingOptions
+	//      Traces         *genericoptions.TracingOptions
 
 	Storage *storageoptions.StorageOptions
 }
@@ -46,6 +44,9 @@ func NewServerOptions() *ClusterPediaServerOptions {
 	sso.HTTP2MaxStreamsPerConnection = 1000
 
 	return &ClusterPediaServerOptions{
+		MaxRequestsInFlight:         0,
+		MaxMutatingRequestsInFlight: 0,
+
 		SecureServing:  sso.WithLoopback(),
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
@@ -54,7 +55,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Admission:      genericoptions.NewAdmissionOptions(),
-		//	Traces:         genericoptions.NewTracingOptions(),
+		//      Traces:         genericoptions.NewTracingOptions(),
 
 		Storage: storageoptions.NewStorageOptions(),
 	}
@@ -102,6 +103,9 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 }
 
 func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserver.RecommendedConfig) error {
+	config.MaxRequestsInFlight = o.MaxRequestsInFlight
+	config.MaxMutatingRequestsInFlight = o.MaxMutatingRequestsInFlight
+
 	if err := o.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return err
 	}
@@ -124,23 +128,17 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 		return err
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.APIPriorityAndFairness) {
-		if config.ClientConfig != nil {
-			config.FlowControl = utilflowcontrol.New(
-				config.SharedInformerFactory,
-				kubernetes.NewForConfigOrDie(config.ClientConfig).FlowcontrolV1beta1(),
-				config.MaxRequestsInFlight+config.MaxMutatingRequestsInFlight,
-				config.RequestTimeout/4,
-			)
-		} else {
-			klog.Warningf("Neither kubeconfig is provided nor service-account is mounted, so APIPriorityAndFairness will be disabled")
-		}
-	}
 	return nil
 }
 
 func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	var fss cliflag.NamedFlagSets
+
+	genericfs := fss.FlagSet("generic")
+	genericfs.IntVar(&o.MaxRequestsInFlight, "max-requests-inflight", o.MaxRequestsInFlight, ""+
+		"Otherwise, this flag limits the maximum number of non-mutating requests in flight, or a zero value disables the limit completely.")
+	genericfs.IntVar(&o.MaxMutatingRequestsInFlight, "max-mutating-requests-inflight", o.MaxMutatingRequestsInFlight, ""+
+		"this flag limits the maximum number of mutating requests in flight, or a zero value disables the limit completely.")
 
 	o.CoreAPI.AddFlags(fss.FlagSet("global"))
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
@@ -158,6 +156,13 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 
 func (o *ClusterPediaServerOptions) validateGenericOptions() []error {
 	errors := []error{}
+	if o.MaxRequestsInFlight < 0 {
+		errors = append(errors, fmt.Errorf("--max-requests-inflight can not be negative value"))
+	}
+	if o.MaxMutatingRequestsInFlight < 0 {
+		errors = append(errors, fmt.Errorf("--max-mutating-requests-inflight can not be negative value"))
+	}
+
 	errors = append(errors, o.CoreAPI.Validate()...)
 	errors = append(errors, o.SecureServing.Validate()...)
 	errors = append(errors, o.Authentication.Validate()...)
