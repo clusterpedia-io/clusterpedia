@@ -128,9 +128,7 @@ apiserver:
   affinity: {}
   ## @param controllerManager.tolerations
   ## @param apiserver.tolerations
-  tolerations:
-     - key: node-role.kubernetes.io/master
-       operator: Exists
+  tolerations: []
   ## @param featureGate to apiserver
   featureGates:
     ## Allow apiservers to show a count of remaining items in the response to a chunking list request.
@@ -186,9 +184,7 @@ clustersynchroManager:
   ## @param clustersynchroManager.affinity
   affinity: {}
   ## @param clustersynchroManager.tolerations
-  tolerations:
-    - key: node-role.kubernetes.io/master
-      operator: Exists
+  tolerations: []
   ## @param featureGate to clustersynchro
   featureGates:
     ## @param PruneManagedFields is a feature gate for ClusterSynchro to prune `ManagedFields` of the resource

@@ -39,9 +39,6 @@ spec:
           mountPath: /etc/clusterpedia/storage
           readOnly: true
       serviceAccountName: clusterpedia-clustersynchro-manager
-      tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
       volumes:
       - name: internalstorage-config
         configMap:
