@@ -91,10 +91,10 @@ apiserver:
   podAnnotations: {}
   ## @param apiserver.podLabels
   podLabels: {}
-  ## @param image.registry kpanda controllerManager image registry
-  ## @param image.repository kpanda controllerManager image repository
-  ## @param image.tag kpanda controllerManager image tag (immutable tags are recommended)
-  ## @param image.pullPolicy kpanda controllerManager image pull policy
+  ## @param image.registry clusterpedia apiserver image registry
+  ## @param image.repository clusterpedia apiserver image repository
+  ## @param image.tag clusterpedia apiserver image tag (immutable tags are recommended)
+  ## @param image.pullPolicy clusterpedia apiserver image pull policy
   ## @param image.pullSecrets Specify docker-registry secret names as an array
   ##
   image:
@@ -148,10 +148,10 @@ clustersynchroManager:
   podAnnotations: {}
   ## @param clustersynchroManager.podLabels
   podLabels: {}
-  ## @param image.registry kpanda controllerManager image registry
-  ## @param image.repository kpanda controllerManager image repository
-  ## @param image.tag kpanda controllerManager image tag (immutable tags are recommended)
-  ## @param image.pullPolicy kpanda controllerManager image pull policy
+  ## @param image.registry clusterpedia clustersynchroManager image registry
+  ## @param image.repository clusterpedia clustersynchroManager image repository
+  ## @param image.tag clusterpedia clustersynchroManager image tag (immutable tags are recommended)
+  ## @param image.pullPolicy clusterpedia clustersynchroManager image pull policy
   ## @param image.pullSecrets Specify docker-registry secret names as an array
   ##
   image:
