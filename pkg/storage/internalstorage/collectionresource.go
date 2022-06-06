@@ -13,8 +13,8 @@ const (
 	CollectionResourceKubeResources = "kuberesources"
 )
 
-var collectionResources = map[string]internal.CollectionResource{
-	CollectionResourceWorkloads: {
+var collectionResources = []internal.CollectionResource{
+	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: CollectionResourceWorkloads,
 		},
@@ -33,8 +33,7 @@ var collectionResources = map[string]internal.CollectionResource{
 			},
 		},
 	},
-
-	CollectionResourceKubeResources: {
+	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: CollectionResourceKubeResources,
 		},
@@ -54,10 +53,9 @@ func init() {
 		})
 	}
 
-	collectionResources[CollectionResourceKubeResources] = internal.CollectionResource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: CollectionResourceKubeResources,
-		},
-		ResourceTypes: types,
+	for i := range collectionResources {
+		if collectionResources[i].Name == CollectionResourceKubeResources {
+			collectionResources[i].ResourceTypes = types
+		}
 	}
 }
