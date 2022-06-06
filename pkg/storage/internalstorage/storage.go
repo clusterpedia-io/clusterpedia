@@ -27,10 +27,12 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 }
 
 func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionResource) (storage.CollectionResourceStorage, error) {
-	if _, ok := collectionResources[cr.Name]; !ok {
-		return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
+	for i := range collectionResources {
+		if collectionResources[i].Name == cr.Name {
+			return NewCollectionResourceStorage(s.db, cr), nil
+		}
 	}
-	return NewCollectionResourceStorage(s.db, cr), nil
+	return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
 }
 
 func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
