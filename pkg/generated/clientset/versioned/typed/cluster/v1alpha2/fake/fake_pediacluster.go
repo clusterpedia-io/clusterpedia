@@ -94,7 +94,7 @@ func (c *FakePediaClusters) UpdateStatus(ctx context.Context, pediaCluster *v1al
 // Delete takes name of the pediaCluster and deletes it. Returns an error if one occurs.
 func (c *FakePediaClusters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(pediaclustersResource, name), &v1alpha2.PediaCluster{})
+		Invokes(testing.NewRootDeleteActionWithOptions(pediaclustersResource, name, opts), &v1alpha2.PediaCluster{})
 	return err
 }
 

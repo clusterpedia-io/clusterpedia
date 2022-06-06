@@ -89,7 +89,6 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 func (o *Options) Validate() error {
 	var errs []error
 
-	errs = append(errs, o.Logs.Validate()...)
 	errs = append(errs, o.Storage.Validate()...)
 	return utilerrors.NewAggregate(errs)
 }
@@ -127,7 +126,6 @@ func (o *Options) Config() (*config.Config, error) {
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: ClusterSynchroManagerUserAgent})
 
-	o.Logs.Apply()
 	return &config.Config{
 		Client:         client,
 		CRDClient:      crdclient,
