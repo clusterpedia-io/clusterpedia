@@ -1,7 +1,6 @@
 package kubeapiserver
 
 import (
-	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -240,13 +239,8 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 
 		if info.RequestScope == nil {
 			namer := handlers.ContextBasedNaming{
-				SelfLinker:    runtime.SelfLinker(meta.NewAccessor()),
+				Namer:         runtime.Namer(meta.NewAccessor()),
 				ClusterScoped: !info.APIResource.Namespaced,
-			}
-			if gvr.Group == "" {
-				namer.SelfLinkPathPrefix = path.Join("api", gvr.Version) + "/"
-			} else {
-				namer.SelfLinkPathPrefix = path.Join("apis", gvr.Group, gvr.Version) + "/"
 			}
 
 			var requestScope *handlers.RequestScope

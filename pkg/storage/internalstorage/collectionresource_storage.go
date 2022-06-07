@@ -7,13 +7,10 @@ import (
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
-
-var caseSensitiveJSONIterator = json.CaseSensitiveJSONIterator()
 
 type CollectionResourceStorage struct {
 	db         *gorm.DB

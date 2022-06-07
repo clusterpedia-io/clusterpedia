@@ -374,7 +374,7 @@ func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (run
 
 func (synchro *ResourceSynchro) createOrUpdateResource(obj runtime.Object) error {
 	err := synchro.storage.Create(synchro.ctx, synchro.cluster, obj)
-	if genericstorage.IsNodeExist(err) {
+	if genericstorage.IsExist(err) {
 		return synchro.storage.Update(synchro.ctx, synchro.cluster, obj)
 	}
 	return err

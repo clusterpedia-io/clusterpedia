@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 type Resource struct {
@@ -77,7 +78,7 @@ func (res Resource) GetResourceType() ResourceType {
 
 func (res Resource) ConvertToUnstructured() (*unstructured.Unstructured, error) {
 	obj := &unstructured.Unstructured{}
-	if err := caseSensitiveJSONIterator.Unmarshal(res.Object, obj); err != nil {
+	if err := json.Unmarshal(res.Object, obj); err != nil {
 		return nil, err
 	}
 	return obj, nil

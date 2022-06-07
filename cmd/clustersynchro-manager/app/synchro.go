@@ -6,12 +6,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/component-base/logs"
 	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
 
@@ -21,6 +23,10 @@ import (
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
+
+func init() {
+	runtime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+}
 
 func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 	opts, _ := options.NewClusterSynchroManagerOptions()
@@ -37,7 +43,15 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
-			cliflag.PrintFlags(cmd.Flags())
+			fs := cmd.Flags()
+
+			// Activate logging as soon as possible, after that
+			// show flags with the final logging configuration.
+			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
+				return err
+			}
+
+			cliflag.PrintFlags(fs)
 
 			config, err := opts.Config()
 			if err != nil {
