@@ -1,3 +1,6 @@
 /bin
 /charts/charts/*.tgz
 .idea
+
+# OSX trash
+.DS_Store
