@@ -47,3 +47,14 @@ else
   echo "${DIFFROOT}, 'go.mod' or 'go.sum' is out of date. Please run 'make vendor'"
   exit 1
 fi
+
+reflector=0
+diff vendor/k8s.io/client-go/tools/cache/reflector.go pkg/synchromanager/clustersynchro/informer/.reflector.go || reflector=$?
+
+if [[ $reflector -eq 0 ]]
+then
+  echo "'reflector.go' is up to date."
+else
+  echo "the file 'reflector.go' in vendor has been changed, please update the '.reflector.go' and 'reflector.go' in the pkg/synchromanager/clustersynchro/informer"
+  exit 1
+fi
