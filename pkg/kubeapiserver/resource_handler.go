@@ -108,7 +108,10 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch requestInfo.Verb {
 	case "get":
 		if clusterName == "" {
-			r.delegate.ServeHTTP(w, req)
+			responsewriters.ErrorNegotiated(
+				apierrors.NewBadRequest("please specify the cluster name when using the resource name to get a specific resource."),
+				Codecs, gvr.GroupVersion(), w, req,
+			)
 			return
 		}
 
