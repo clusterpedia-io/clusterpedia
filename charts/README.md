@@ -53,7 +53,7 @@ $ kubectl get pediaclusters
 Once all these resources have been deleted you are ready to unisntall clusterpedia.
 
 ```bash
-$ helm --namespace clusterpedia-system uinstall clusterpedia
+$ helm --namespace clusterpedia-system uninstall clusterpedia
 ```
 
 If the CRDs is not managed through Helm, then you need to delete the crd manually:
