@@ -80,6 +80,7 @@ image-apiserver:
 	docker buildx build \
 		-t ${REGISTRY}/apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
+		--load \
 		--build-arg BASEIMAGE=$(BASEIMAGE) \
 		--build-arg BINNAME=apiserver .
 	    
@@ -88,7 +89,8 @@ image-clustersynchro-manager:
 	docker buildx build \
 		-t $(REGISTRY)/clustersynchro-manager-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
-	    --build-arg BASEIMAGE=$(BASEIMAGE) \
+		--load \
+		--build-arg BASEIMAGE=$(BASEIMAGE) \
 		--build-arg BINNAME=clustersynchro-manager .
 
 .PHONY: push-images
