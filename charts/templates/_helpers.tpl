@@ -126,7 +126,7 @@ Return the proper Docker Image Registry Secret Names
      {{- if eq (include "clusterpedia.storage.type" .) "postgres" -}}
      {{- .Values.postgresql.primary.service.ports.postgresql -}}
           {{- else if eq (include "clusterpedia.storage.type" .) "mysql" -}}
-     {{- .Values.mysql.primary.service.port -}}
+     {{- .Values.mysql.primary.service.ports.mysql -}}
      {{- end -}}
 {{- end -}}
 {{- end -}}
