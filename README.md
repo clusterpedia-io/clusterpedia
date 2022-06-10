@@ -4,11 +4,79 @@
 </p>
 
 # Clusterpedia
+![build](https://github.com/clusterpedia-io/clusterpedia/actions/workflows/ci.yml/badge.svg)
+[![License](https://img.shields.io/github/license/clusterpedia-io/clusterpedia)](/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/clusterpedia-io/clusterpedia)](https://goreportcard.com/report/github.com/clusterpedia-io/clusterpedia)
+[![Release](https://img.shields.io/github/v/release/clusterpedia-io/clusterpedia)](https://github.com/clusterpedia-io/clusterpedia/releases)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5539/badge)](https://bestpractices.coreinfrastructure.org/projects/5539)
+
 This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources. 
 
 Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
 
 > The capability of Clusterpedia is not only to search for and view but also simply control resources in the future, just like Wikipedia that supports for editing entries.
+
+## Why Clusterpedia
+Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet) and other multi-cloud platforms
+> In the next, Clusterpedia will implemente the feature of automatically synchronizing resources within clusters managed by `Cluster API`, `Karmada`, `Clusternet` and other multi-cloud platforms.
+
+### More retrieval features and compatibility with **Kubernetes OpenAPI**
+* Support for retrieving resources using `kubectl`, `client-go` or `controller-runtime/client`, [client-go example](https://github.com/clusterpedia-io/client-go/blob/main/examples/list-clusterpedia-resources/main.go)
+* The resource metadata can be retrived via API or [client-go/metadata](https://pkg.go.dev/k8s.io/client-go/metadata)
+* Rich retrieval conditions: [Filter by cluster/namespace/name/creation](https://clusterpedia.io/docs/usage/search/multi-cluster/#basic-features), [Search by parent or ancestor owner](https://clusterpedia.io/docs/usage/search/multi-cluster/#search-by-parent-or-ancestor-owner),[Multi-Cluster Label Selector](https://clusterpedia.io/docs/usage/search/#label-selector), [Enhanced Field Selector](https://clusterpedia.io/docs/usage/search/#field-selector), [Custom Search Conditions](https://clusterpedia.io/docs/usage/search/#advanced-searchcustom-conditional-search), etc.
+### Support for importing Kubernetes 1.10+
+### Automic conversion of different versions of Kube resources and support for multiple version of resources
+* Even if you import different version of Kube, we can still use the same resource version to retrieve resources
+> For example, we can use `v1`, `v1beta2`, `v1beta1` version to retrieve the Deployments resources in different clusters.
+> 
+>   Notes: The version of *deployments* is `v1beta1` in Kubernetes 1.10 and it is `v1` in Kubernetes 1.24.
+```bash
+$ kubectl get --raw "/apis/clusterpedia.io/v1beta1/resources/apis/apps" | jq
+{
+  "kind": "APIGroup",
+  "apiVersion": "v1",
+  "name": "apps",
+  "versions": [
+    {
+      "groupVersion": "apps/v1",
+      "version": "v1"
+    },
+    {
+      "groupVersion": "apps/v1beta2",
+      "version": "v1beta2"
+    },
+    {
+      "groupVersion": "apps/v1beta1",
+      "version": "v1beta1"
+    }
+  ],
+  "preferredVersion": {
+    "groupVersion": "apps/v1",
+    "version": "v1"
+  }
+}
+```
+### A single API can be used to retrieve different types of resources
+* Use [`Collection Resource`](https://clusterpedia.io/docs/concepts/collection-resource/) to retrieve different types of resources, such as `Deployment`, `DaemonSet`, `StatefulSet`.
+```bash
+$ kubectl get collectionresources
+NAME            RESOURCES
+workloads       deployments.apps,daemonsets.apps,statefulsets.apps
+kuberesources   *,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextensions.k8s.io,*.apps,*.authentication.k8s.io,*.authorization.k8s.io,*.autoscaling,*.batch,*.certificates.k8s.io,*.coordination.k8s.io,*.discovery.k8s.io,*.events.k8s.io,*.extensions,*.flowcontrol.apiserver.k8s.io,*.imagepolicy.k8s.io,*.internal.apiserver.k8s.io,*.networking.k8s.io,*.node.k8s.io,*.policy,*.rbac.authorization.k8s.io,*.scheduling.k8s.io,*.storage.k8s.io
+```
+### Diverse policies and intelligent synchronization
+* [Wildcards](https://clusterpedia.io/docs/usage/sync-resources/#using-wildcards-to-sync-resources) can be used to sync all types of resources within a specified group or cluster.
+* [Support for synchronizing all custom resources](https://clusterpedia.io/docs/usage/sync-resources/#sync-all-custom-resources)
+* The type and version of resources that Clusterpedia is synchroizing with can be adapted to you CRD and AA changes
+### Unify the search entry for master clusters and multi-cluster resources
+* Based on [Aggregated API](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/), the entry portal for multi-cluster retrieval is the same as that of the the master cluster(IP:PORT)
+### Very low memory usage and weak network optimization
+* Optimized caches used by informer, so the memory usage is very low for resource synchronization.
+* Automatic start/stop synchronization based on cluster health status
+### High availability
+### No dependency on specific storage components
+Clusterpedia does not care about storage components and uses the storage layer to attach specific storage components,
+and will also add storage layers for **graph databases** and **ES** in the future
 
 ## Architecture <span id="design"></span>
 <div align="center"><img src="./docs/images/arch.png" style="width:900px;" /></div>
@@ -26,33 +94,11 @@ Clusterpedia also provides a `Default Storage Layer` that can connect with **MyS
 > you can choose or implement the storage layer according to your own needs,
 > and then register the storage layer in Clusterpedia as a plug-in
 
-## Features
-- [x] Support for complex search, filters, sorting, paging, and more
-- [ ] Support for requesting relevant resources when you query resources
-- [x] Unify the search entry for master clusters and multi-cluster resources
-- [x] Compatible with kubernetes OpenAPI, where you can directly use kubectl for multi-cluster search without any third-party plug-ins or tools
-- [x] Compatible with synchronizing different versions of cluster resources, not restricted by the version of master cluster
-- [x] High performance and low memory consumption for resource synchronization
-- [x] Automatically start/stop resource synchronization according to the current health status of the cluster
-- [ ] Support for plug-in storage layer. You can use other storage components to customize the storage layer according to your needs.
-- [x] High availability
-> The above unimplemented features are already in the [Roadmap](/ROADMAP.md)
-
 ---
 [Installation](https://clusterpedia.io/docs/installation/) | [Import Clusters](https://clusterpedia.io/docs/usage/import-clusters/) | [Sync Cluster Resources](https://clusterpedia.io/docs/usage/sync-resources/)
 ---
 
-## Usage Samples
-We can search for resources configured in *PediaCluster*, Clusterpedia supports two types of resource search:
-* Search for resources that are compatible with Kubernetes OpenAPI
-* Search for [`Collection Resource`](https://clusterpedia.io/docs/concepts/collection-resource/)
-```sh
-$ kubectl api-resources | grep clusterpedia.io
-collectionresources     clusterpedia.io/v1beta1  false   CollectionResource
-resources               clusterpedia.io/v1beta1  false   Resources
-```
-
-### Search Label and URL Query
+## Search Label and URL Query
 |Role| search label key|url query|
 | -- | --------------- | ------- |
 |Filter cluster names|`search.clusterpedia.io/clusters`|`clusters`|
@@ -70,6 +116,7 @@ resources               clusterpedia.io/v1beta1  false   Resources
 |Set page offset|`search.clusterpedia.io/offset`|`continue`|
 |Response include Continue|`search.clusterpedia.io/with-continue`|`withContinue`
 |Response include remaining count|`search.clusterpedia.io/with-remaining-count`|`withRemainingCount`
+|[Custom Where SQL](https://clusterpedia.io/docs/usage/search/#advanced-searchcustom-conditional-search)|-|`whereSQL`|
 
 **Both Search Labels and URL Query support same operators as Label Selector:**
 * `exist`, `not exist`
@@ -77,11 +124,20 @@ resources               clusterpedia.io/v1beta1  false   Resources
 * `in`, `notin`
 
 More information about [Search Conditions](https://clusterpedia.io/docs/usage/search/),
-about [Label Selector](https://clusterpedia.io/docs/usage/search/#label-selector) and [Field Selector](https://clusterpedia.io/docs/usage/search/#field-selector)
+[Label Selector](https://clusterpedia.io/docs/usage/search/#label-selector) and [Field Selector](https://clusterpedia.io/docs/usage/search/#field-selector)
 
-### Search in Kubernetes OpenAPI Compatible Way
-Although we can use URL to search resources, if we want to use `kubectl` to query more conveniently, 
-we need to [configure the cluster shortcut for `kubectl`](https://clusterpedia.io/docs/usage/access-clusterpedia/#configure-the-cluster-shortcut-for-kubectl).
+## Usage Samples
+You can search for resources configured in *PediaCluster*, Clusterpedia supports two types of resource search:
+* Resources that are compatible with **Kubernetes OpenAPI**
+* [`Collection Resource`](https://clusterpedia.io/docs/concepts/collection-resource/)
+```sh
+$ kubectl api-resources | grep clusterpedia.io
+collectionresources     clusterpedia.io/v1beta1  false   CollectionResource
+resources               clusterpedia.io/v1beta1  false   Resources
+```
+### Use a compatible way with Kubernetes OpenAPI
+It is possible to search resources via URL, but using `kubectl` may be more convenient if
+you [configured the cluster shortcuts for `kubectl`](https://clusterpedia.io/docs/usage/access-clusterpedia/#configure-the-cluster-shortcut-for-kubectl).
 
 We can use `kubectl --cluster <cluster name>` to specify the cluster, if `<cluster name>` is `clusterpedia`,
 it meas it is a multi-cluster search operation.
