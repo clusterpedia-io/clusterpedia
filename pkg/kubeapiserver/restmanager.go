@@ -342,11 +342,11 @@ func (m *RESTManager) genCustomResourceRequestScope(namer handlers.ScopeNamer, g
 	)
 	parameterCodec := runtime.NewParameterCodec(parameterScheme)
 
-	typer := unstructuredObjectTyper{parameterScheme, resourcescheme.CustomResourceScheme}
+	typer := unstructuredObjectTyper{parameterScheme, resourcescheme.UnstructuredScheme}
 	negotiatedSerializer := unstructuredNegotiatedSerializer{
 		typer,
-		resourcescheme.CustomResourceScheme,
-		resourcescheme.CustomResourceScheme,
+		resourcescheme.UnstructuredScheme,
+		resourcescheme.UnstructuredScheme,
 	}
 
 	var standardSerializers []runtime.SerializerInfo
@@ -362,10 +362,10 @@ func (m *RESTManager) genCustomResourceRequestScope(namer handlers.ScopeNamer, g
 		Serializer:          negotiatedSerializer,
 		StandardSerializers: standardSerializers,
 		ParameterCodec:      parameterCodec,
-		Creater:             resourcescheme.CustomResourceScheme,
-		Convertor:           resourcescheme.CustomResourceScheme,
-		UnsafeConvertor:     unstructuredresourcescheme.UnsafeObjectConvertor(resourcescheme.CustomResourceScheme),
-		Defaulter:           resourcescheme.CustomResourceScheme,
+		Creater:             resourcescheme.UnstructuredScheme,
+		Convertor:           resourcescheme.UnstructuredScheme,
+		UnsafeConvertor:     unstructuredresourcescheme.UnsafeObjectConvertor(resourcescheme.UnstructuredScheme),
+		Defaulter:           resourcescheme.UnstructuredScheme,
 		Typer:               typer,
 
 		Resource: gvr,

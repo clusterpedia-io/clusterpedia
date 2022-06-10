@@ -12,6 +12,6 @@ var (
 	LegacyResourceCodecs         = legacyscheme.Codecs
 	LegacyResourceParameterCodec = legacyscheme.ParameterCodec
 
-	CustomResourceScheme = unstructuredresourcescheme.NewScheme()
-	CustomResourceCodecs = unstructured.UnstructuredJSONScheme
+	UnstructuredScheme = unstructuredresourcescheme.NewScheme()
+	UnstructuredCodecs = unstructured.UnstructuredJSONScheme
 )

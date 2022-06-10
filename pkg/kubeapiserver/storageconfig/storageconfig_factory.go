@@ -69,11 +69,11 @@ func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource) (*stor
 func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionResource) (*storage.ResourceStorageConfig, error) {
 	version := gvr.GroupVersion()
 	codec := versioning.NewCodec(
-		resourcescheme.CustomResourceCodecs,
-		resourcescheme.CustomResourceCodecs,
-		resourcescheme.CustomResourceScheme,
-		resourcescheme.CustomResourceScheme,
-		resourcescheme.CustomResourceScheme,
+		resourcescheme.UnstructuredCodecs,
+		resourcescheme.UnstructuredCodecs,
+		resourcescheme.UnstructuredScheme,
+		resourcescheme.UnstructuredScheme,
+		resourcescheme.UnstructuredScheme,
 		nil,
 		version,
 		version,
