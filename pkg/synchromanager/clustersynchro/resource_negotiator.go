@@ -141,7 +141,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					if unstructured {
 						convertor = resourcescheme.LegacyResourceScheme
 					} else {
-						convertor = resourcescheme.CustomResourceScheme
+						convertor = resourcescheme.UnstructuredScheme
 					}
 				}
 				storageResourceSyncConfigs[storageGVR] = syncConfig{
