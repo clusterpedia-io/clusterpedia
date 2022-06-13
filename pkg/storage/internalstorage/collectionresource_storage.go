@@ -49,18 +49,13 @@ func NewCollectionResourceStorage(db *gorm.DB, cr *internal.CollectionResource) 
 }
 
 func (s *CollectionResourceStorage) query(ctx context.Context, metadata bool) (*gorm.DB, ObjectList) {
-	query := s.db.WithContext(ctx).Model(&Resource{})
-	if !metadata {
-		return query.Where(s.typesQuery), &ResourceList{}
+	var result ObjectList = &ResourceList{}
+	if metadata {
+		result = &ResourceMetadataList{}
 	}
 
-	switch s.db.Dialector.Name() {
-	case "mysql":
-		query = query.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
-	case "postgres":
-		query = query.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
-	}
-	return query.Where(s.typesQuery), &ResourceMetadataList{}
+	query := s.db.WithContext(ctx).Model(&Resource{})
+	return result.Select(query).Where(s.typesQuery), result
 }
 
 func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error) {
@@ -84,14 +79,15 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 		}
 		objs = append(objs, obj)
 
-		resourceType := resource.GetResourceType()
-		if _, ok := gvrs[resourceType.GroupVersionResource()]; !ok {
-			types = append(types, internal.CollectionResourceType{
-				Group:    resourceType.Group,
-				Resource: resourceType.Resource,
-				Version:  resourceType.Version,
-				Kind:     resourceType.Kind,
-			})
+		if resourceType := resource.GetResourceType(); !resourceType.Empty() {
+			if _, ok := gvrs[resourceType.GroupVersionResource()]; !ok {
+				types = append(types, internal.CollectionResourceType{
+					Group:    resourceType.Group,
+					Resource: resourceType.Resource,
+					Version:  resourceType.Version,
+					Kind:     resourceType.Kind,
+				})
+			}
 		}
 	}
 	sortCollectionResourceTypes(types)

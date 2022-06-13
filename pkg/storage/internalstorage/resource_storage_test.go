@@ -261,7 +261,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 			postgreSQL, err := toSQL(postgresDB.Session(&gorm.Session{DryRun: true}), test.listOptions,
 				func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 					rs := newTestResourceStorage(db, test.resource)
-					_, _, query, err := rs.genListObjectsQuery(context.TODO(), options)
+					_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
 					return query, err
 				},
 			)
@@ -277,7 +277,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 				mysqlSQL, err := toSQL(mysqlDBs[version].Session(&gorm.Session{DryRun: true}), test.listOptions,
 					func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 						rs := newTestResourceStorage(db, test.resource)
-						_, _, query, err := rs.genListObjectsQuery(context.TODO(), options)
+						_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
 						return query, err
 					},
 				)
