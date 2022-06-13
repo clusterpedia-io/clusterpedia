@@ -13,6 +13,13 @@ import (
 )
 
 func main() {
+	if err := runClusterSynchroManagerCommand(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runClusterSynchroManagerCommand() error {
 	rand.Seed(time.Now().UnixNano())
 
 	logs.InitLogs()
@@ -20,7 +27,8 @@ func main() {
 
 	ctx := apiserver.SetupSignalContext()
 	if err := app.NewClusterSynchroManagerCommand(ctx).Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		return err
 	}
+
+	return nil
 }

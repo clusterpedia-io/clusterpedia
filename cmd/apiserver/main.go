@@ -11,12 +11,19 @@ import (
 )
 
 func main() {
+	if err := runApiServerCommand(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runApiServerCommand() error {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
 	ctx := apiserver.SetupSignalContext()
 	if err := app.NewClusterPediaServerCommand(ctx).Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
