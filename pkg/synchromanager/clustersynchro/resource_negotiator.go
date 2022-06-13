@@ -97,7 +97,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 			}
 
 			syncGK := schema.GroupKind{Group: syncGR.Group, Kind: apiResource.Kind}
-			syncVersions, unstructured, err := negotiateSyncVersions(syncGK, groupResources.Versions, supportedVersions)
+			syncVersions, isLegacyResource, err := negotiateSyncVersions(syncGK, groupResources.Versions, supportedVersions)
 			if err != nil {
 				klog.InfoS("Skip resource sync", "cluster", negotiator.name, "resource", resource, "reason", err)
 				continue
@@ -138,7 +138,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 
 				var convertor runtime.ObjectConvertor
 				if syncGVR != storageGVR {
-					if unstructured {
+					if isLegacyResource {
 						convertor = resourcescheme.LegacyResourceScheme
 					} else {
 						convertor = resourcescheme.UnstructuredScheme
