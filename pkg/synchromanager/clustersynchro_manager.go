@@ -224,8 +224,8 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	// ensure finalizer
 	if !controllerutil.ContainsFinalizer(cluster, ClusterSynchroControllerFinalizer) {
 		controllerutil.AddFinalizer(cluster, ClusterSynchroControllerFinalizer)
-		cluster, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
-		if err != nil {
+
+		if _, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to add finializer", "cluster", cluster.Name)
 			return err
 		}
