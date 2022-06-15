@@ -100,10 +100,10 @@ func (cfg *Config) Complete() CompletedConfig {
 
 func (config completedConfig) New() (*ClusterPediaServer, error) {
 	if config.ClientConfig == nil {
-		return nil, errors.New("")
+		return nil, errors.New("ClientConfig is missing")
 	}
 	if config.StorageFactory == nil {
-		return nil, errors.New("")
+		return nil, errors.New("StorageFactory config is missing")
 	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)
