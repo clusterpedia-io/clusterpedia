@@ -104,7 +104,6 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	}
 	if config.StorageFactory == nil {
 		return nil, fmt.Errorf("CompletedConfig.New() called with config.StorageFactory == nil")
-
 	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)

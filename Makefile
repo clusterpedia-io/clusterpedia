@@ -152,10 +152,13 @@ clean-clustersynchro-manager-manifest:
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:$(VERSION) 2>/dev/null;\
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:latest 2>/dev/null; exit 0
 
+
+
+MAINLAND ?= $(shell echo $CHINA_MAINLAND)
 .PHONY: golangci-lint
 golangci-lint:
 ifeq (, $(shell which golangci-lint))
-	GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2
+	./hack/install-golangci-lint.sh
 GOLANGLINT_BIN=$(shell go env GOPATH)/bin/golangci-lint
 else
 GOLANGLINT_BIN=$(shell which golangci-lint)
