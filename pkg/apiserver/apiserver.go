@@ -2,7 +2,7 @@ package apiserver
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 
 	metainternal "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -100,10 +100,11 @@ func (cfg *Config) Complete() CompletedConfig {
 
 func (config completedConfig) New() (*ClusterPediaServer, error) {
 	if config.ClientConfig == nil {
-		return nil, errors.New("ClientConfig is missing")
+		return nil, fmt.Errorf("CompletedConfig.New() called with config.ClientConfig == nil")
 	}
 	if config.StorageFactory == nil {
-		return nil, errors.New("StorageFactory config is missing")
+		return nil, fmt.Errorf("CompletedConfig.New() called with config.StorageFactory == nil")
+
 	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)
