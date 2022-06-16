@@ -114,7 +114,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		delegate = http.NotFoundHandler()
 	}
 
-	restManager := NewRESTManager(runtime.ContentTypeJSON, c.ExtraConfig.StorageFactory, c.ExtraConfig.InitialAPIGroupResources)
+	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.ExtraConfig.StorageFactory, c.ExtraConfig.InitialAPIGroupResources)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
 	// handle root discovery request

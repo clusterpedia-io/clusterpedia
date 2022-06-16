@@ -20,10 +20,13 @@ import (
 	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/negotiation"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
 type RESTStorage struct {
+	Serializer runtime.NegotiatedSerializer
+
 	DefaultQualifiedResource schema.GroupResource
 
 	NewFunc     func() runtime.Object
@@ -92,6 +95,14 @@ func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (
 	if options.WithRemainingCount == nil {
 		if enabled := utilfeature.DefaultFeatureGate.Enabled(genericfeatures.RemainingItemCount); enabled {
 			options.WithRemainingCount = &enabled
+		}
+	}
+
+	if accept := request.AcceptHeaderFrom(ctx); accept != "" {
+		if mediaType, ok := negotiation.NegotiateMediaTypeOptions(accept, s.Serializer.SupportedMediaTypes(), negotiation.PartialObjectMetadataEndpointRestrictions); ok {
+			if target := mediaType.Convert; target != nil && target.Kind == "PartialObjectMetadataList" {
+				options.OnlyMetadata = true
+			}
 		}
 	}
 

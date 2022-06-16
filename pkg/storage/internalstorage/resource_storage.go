@@ -11,10 +11,12 @@ import (
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	genericstorage "k8s.io/apiserver/pkg/storage"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -171,25 +173,32 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	return nil
 }
 
-func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
-	query := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
+func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *internal.ListOptions) (int64, *int64, *gorm.DB, ObjectList, error) {
+	var result ObjectList = &BytesList{}
+	if opts.OnlyMetadata {
+		result = &ResourceMetadataList{}
+	}
+
+	query := s.db.WithContext(ctx).Model(&Resource{})
+	query = result.Select(query).Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
 	})
-	return applyListOptionsToResourceQuery(s.db, query, opts)
+	offset, amount, query, err := applyListOptionsToResourceQuery(s.db, query, opts)
+	return offset, amount, query, result, err
 }
 
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
-	offset, amount, query, err := s.genListObjectsQuery(ctx, opts)
+	offset, amount, query, result, err := s.genListObjectsQuery(ctx, opts)
 	if err != nil {
 		return err
 	}
 
-	var objects [][]byte
-	if result := query.Find(&objects); result.Error != nil {
-		return InterpreError(s.storageGroupResource.String(), result.Error)
+	if err := result.From(query); err != nil {
+		return InterpreError(s.storageGroupResource.String(), err)
 	}
+	objects := result.Items()
 
 	list, err := meta.ListAccessor(listObject)
 	if err != nil {
@@ -209,6 +218,38 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		list.SetRemainingItemCount(&remain)
 	}
 
+	if len(objects) == 0 {
+		return nil
+	}
+
+	if unstructuredList, ok := listObject.(*unstructured.UnstructuredList); ok {
+		unstructuredList.Items = make([]unstructured.Unstructured, 0, len(objects))
+		for _, object := range objects {
+			uObj := &unstructured.Unstructured{}
+			obj, err := object.ConvertTo(s.codec, uObj)
+			if err != nil {
+				return err
+			}
+
+			uObj, ok := obj.(*unstructured.Unstructured)
+			if !ok {
+				return genericstorage.NewInternalError("the converted object is not *unstructured.Unstructured")
+			}
+
+			if uObj.GroupVersionKind().Empty() {
+				if version := unstructuredList.GetAPIVersion(); version != "" {
+					// set to the same APIVersion as listObject
+					uObj.SetAPIVersion(version)
+				}
+				if rt := object.GetResourceType(); !rt.Empty() {
+					uObj.SetKind(rt.Kind)
+				}
+			}
+			unstructuredList.Items = append(unstructuredList.Items, *uObj)
+		}
+		return nil
+	}
+
 	listPtr, err := meta.GetItemsPtr(listObject)
 	if err != nil {
 		return InterpreError(s.storageGroupResource.String(), err)
@@ -219,12 +260,16 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		return InterpreError(s.storageGroupResource.String(), fmt.Errorf("need ptr to slice: %v", err))
 	}
 
-	newItemFunc := getNewItemFunc(listObject, v)
-	for _, object := range objects {
-		if err := appendListItem(v, object, s.codec, newItemFunc); err != nil {
-			return InterpreError(s.storageGroupResource.String(), fmt.Errorf("need ptr to slice: %v", err))
+	slice := reflect.MakeSlice(v.Type(), len(objects), len(objects))
+	expected := reflect.New(v.Type().Elem()).Interface().(runtime.Object)
+	for i, object := range objects {
+		obj, err := object.ConvertTo(s.codec, expected.DeepCopyObject())
+		if err != nil {
+			return err
 		}
+		slice.Index(i).Set(reflect.ValueOf(obj).Elem())
 	}
+	v.Set(slice)
 	return nil
 }
 

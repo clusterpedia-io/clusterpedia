@@ -2,15 +2,50 @@ package internalstorage
 
 import (
 	"database/sql"
+	"errors"
+	"reflect"
 	"time"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 )
+
+type Object interface {
+	GetResourceType() ResourceType
+	ConvertToUnstructured() (*unstructured.Unstructured, error)
+	ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error)
+}
+
+type ObjectList interface {
+	Select(db *gorm.DB) *gorm.DB
+	From(db *gorm.DB) error
+	Items() []Object
+}
+
+type ResourceType struct {
+	Group    string
+	Version  string
+	Resource string
+	Kind     string
+}
+
+func (rt ResourceType) Empty() bool {
+	return rt == ResourceType{}
+}
+
+func (rt ResourceType) GroupVersionResource() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    rt.Group,
+		Version:  rt.Version,
+		Resource: rt.Resource,
+	}
+}
 
 type Resource struct {
 	ID uint `gorm:"primaryKey"`
@@ -42,31 +77,6 @@ func (res Resource) GroupVersionResource() schema.GroupVersionResource {
 	}
 }
 
-type Object interface {
-	GetResourceType() ResourceType
-	ConvertToUnstructured() (*unstructured.Unstructured, error)
-}
-
-type ObjectList interface {
-	From(db *gorm.DB) error
-	Items() []Object
-}
-
-type ResourceType struct {
-	Group    string
-	Version  string
-	Resource string
-	Kind     string
-}
-
-func (res ResourceType) GroupVersionResource() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    res.Group,
-		Version:  res.Version,
-		Resource: res.Resource,
-	}
-}
-
 func (res Resource) GetResourceType() ResourceType {
 	return ResourceType{
 		Group:    res.Group,
@@ -84,7 +94,92 @@ func (res Resource) ConvertToUnstructured() (*unstructured.Unstructured, error) 
 	return obj, nil
 }
 
+func (res Resource) ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error) {
+	obj, _, err := codec.Decode(res.Object, nil, object)
+	return obj, err
+}
+
+type ResourceMetadata struct {
+	ResourceType `gorm:"embedded"`
+
+	Metadata datatypes.JSON
+}
+
+func (data ResourceMetadata) ConvertToUnstructured() (*unstructured.Unstructured, error) {
+	metadata := map[string]interface{}{}
+	if err := json.Unmarshal(data.Metadata, &metadata); err != nil {
+		return nil, err
+	}
+
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": schema.GroupVersion{Group: data.Group, Version: data.Version}.String(),
+			"kind":       data.Kind,
+			"metadata":   metadata,
+		},
+	}, nil
+}
+
+func (data ResourceMetadata) ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error) {
+	if uObj, ok := object.(*unstructured.Unstructured); ok {
+		if uObj.Object == nil {
+			uObj.Object = make(map[string]interface{}, 1)
+		}
+
+		metadata := map[string]interface{}{}
+		if err := json.Unmarshal(data.Metadata, &metadata); err != nil {
+			return nil, err
+		}
+
+		// There may be version conversions in the codec,
+		// so we cannot use data.ResourceType to override `APIVersion` and `Kind`.
+		uObj.Object["metadata"] = metadata
+		return uObj, nil
+	}
+
+	metadata := metav1.ObjectMeta{}
+	if err := json.Unmarshal(data.Metadata, &metadata); err != nil {
+		return nil, err
+	}
+	v := reflect.ValueOf(object)
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return nil, errors.New("object is nil or not pointer")
+	}
+
+	// There may be version conversions in the codec,
+	// so we cannot use data.ResourceType to override `APIVersion` and `Kind`.
+	v.Elem().FieldByName("ObjectMeta").Set(reflect.ValueOf(metadata))
+	return object, nil
+}
+
+func (data ResourceMetadata) GetResourceType() ResourceType {
+	return data.ResourceType
+}
+
+type Bytes []byte
+
+func (bytes Bytes) ConvertToUnstructured() (*unstructured.Unstructured, error) {
+	obj := &unstructured.Unstructured{}
+	if err := json.Unmarshal(bytes, obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func (bytes Bytes) ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error) {
+	obj, _, err := codec.Decode(bytes, nil, object)
+	return obj, err
+}
+
+func (bytes Bytes) GetResourceType() ResourceType {
+	return ResourceType{}
+}
+
 type ResourceList []Resource
+
+func (list ResourceList) Select(query *gorm.DB) *gorm.DB {
+	return query
+}
 
 func (list *ResourceList) From(db *gorm.DB) error {
 	resources := []Resource{}
@@ -103,27 +198,17 @@ func (list ResourceList) Items() []Object {
 	return objects
 }
 
-type ResourceMetadata struct {
-	ResourceType `gorm:"embedded"`
-
-	Metadata datatypes.JSONMap
-}
-
-func (data ResourceMetadata) ConvertToUnstructured() (*unstructured.Unstructured, error) {
-	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": schema.GroupVersion{Group: data.Group, Version: data.Version}.String(),
-			"kind":       data.Kind,
-			"metadata":   map[string]interface{}(data.Metadata),
-		},
-	}, nil
-}
-
-func (data ResourceMetadata) GetResourceType() ResourceType {
-	return data.ResourceType
-}
-
 type ResourceMetadataList []ResourceMetadata
+
+func (list ResourceMetadataList) Select(query *gorm.DB) *gorm.DB {
+	switch query.Dialector.Name() {
+	case "mysql":
+		return query.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
+	case "postgres":
+		return query.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
+	}
+	panic("storage: only support mysql or postgres")
+}
 
 func (list *ResourceMetadataList) From(db *gorm.DB) error {
 	metadatas := []ResourceMetadata{}
@@ -135,6 +220,27 @@ func (list *ResourceMetadataList) From(db *gorm.DB) error {
 }
 
 func (list ResourceMetadataList) Items() []Object {
+	objects := make([]Object, 0, len(list))
+	for _, object := range list {
+		objects = append(objects, object)
+	}
+	return objects
+}
+
+type BytesList []Bytes
+
+func (list BytesList) Select(query *gorm.DB) *gorm.DB {
+	return query.Select("object")
+}
+
+func (list *BytesList) From(db *gorm.DB) error {
+	if result := db.Find(list); result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (list BytesList) Items() []Object {
 	objects := make([]Object, 0, len(list))
 	for _, object := range list {
 		objects = append(objects, object)

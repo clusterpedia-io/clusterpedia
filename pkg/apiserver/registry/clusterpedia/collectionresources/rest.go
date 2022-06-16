@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/duration"
-	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/negotiation"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
@@ -96,7 +96,7 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 	}
 
 	if accept := request.AcceptHeaderFrom(ctx); accept != "" {
-		if mediaType, ok := negotiation.NegotiateMediaTypeOptions(accept, s.serializer.SupportedMediaTypes(), TableEndpointRestrictions); ok {
+		if mediaType, ok := negotiation.NegotiateMediaTypeOptions(accept, s.serializer.SupportedMediaTypes(), negotiation.TableEndpointRestrictions); ok {
 			if target := mediaType.Convert; target != nil && target.Kind == "Table" {
 				opts.OnlyMetadata = true
 			}

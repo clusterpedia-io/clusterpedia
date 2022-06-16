@@ -33,6 +33,7 @@ import (
 )
 
 type RESTManager struct {
+	serializer                 runtime.NegotiatedSerializer
 	storageFactory             storage.StorageFactory
 	resourcetSorageConfig      *storageconfig.StorageConfigFactory
 	equivalentResourceRegistry runtime.EquivalentResourceMapper
@@ -44,7 +45,7 @@ type RESTManager struct {
 	restResourceInfos atomic.Value // map[schema.GroupVersionResource]RESTResourceInfo
 }
 
-func NewRESTManager(storageMediaType string, storageFactory storage.StorageFactory, initialAPIGroupResources []*restmapper.APIGroupResources) *RESTManager {
+func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType string, storageFactory storage.StorageFactory, initialAPIGroupResources []*restmapper.APIGroupResources) *RESTManager {
 	apiresources := make(map[schema.GroupResource]metav1.APIResource)
 	for _, groupresources := range initialAPIGroupResources {
 		group := groupresources.Group
@@ -79,6 +80,7 @@ func NewRESTManager(storageMediaType string, storageFactory storage.StorageFacto
 	}
 
 	manager := &RESTManager{
+		serializer:                 serializer,
 		storageFactory:             storageFactory,
 		resourcetSorageConfig:      storageconfig.NewStorageConfigFactory(),
 		equivalentResourceRegistry: runtime.NewEquivalentResourceRegistry(),
@@ -234,6 +236,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 
 			storage.DefaultQualifiedResource = gvr.GroupResource()
 			storage.TableConvertor = GetTableConvertor(gvr.GroupResource())
+			storage.Serializer = m.serializer
 			info.Storage = storage
 		}
 

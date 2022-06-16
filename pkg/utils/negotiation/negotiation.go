@@ -1,4 +1,4 @@
-package collectionresources
+package negotiation
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -8,11 +8,13 @@ import (
 )
 
 var (
-	TableEndpointRestrictions   negotiation.EndpointRestrictions = defaultEndpointRestrictions{false}
-	DefaultEndpointRestrictions negotiation.EndpointRestrictions = defaultEndpointRestrictions{true}
+	TableEndpointRestrictions                 negotiation.EndpointRestrictions = defaultEndpointRestrictions{allowTable: true}
+	PartialObjectMetadataEndpointRestrictions negotiation.EndpointRestrictions = defaultEndpointRestrictions{allowPartialObjectMetadata: true}
+	DefaultEndpointRestrictions               negotiation.EndpointRestrictions = defaultEndpointRestrictions{allowTable: true, allowPartialObjectMetadata: true}
 )
 
 type defaultEndpointRestrictions struct {
+	allowTable                 bool
 	allowPartialObjectMetadata bool
 }
 
@@ -27,7 +29,7 @@ func (r defaultEndpointRestrictions) AllowsMediaTypeTransform(mimeType, mimeSubT
 
 	switch gvk.Kind {
 	case "Table":
-		return mimeType == "application" && (mimeSubType == "json" || mimeSubType == "yaml")
+		return r.allowTable && mimeType == "application" && (mimeSubType == "json" || mimeSubType == "yaml")
 	case "PartialObjectMetadata", "PartialObjectMetadataList":
 		return r.allowPartialObjectMetadata
 	}
@@ -41,3 +43,5 @@ func (r defaultEndpointRestrictions) AllowsServerVersion(version string) bool {
 func (r defaultEndpointRestrictions) AllowsStreamSchema(s string) bool {
 	return s == "watch"
 }
+
+var NegotiateMediaTypeOptions = negotiation.NegotiateMediaTypeOptions

@@ -2,15 +2,12 @@ package internalstorage
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -190,26 +187,4 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 		query = query.Offset(offset)
 	}
 	return int64(offset), query, nil
-}
-
-func getNewItemFunc(listObj runtime.Object, v reflect.Value) func() runtime.Object {
-	if _, isUnstructuredList := listObj.(*unstructured.UnstructuredList); isUnstructuredList {
-		return func() runtime.Object {
-			return &unstructured.Unstructured{Object: map[string]interface{}{}}
-		}
-	}
-
-	elem := v.Type().Elem()
-	return func() runtime.Object {
-		return reflect.New(elem).Interface().(runtime.Object)
-	}
-}
-
-func appendListItem(v reflect.Value, data []byte, codec runtime.Codec, newItemFunc func() runtime.Object) error {
-	obj, _, err := codec.Decode(data, nil, newItemFunc())
-	if err != nil {
-		return err
-	}
-	v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
-	return nil
 }
