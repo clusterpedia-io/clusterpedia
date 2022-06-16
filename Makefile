@@ -50,6 +50,10 @@ vendor:
 lint: golangci-lint
 	$(GOLANGLINT_BIN) run
 
+.PHONY: lint-fix
+lint-fix: golangci-lint
+	$(GOLANGLINT_BIN) run --fix
+
 .PHONY: test
 test:
 	go test -race -cover -v ./pkg/...

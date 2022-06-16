@@ -413,7 +413,7 @@ func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErro
 		}
 
 		// `reflector` sets a default timeout when watching,
-		// then when re-watching the error handler is called agin and the `err` is nil.
+		// then when re-watching the error handler is called again and the `err` is nil.
 		// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
 		if status := synchro.Status(); status.Status != clusterv1alpha2.SyncStatusSyncing {
 			status = clusterv1alpha2.ClusterResourceSyncCondition{
