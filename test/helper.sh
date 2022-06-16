@@ -1,6 +1,30 @@
 #!/usr/bin/env bash
-
 ROOT="$(dirname "${BASH_SOURCE[0]}")/.."
+
+# check whether command is installed.
+function cmd_exist() {
+    local command="${1}"
+    type "${command}" >/dev/null 2>&1
+}
+
+# Check dependencies is installed or not and exit if not
+function check_dependencies() {
+    local dependencies=("${@}")
+    local not_installed=()
+    for dependency in "${dependencies[@]}"; do
+        if ! cmd_exist "${dependency}"; then
+            not_installed+=("${dependency}")
+        fi
+    done
+
+    if [[ "${#not_installed[@]}" -ne 0 ]]; then
+        echo "Error: Some dependencies are not installed:"
+        for dependency in "${not_installed[@]}"; do
+            echo "  - ${dependency}"
+        done
+        exit 1
+    fi
+}
 
 # build the image for the test
 function build_image() {
