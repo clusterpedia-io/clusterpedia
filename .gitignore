@@ -4,3 +4,6 @@
 
 # OSX trash
 .DS_Store
+
+# apiserver local up cert trash
+apiserver.local.config
