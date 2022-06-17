@@ -9,6 +9,10 @@ function main() {
     local env_name
     local failed=()
 
+    echo "::group::check dependencies"
+    check_dependencies docker kind kubectl helm
+    echo "::endgroup::"
+
     echo "::group::Build image"
     build_image
     echo "::endgroup::"
