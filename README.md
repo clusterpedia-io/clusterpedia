@@ -9,12 +9,17 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/clusterpedia-io/clusterpedia)](https://goreportcard.com/report/github.com/clusterpedia-io/clusterpedia)
 [![Release](https://img.shields.io/github/v/release/clusterpedia-io/clusterpedia)](https://github.com/clusterpedia-io/clusterpedia/releases)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5539/badge)](https://bestpractices.coreinfrastructure.org/projects/5539)
+[![Join Slack channel](https://img.shields.io/badge/slack-@cncf/clusterpedia-30c000.svg?logo=slack)](https://cloud-native.slack.com/messages/clusterpedia)
 
 This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and simply control multi-cluster resources. 
 
 Clusterpedia can synchronize resources with multiple clusters and provide more powerful search features on the basis of compatibility with Kubernetes OpenAPI to help you effectively get any multi-cluster resource that you are looking for in a quick and easy way.  
 
 > The capability of Clusterpedia is not only to search for and view but also simply control resources in the future, just like Wikipedia that supports for editing entries.
+
+<img src="https://github.com/cncf/artwork/blob/master/other/illustrations/ashley-mcnamara/transparent/cncf-cloud-gophers-transparent.png" style="width:600px;" />
+
+**Clusterpedia is a [Cloud Native Computing Foundation](https://cncf.io/) sandbox project.**
 
 ## Why Clusterpedia
 Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet) and other multi-cloud platforms
@@ -333,7 +338,7 @@ Clusterpedia does not actually solve the problem of network connectivity in a mu
 
 ## Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
-* [Slack](https://join.slack.com/t/clusterpedia/shared_invite/zt-11smmdntu-Im1YjOahqvHhJFqNzLELOA)
+* [Slack](https://cloud-native.slack.com/messages/clusterpedia)
 
 ## Contributors
 
