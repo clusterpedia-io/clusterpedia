@@ -2,14 +2,15 @@ package collectionresources
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternal "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
@@ -109,7 +110,10 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 
 	storage, ok := s.storages[name]
 	if !ok {
-		return nil, errors.New("")
+		return nil, apierrors.NewNotFound(
+			schema.GroupResource{Group: internal.GroupName, Resource: "collectionresources"},
+			name,
+		)
 	}
 	return storage.Get(ctx, &opts)
 }
