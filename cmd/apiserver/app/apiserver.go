@@ -10,6 +10,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/featuregate"
+	"k8s.io/component-base/logs"
 	"k8s.io/component-base/term"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
@@ -51,7 +52,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
 	utilfeature.DefaultMutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
