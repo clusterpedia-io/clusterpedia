@@ -67,7 +67,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
 	clusterpediafeature.MutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
