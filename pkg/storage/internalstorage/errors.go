@@ -11,15 +11,15 @@ import (
 	genericstorage "k8s.io/apiserver/pkg/storage"
 )
 
-func InterpreResourceError(cluster, name string, err error) error {
+func InterpreResourceDBError(cluster, name string, err error) error {
 	if err == nil {
 		return nil
 	}
 
-	return InterpreError(fmt.Sprintf("%s/%s", cluster, name), err)
+	return InterpreDBError(fmt.Sprintf("%s/%s", cluster, name), err)
 }
 
-func InterpreError(key string, err error) error {
+func InterpreDBError(key string, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -39,7 +39,7 @@ func InterpreError(key string, err error) error {
 		return pgError
 	}
 
-	return genericstorage.NewInternalError(err.Error())
+	return err
 }
 
 func InterpreMysqlError(key string, err error) error {

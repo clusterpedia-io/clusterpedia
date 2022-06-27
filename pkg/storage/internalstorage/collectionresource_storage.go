@@ -66,7 +66,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 	}
 
 	if err := list.From(query); err != nil {
-		return nil, InterpreError(s.collectionResource.Name, err)
+		return nil, InterpreDBError(s.collectionResource.Name, err)
 	}
 
 	gvrs := make(map[schema.GroupVersionResource]struct{})
@@ -75,7 +75,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 	for _, resource := range list.Items() {
 		obj, err := resource.ConvertToUnstructured()
 		if err != nil {
-			return nil, InterpreError(s.collectionResource.Name, err)
+			return nil, err
 		}
 		objs = append(objs, obj)
 
