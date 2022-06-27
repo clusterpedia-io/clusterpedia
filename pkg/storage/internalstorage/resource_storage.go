@@ -48,7 +48,7 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 
 	metaobj, err := meta.Accessor(obj)
 	if err != nil {
-		return InterpreError("", err)
+		return err
 	}
 
 	var ownerUID types.UID
@@ -58,7 +58,7 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 
 	var buffer bytes.Buffer
 	if err := s.codec.Encode(obj, &buffer); err != nil {
-		return InterpreResourceError(cluster, metaobj.GetName(), err)
+		return err
 	}
 
 	resource := Resource{
@@ -80,18 +80,18 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 	}
 
 	result := s.db.WithContext(ctx).Create(&resource)
-	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
+	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 }
 
 func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtime.Object) error {
 	metaobj, err := meta.Accessor(obj)
 	if err != nil {
-		return InterpreError("", err)
+		return err
 	}
 
 	var buffer bytes.Buffer
 	if err := s.codec.Encode(obj, &buffer); err != nil {
-		return InterpreResourceError(cluster, metaobj.GetName(), err)
+		return err
 	}
 
 	var ownerUID types.UID
@@ -119,7 +119,7 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		"namespace": metaobj.GetNamespace(),
 		"name":      metaobj.GetName(),
 	}).Updates(updatedResource)
-	return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
+	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 }
 
 func (s *ResourceStorage) deleteObject(cluster, namespace, name string) *gorm.DB {
@@ -136,11 +136,11 @@ func (s *ResourceStorage) deleteObject(cluster, namespace, name string) *gorm.DB
 func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {
 	metaobj, err := meta.Accessor(obj)
 	if err != nil {
-		return InterpreError("", err)
+		return err
 	}
 
 	if result := s.deleteObject(cluster, metaobj.GetNamespace(), metaobj.GetName()); result.Error != nil {
-		return InterpreResourceError(cluster, metaobj.GetName(), result.Error)
+		return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 	}
 	return nil
 }
@@ -159,16 +159,15 @@ func (s *ResourceStorage) genGetObjectQuery(ctx context.Context, cluster, namesp
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
 	var objects [][]byte
 	if result := s.genGetObjectQuery(ctx, cluster, namespace, name).First(&objects); result.Error != nil {
-		return InterpreResourceError(cluster, namespace+"/"+name, result.Error)
+		return InterpretResourceDBError(cluster, namespace+"/"+name, result.Error)
 	}
 
 	obj, _, err := s.codec.Decode(objects[0], nil, into)
 	if err != nil {
-		return InterpreResourceError(cluster, namespace+"/"+name, err)
+		return err
 	}
 	if obj != into {
-		err := fmt.Errorf("Failed to decode resource, into is %T", into)
-		return InterpreResourceError(cluster, namespace+"/"+name, err)
+		return fmt.Errorf("Failed to decode resource, into is %T", into)
 	}
 	return nil
 }
@@ -196,13 +195,13 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	}
 
 	if err := result.From(query); err != nil {
-		return InterpreError(s.storageGroupResource.String(), err)
+		return InterpretDBError(s.storageGroupResource.String(), err)
 	}
 	objects := result.Items()
 
 	list, err := meta.ListAccessor(listObject)
 	if err != nil {
-		return InterpreError(s.storageGroupResource.String(), err)
+		return err
 	}
 
 	if opts.WithContinue != nil && *opts.WithContinue {
@@ -252,12 +251,12 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 
 	listPtr, err := meta.GetItemsPtr(listObject)
 	if err != nil {
-		return InterpreError(s.storageGroupResource.String(), err)
+		return err
 	}
 
 	v, err := conversion.EnforcePtr(listPtr)
 	if err != nil || v.Kind() != reflect.Slice {
-		return InterpreError(s.storageGroupResource.String(), fmt.Errorf("need ptr to slice: %v", err))
+		return fmt.Errorf("need ptr to slice: %v", err)
 	}
 
 	slice := reflect.MakeSlice(v.Type(), len(objects), len(objects))
