@@ -11,6 +11,7 @@ import (
 	"k8s.io/apiserver/pkg/util/feature"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
+	"k8s.io/component-base/logs"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -21,6 +22,7 @@ type ClusterPediaServerOptions struct {
 	MaxRequestsInFlight         int
 	MaxMutatingRequestsInFlight int
 
+	Logs           *logs.Options
 	SecureServing  *genericoptions.SecureServingOptionsWithLoopback
 	Authentication *genericoptions.DelegatingAuthenticationOptions
 	Authorization  *genericoptions.DelegatingAuthorizationOptions
@@ -47,6 +49,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		MaxRequestsInFlight:         0,
 		MaxMutatingRequestsInFlight: 0,
 
+		Logs:           logs.NewOptions(),
 		SecureServing:  sso.WithLoopback(),
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
@@ -151,6 +154,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	// o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
+	o.Logs.AddFlags(fss.FlagSet("logs"))
 	return fss
 }
 
