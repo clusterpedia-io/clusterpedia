@@ -24,14 +24,13 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 		Use: "clusterpedia-apiserver",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
-			cliflag.PrintFlags(cmd.Flags())
 
-			if err := opts.Complete(); err != nil {
+			// Activate logging as soon as possible, after that
+			// show flags with the final logging configuration.
+			if err := opts.Logs.ValidateAndApply(utilfeature.DefaultFeatureGate); err != nil {
 				return err
 			}
-			if err := opts.Validate(args); err != nil {
-				return err
-			}
+			cliflag.PrintFlags(cmd.Flags())
 
 			config, err := opts.Config()
 			if err != nil {
@@ -66,6 +65,8 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 }
 
 func init() {
+	runtime.Must(logs.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+
 	// The feature gate `RemainingItemCount` should default to false
 	// https://github.com/clusterpedia-io/clusterpedia/issues/196
 	gates := utilfeature.DefaultMutableFeatureGate.GetAll()

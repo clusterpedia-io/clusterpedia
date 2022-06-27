@@ -43,15 +43,13 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
-			fs := cmd.Flags()
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
 			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
 				return err
 			}
-
-			cliflag.PrintFlags(fs)
+			cliflag.PrintFlags(cmd.Flags())
 
 			config, err := opts.Config()
 			if err != nil {

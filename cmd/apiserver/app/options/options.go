@@ -64,7 +64,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 	}
 }
 
-func (o *ClusterPediaServerOptions) Validate(args []string) error {
+func (o *ClusterPediaServerOptions) Validate() error {
 	errors := []error{}
 	errors = append(errors, o.validateGenericOptions()...)
 	errors = append(errors, o.Storage.Validate()...)
@@ -72,11 +72,11 @@ func (o *ClusterPediaServerOptions) Validate(args []string) error {
 	return utilerrors.NewAggregate(errors)
 }
 
-func (o *ClusterPediaServerOptions) Complete() error {
-	return nil
-}
-
 func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
+	if err := o.Validate(); err != nil {
+		return nil, err
+	}
+
 	storage, err := storage.NewStorageFactory(o.Storage.Name, o.Storage.ConfigPath)
 	if err != nil {
 		return nil, err
