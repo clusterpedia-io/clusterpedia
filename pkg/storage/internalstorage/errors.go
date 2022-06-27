@@ -53,6 +53,11 @@ func InterpreMysqlError(key string, err error) error {
 		return genericstorage.NewKeyExistsError(key, 0)
 	case 1040:
 		// klog.Error("too many connections")
+
+	//&mysql.MySQLError{Number:0x47a, Message:"Table 'abc.users' doesn't exist"}
+	//&mysql.MySQLError{Number:0x419, Message:"Unknown database 'abc'"}
+	case 1146, 1049:
+		return genericstorage.NewUnreachableError(key, 0)
 	}
 	return err
 }
