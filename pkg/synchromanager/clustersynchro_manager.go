@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -43,10 +44,11 @@ type Manager struct {
 	clusterpediaclient crdclientset.Interface
 	informerFactory    externalversions.SharedInformerFactory
 
-	queue           workqueue.RateLimitingInterface
-	storage         storage.StorageFactory
-	clusterlister   clusterlister.PediaClusterLister
-	clusterInformer cache.SharedIndexInformer
+	queue                      workqueue.RateLimitingInterface
+	storage                    storage.StorageFactory
+	clusterlister              clusterlister.PediaClusterLister
+	clusterSyncResourcesLister clusterlister.ClusterSyncResourcesLister
+	clusterInformer            cache.SharedIndexInformer
 
 	synchrolock      sync.RWMutex
 	synchros         map[string]*clustersynchro.ClusterSynchro
@@ -56,15 +58,17 @@ type Manager struct {
 func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, storage storage.StorageFactory) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
+	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
 
 	manager := &Manager{
 		informerFactory:    factory,
 		kubeclient:         kubeclient,
 		clusterpediaclient: client,
 
-		storage:         storage,
-		clusterlister:   clusterinformer.Lister(),
-		clusterInformer: clusterinformer.Informer(),
+		storage:                    storage,
+		clusterlister:              clusterinformer.Lister(),
+		clusterInformer:            clusterinformer.Informer(),
+		clusterSyncResourcesLister: clusterSyncResourcesInformer.Lister(),
 		queue: workqueue.NewRateLimitingQueue(
 			workqueue.NewItemExponentialFailureRateLimiter(2*time.Second, 5*time.Second),
 		),
@@ -79,6 +83,14 @@ func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, s
 			DeleteFunc: manager.deleteCluster,
 		},
 	)
+
+	clusterSyncResourcesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: manager.handleClusterSyncResources,
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			manager.handleClusterSyncResources(newObj)
+		},
+		DeleteFunc: manager.handleClusterSyncResources,
+	})
 
 	return manager
 }
@@ -281,8 +293,22 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	}
 
 	manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.RunningConditionReason, "", metav1.ConditionTrue)
+	syncResources := cluster.Spec.SyncResources
+	if refName := cluster.Spec.SyncResourcesRefName; refName != "" {
+		ref, err := manager.clusterSyncResourcesLister.Get(refName)
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to get SyncResourcesRef of cluster", "cluster", cluster.Name, "SyncResourcesRef", refName)
+				return err
+			}
+			// TODO: Use more obvious method to let users know.
+			klog.Warningf("Failed to get SyncResourcesRef of cluster %s: %v", cluster.Name, err)
+		} else {
+			syncResources = append(syncResources, ref.Spec.SyncResources...)
+		}
+	}
 
-	synchro.SetResources(cluster.Spec.SyncResources, cluster.Spec.SyncAllCustomResources)
+	synchro.SetResources(syncResources, cluster.Spec.SyncAllCustomResources)
 
 	manager.synchrolock.Lock()
 	manager.synchros[cluster.Name] = synchro
@@ -354,6 +380,25 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 		}
 		return err
 	})
+}
+
+func (manager *Manager) handleClusterSyncResources(obj interface{}) {
+	// ClusterSyncResources is cluster scoped resource, key is name
+	refName, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		klog.ErrorS(err, "handle clustersyncresources failed")
+		return
+	}
+	clusters, err := manager.clusterlister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "list clusters failed while handling clustersyncresources", "clustersyncresources", refName)
+		return
+	}
+	for _, cluster := range clusters {
+		if cluster.Spec.SyncResourcesRefName == refName {
+			manager.enqueue(cluster)
+		}
+	}
 }
 
 func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {

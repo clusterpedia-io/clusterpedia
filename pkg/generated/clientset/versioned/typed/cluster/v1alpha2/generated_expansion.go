@@ -2,4 +2,6 @@
 
 package v1alpha2
 
+type ClusterSyncResourcesExpansion interface{}
+
 type PediaClusterExpansion interface{}

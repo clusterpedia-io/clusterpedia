@@ -1,0 +1,11 @@
+apiVersion: cluster.clusterpedia.io/v1alpha2
+kind: ClusterSyncResources
+metadata:
+  name: cluster-sync-resources-example
+spec:
+  syncResources:
+    - group: ""
+      resources:
+        - pods
+      versions:
+        - v1
