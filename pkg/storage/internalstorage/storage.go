@@ -41,7 +41,7 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 		Where(map[string]interface{}{"cluster": cluster}).
 		Find(&resources)
 	if result.Error != nil {
-		return nil, InterpreError(cluster, result.Error)
+		return nil, InterpretDBError(cluster, result.Error)
 	}
 
 	resourceversions := make(map[schema.GroupVersionResource]map[string]interface{})
@@ -64,7 +64,7 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 
 func (f *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
 	result := f.db.WithContext(ctx).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
-	return InterpreError(cluster, result.Error)
+	return InterpretDBError(cluster, result.Error)
 }
 
 func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error {
@@ -74,7 +74,7 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 		"version":  gvr.Version,
 		"resource": gvr.Resource,
 	}).Delete(&Resource{})
-	return InterpreError(fmt.Sprintf("%s/%s", cluster, gvr), result.Error)
+	return InterpretDBError(fmt.Sprintf("%s/%s", cluster, gvr), result.Error)
 }
 
 func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error) {

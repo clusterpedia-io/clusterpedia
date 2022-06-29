@@ -11,15 +11,15 @@ import (
 	genericstorage "k8s.io/apiserver/pkg/storage"
 )
 
-func InterpreResourceError(cluster, name string, err error) error {
+func InterpretResourceDBError(cluster, name string, err error) error {
 	if err == nil {
 		return nil
 	}
 
-	return InterpreError(fmt.Sprintf("%s/%s", cluster, name), err)
+	return InterpretDBError(fmt.Sprintf("%s/%s", cluster, name), err)
 }
 
-func InterpreError(key string, err error) error {
+func InterpretDBError(key string, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -29,20 +29,20 @@ func InterpreError(key string, err error) error {
 	}
 
 	// TODO(iceber): add dialector judgment
-	mysqlErr := InterpreMysqlError(key, err)
+	mysqlErr := InterpretMysqlError(key, err)
 	if mysqlErr != err {
 		return mysqlErr
 	}
 
-	pgError := InterprePostgresError(key, err)
+	pgError := InterpretPostgresError(key, err)
 	if pgError != err {
 		return pgError
 	}
 
-	return genericstorage.NewInternalError(err.Error())
+	return err
 }
 
-func InterpreMysqlError(key string, err error) error {
+func InterpretMysqlError(key string, err error) error {
 	var mysqlErr *mysql.MySQLError
 	if !errors.As(err, &mysqlErr) {
 		return err
@@ -57,7 +57,7 @@ func InterpreMysqlError(key string, err error) error {
 	return err
 }
 
-func InterprePostgresError(key string, err error) error {
+func InterpretPostgresError(key string, err error) error {
 	var pgError *pgconn.PgError
 	if !errors.As(err, &pgError) {
 		return err
