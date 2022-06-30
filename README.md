@@ -20,6 +20,7 @@ Clusterpedia can synchronize resources with multiple clusters and provide more p
 <img src="https://github.com/cncf/artwork/blob/master/other/illustrations/ashley-mcnamara/transparent/cncf-cloud-gophers-transparent.png" style="width:600px;" />
 
 **Clusterpedia is a [Cloud Native Computing Foundation](https://cncf.io/) sandbox project.**
+> If you want to join the clusterpedia channel on CNCF slack, please **[get invite to CNCF slack](https://slack.cncf.io/)** and then join the [#clusterpedia](https://cloud-native.slack.com/messages/clusterpedia) channel.
 
 ## Why Clusterpedia
 Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet) and other multi-cloud platforms
@@ -338,7 +339,9 @@ Clusterpedia does not actually solve the problem of network connectivity in a mu
 
 ## Contact <span id="contact"></span>
 If you have any question, feel free to reach out to us in the following ways:
-* [Slack](https://cloud-native.slack.com/messages/clusterpedia)
+* [@cncf/clusterpedia slack](https://cloud-native.slack.com/messages/clusterpedia)
+
+> If you want to join the clusterpedia channel on CNCF slack, please **[get invite to CNCF slack](https://slack.cncf.io/)** and then join the [#clusterpedia](https://cloud-native.slack.com/messages/clusterpedia) channel.
 
 ## Contributors
 
