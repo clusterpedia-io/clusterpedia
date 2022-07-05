@@ -12,3 +12,4 @@ GO11MODULE=on go install sigs.k8s.io/controller-tools/cmd/controller-gen
 
 cd "${API_ROOT}"
 controller-gen crd paths=./cluster/... output:crd:dir="${REPO_ROOT}/charts/_crds"
+controller-gen crd paths=./policy/... output:crd:dir="${REPO_ROOT}/charts/_crds"

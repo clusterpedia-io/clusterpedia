@@ -6,6 +6,8 @@ import (
 	clientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/cluster/v1alpha2"
 	fakeclusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/cluster/v1alpha2/fake"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/policy/v1alpha1"
+	fakepolicyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/policy/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -66,4 +68,9 @@ var (
 // ClusterV1alpha2 retrieves the ClusterV1alpha2Client
 func (c *Clientset) ClusterV1alpha2() clusterv1alpha2.ClusterV1alpha2Interface {
 	return &fakeclusterv1alpha2.FakeClusterV1alpha2{Fake: &c.Fake}
+}
+
+// PolicyV1alpha1 retrieves the PolicyV1alpha1Client
+func (c *Clientset) PolicyV1alpha1() policyv1alpha1.PolicyV1alpha1Interface {
+	return &fakepolicyv1alpha1.FakePolicyV1alpha1{Fake: &c.Fake}
 }

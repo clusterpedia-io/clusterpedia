@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -41,6 +42,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cluster().V1alpha2().ClusterSyncResources().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("pediaclusters"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cluster().V1alpha2().PediaClusters().Informer()}, nil
+
+		// Group=policy.clusterpedia.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("clusterimportpolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Policy().V1alpha1().ClusterImportPolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("pediaclusterlifecycles"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Policy().V1alpha1().PediaClusterLifecycles().Informer()}, nil
 
 	}
 
