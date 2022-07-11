@@ -209,6 +209,56 @@ clustersynchroManager:
     ## alpha: v0.3.0
     AllowSyncAllResources: false
 
+## controller manager config
+controllerManager:
+  ## @param controllerManager.labels
+  labels: {}
+  ## @param controllerManager.replicaCount target replicas
+  replicaCount: 1
+  ## @param controllerManager.podAnnotations
+  podAnnotations: {}
+  ## @param controllerManager.podLabels
+  podLabels: {}
+  ## @param image.registry clusterpedia controllerManager image registry
+  ## @param image.repository clusterpedia controllerManager image repository
+  ## @param image.tag clusterpedia controllerManager image tag (immutable tags are recommended)
+  ## @param image.pullPolicy clusterpedia controllerManager image pull policy
+  ## @param image.pullSecrets Specify docker-registry secret names as an array
+  ##
+  image:
+    registry: ghcr.io
+    repository: clusterpedia-io/clusterpedia/controller-manager
+    tag: latest
+    ## Specify a imagePullPolicy
+    ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+    ##
+    pullPolicy: IfNotPresent
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## Example:
+    ## pullSecrets:
+    ##   - myRegistryKeySecretName
+    ##
+    pullSecrets: []
+  ## @param controllerManager.resources
+  resources: {}
+    # If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+  ## @param controllerManager.nodeSelector
+  nodeSelector: {}
+  ## @param controllerManager.affinity
+  affinity: {}
+  ## @param controllerManager.tolerations
+  tolerations: []
+  ## @param featureGate to controller
+  featureGates: {}
+
 ## @section PostgreSQL Parameters
 ##
 ## PostgreSQL properties

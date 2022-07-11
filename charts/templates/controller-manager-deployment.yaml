@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clusterpedia.controllerManager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    app: {{ include "clusterpedia.controllerManager.fullname" . }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{  .Values.controllerManager.replicaCount }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+      app: {{ include "clusterpedia.controllerManager.fullname" . }}
+  template:
+    metadata:
+      {{- if .Values.controllerManager.podAnnotations }}
+      annotations:
+      {{- include "common.tplvalues.render" (dict "value" .Values.controllerManager.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        app: {{ include "clusterpedia.controllerManager.fullname" . }}
+        {{- if .Values.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.controllerManager.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "clusterpedia.controllerManager.imagePullSecrets" . | nindent 6 }}
+      containers:
+      - name: {{ include "clusterpedia.controllerManager.fullname" . }}
+        image: {{ template "clusterpedia.controllerManager.image" . }}
+        imagePullPolicy: {{ .Values.controllerManager.image.pullPolicy }}
+        command:
+        - /usr/local/bin/clustersynchro-manager
+        - --leader-elect-resource-namespace={{ .Release.Namespace }}
+        {{- with (include "clusterpedia.controllerManager.featureGates" .) }}
+        - {{ . }}
+        {{- end }}
+        {{- if .Values.controllerManager.resources }}
+        resources: {{- toYaml .Values.controllerManager.resources | nindent 12 }}
+        {{- end }}
+      serviceAccountName: {{ include "clusterpedia.controllerManager.fullname" . }}
+      {{- if .Values.controllerManager.affinity }}
+      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.controllerManager.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.controllerManager.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.controllerManager.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.controllerManager.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.controllerManager.tolerations "context" $) | nindent 8 }}
+      {{- end }}
