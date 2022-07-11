@@ -10,6 +10,7 @@ import (
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	cluster "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/cluster"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
+	policy "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/policy"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -157,8 +158,13 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Cluster() cluster.Interface
+	Policy() policy.Interface
 }
 
 func (f *sharedInformerFactory) Cluster() cluster.Interface {
 	return cluster.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Policy() policy.Interface {
+	return policy.New(f, f.namespace, f.tweakListOptions)
 }

@@ -30,6 +30,10 @@ deepcopy-gen \
     --output-file-base="zz_generated.deepcopy"
 deepcopy-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
+    --input-dirs="./policy/v1alpha1" \
+    --output-file-base="zz_generated.deepcopy"
+deepcopy-gen \
+    --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./clusterpedia/v1beta1" \
     --output-file-base="zz_generated.deepcopy"
 deepcopy-gen \
@@ -50,7 +54,7 @@ echo "Generating with client-gen"
 client-gen \
     --go-header-file="hack/boilerplate.go.txt" \
     --input-base="github.com/clusterpedia-io/api" \
-    --input="cluster/v1alpha2" \
+    --input="cluster/v1alpha2,policy/v1alpha1" \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset" \
     --clientset-name="versioned" \
     --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
@@ -58,15 +62,14 @@ client-gen \
 echo "Generating with lister-gen"
 lister-gen \
     --go-header-file="hack/boilerplate.go.txt" \
-    --input-dirs="github.com/clusterpedia-io/api/cluster/v1alpha2" \
+    --input-dirs="github.com/clusterpedia-io/api/cluster/v1alpha2,github.com/clusterpedia-io/api/policy/v1alpha1" \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/listers" \
     --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
 
 echo "Generating with informer-gen"
 informer-gen \
     --go-header-file="hack/boilerplate.go.txt" \
-    --input-dirs="github.com/clusterpedia-io/api/cluster/v1alpha2" \
-    --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers" \
+    --input-dirs="github.com/clusterpedia-io/api/cluster/v1alpha2,github.com/clusterpedia-io/api/policy/v1alpha1" \
     --versioned-clientset-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned" \
     --listers-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/listers" \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers" \

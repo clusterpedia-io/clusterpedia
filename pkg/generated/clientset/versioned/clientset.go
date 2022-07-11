@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/cluster/v1alpha2"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/policy/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -15,6 +16,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ClusterV1alpha2() clusterv1alpha2.ClusterV1alpha2Interface
+	PolicyV1alpha1() policyv1alpha1.PolicyV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -22,11 +24,17 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clusterV1alpha2 *clusterv1alpha2.ClusterV1alpha2Client
+	policyV1alpha1  *policyv1alpha1.PolicyV1alpha1Client
 }
 
 // ClusterV1alpha2 retrieves the ClusterV1alpha2Client
 func (c *Clientset) ClusterV1alpha2() clusterv1alpha2.ClusterV1alpha2Interface {
 	return c.clusterV1alpha2
+}
+
+// PolicyV1alpha1 retrieves the PolicyV1alpha1Client
+func (c *Clientset) PolicyV1alpha1() policyv1alpha1.PolicyV1alpha1Interface {
+	return c.policyV1alpha1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -77,6 +85,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.policyV1alpha1, err = policyv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
@@ -99,6 +111,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.clusterV1alpha2 = clusterv1alpha2.New(c)
+	cs.policyV1alpha1 = policyv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
