@@ -26,7 +26,7 @@ ifeq ($(LATEST_TAG),$(shell git describe --abbrev=0 --tags))
 	VERSION=$(LATEST_TAG)
 endif
 
-all: apiserver clustersynchro-manager
+all: apiserver clustersynchro-manager controller-manager
 
 gen-clusterconfigs:
 	./hack/gen-clusterconfigs.sh
@@ -76,8 +76,15 @@ clustersynchro-manager:
 			   -o  bin/clustersynchro-manager \
 			   cmd/clustersynchro-manager/main.go
 
+.PHONY: controller-manager
+controller-manager:
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+			   -ldflags $(LDFLAGS) \
+			   -o  bin/controller-manager \
+			   cmd/controller-manager/main.go
+
 .PHONY: images
-images: image-apiserver image-clustersynchro-manager
+images: image-apiserver image-clustersynchro-manager image-controller-manager
 
 image-apiserver:
 	GOOS="linux" $(MAKE) apiserver
@@ -97,8 +104,17 @@ image-clustersynchro-manager:
 		--build-arg BASEIMAGE=$(BASEIMAGE) \
 		--build-arg BINNAME=clustersynchro-manager .
 
+image-controller-manager:
+	GOOS="linux" $(MAKE) controller-manager
+	docker buildx build \
+		-t $(REGISTRY)/controller-manager-$(GOARCH):$(VERSION) \
+		--platform=linux/$(GOARCH) \
+		--load \
+		--build-arg BASEIMAGE=$(BASEIMAGE) \
+		--build-arg BINNAME=controller-manager .
+
 .PHONY: push-images
-push-images: push-apiserver-image push-clustersynchro-manager-image
+push-images: push-apiserver-image push-clustersynchro-manager-image push-controller-manager
 
 # clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
 push-apiserver-image: clean-apiserver-manifest
@@ -144,6 +160,28 @@ push-clustersynchro-manager-image: clean-clustersynchro-manager-manifest
 		docker manifest push $(REGISTRY)/clustersynchro-manager:latest; \
 	fi;
 
+# clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
+push-controller-manager-image: clean-controller-manager-manifest
+	set -e; \
+	images=""; \
+	for arch in $(RELEASE_ARCHS); do \
+		GOARCH=$$arch $(MAKE) image-controller-manager; \
+		image=$(REGISTRY)/controller-manager-$$arch:$(VERSION); \
+		docker push $$image; \
+		images="$$images $$image"; \
+		if [ $(VERSION) != latest ]; then \
+			latest_image=$(REGISTRY)/controller-manager-$$arch:latest; \
+			docker tag $$image $$latest_image; \
+			docker push $$latest_image; \
+		fi; \
+	done; \
+	docker manifest create $(REGISTRY)/controller-manager:$(VERSION) $$images; \
+	docker manifest push $(REGISTRY)/controller-manager:$(VERSION); \
+	if [ $(VERSION) != latest ]; then \
+		docker manifest create $(REGISTRY)/controller-manager:latest $$images; \
+		docker manifest push $(REGISTRY)/controller-manager:latest; \
+	fi;
+
 clean-images: clean-apiserver-manifest clean-clustersynchro-manager-manifest
 	docker images|grep $(REGISTRY)/apiserver|awk '{print $$3}'|xargs docker rmi --force
 	docker images|grep $(REGISTRY)/clustersynchro-manager|awk '{print $$3}'|xargs docker rmi --force
@@ -155,6 +193,10 @@ clean-apiserver-manifest:
 clean-clustersynchro-manager-manifest:
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:$(VERSION) 2>/dev/null;\
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:latest 2>/dev/null; exit 0
+
+clean-controller-manager-manifest:
+	docker manifest rm $(REGISTRY)/controller-manager:$(VERSION) 2>/dev/null;\
+	docker manifest rm $(REGISTRY)/controller-manager:latest 2>/dev/null; exit 0
 
 .PHONY: golangci-lint
 golangci-lint:

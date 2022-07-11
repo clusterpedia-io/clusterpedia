@@ -1,0 +1,24 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: secret
+spec:
+  source:
+    group: ""
+    resource: secrets
+  nameTemplate: 'secret-{{ .source.metadata.namespace }}-{{ .source.metadata.name }}'
+  template: |
+    spec:
+      apiserver: "https://127.0.0.1"
+      syncResources:
+        - group: ""
+          resources:
+            - "pods"
+            - "configmaps"
+      syncResourcesRefName: ""
+  creationCondition: |
+    {{ if eq .source.metadata.namespace "default" }}
+      {{ if eq .source.metadata.name "my-secret" }}
+        true
+      {{ end }}
+    {{ end }}
