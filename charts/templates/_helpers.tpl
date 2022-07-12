@@ -15,6 +15,15 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- end -}}
 
 {{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+*/}}
+{{- define "clusterpedia.controllerManager.fullname" -}}
+{{- printf "%s-%s" (include "common.names.fullname" .) "controller-manager" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+
+{{/*
 Return the proper apiserver image name
 */}}
 {{- define "clusterpedia.apiserver.image" -}}
@@ -26,6 +35,13 @@ Return the proper clustersynchroManager image name
 */}}
 {{- define "clusterpedia.clustersynchroManager.image" -}}
 {{ include "common.images.image" (dict "imageRoot" .Values.clustersynchroManager.image "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper controllerManager image name
+*/}}
+{{- define "clusterpedia.controllerManager.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.controllerManager.image "global" .Values.global) }}
 {{- end -}}
 
 {{- define "clusterpedia.internalstorage.fullname" -}}
@@ -44,6 +60,13 @@ Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "clusterpedia.clustersynchroManager.imagePullSecrets" -}}
 {{ include "common.images.pullSecrets" (dict "images" (list .Values.clustersynchroManager.image) "global" .Values.global) }}
+{{- end -}}
+
+{{/*
+Return the proper Docker Image Registry Secret Names
+*/}}
+{{- define "clusterpedia.controllerManager.imagePullSecrets" -}}
+{{ include "common.images.pullSecrets" (dict "images" (list .Values.controllerManager.image) "global" .Values.global) }}
 {{- end -}}
 
 {{- define "clusterpedia.apiserver.featureGates" -}}
@@ -66,6 +89,22 @@ Return the proper Docker Image Registry Secret Names
      {{- if (not (empty .Values.clustersynchroManager.featureGates)) }}
           {{- $featureGatesFlag := "" -}}
           {{- range $key, $value := .Values.clustersynchroManager.featureGates -}}
+               {{- if not (empty (toString $value)) }}
+                    {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value ","  -}}
+               {{- end -}}
+          {{- end -}}
+
+          {{- if gt (len $featureGatesFlag) 0 }}
+               {{- $featureGatesFlag := trimSuffix "," $featureGatesFlag  | nospace -}}
+               {{- printf "%s=%s" "--feature-gates" $featureGatesFlag -}}
+          {{- end -}}
+     {{- end -}}
+{{- end -}}
+
+{{- define "clusterpedia.controllerManager.featureGates" -}}
+     {{- if (not (empty .Values.controllerManager.featureGates)) }}
+          {{- $featureGatesFlag := "" -}}
+          {{- range $key, $value := .Values.controllerManager.featureGates -}}
                {{- if not (empty (toString $value)) }}
                     {{- $featureGatesFlag = cat $featureGatesFlag $key "=" $value ","  -}}
                {{- end -}}
