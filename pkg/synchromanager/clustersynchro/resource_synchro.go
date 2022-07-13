@@ -19,6 +19,7 @@ import (
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage/internalstorage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
@@ -350,6 +351,14 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 			"namespace", o.GetNamespace(),
 			"name", o.GetName(),
 		)
+		mysqlErr := internalstorage.InterpreMysqlError(synchro.cluster, err)
+		if mysqlErr != err {
+			return
+		}
+		// database is unreachable, gracefully stop.
+		if genericstorage.IsUnreachable(mysqlErr) {
+			synchro.Close()
+		}
 	}
 }
 
