@@ -1,0 +1,41 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: karmada
+spec:
+  source:
+    group: "cluster.karmada.io"
+    versions: []
+    resource: clusters
+  references:
+    - group: ""
+      resource: secrets
+      namespaceTemplate: "{{ .source.spec.secretRef.namespace }}"
+      nameTemplate: "{{ .source.spec.secretRef.name }}"
+      key: secret
+  nameTemplate: "karmada-{{ .source.metadata.name }}"
+  template: |
+    spec:
+      apiserver: "{{ .source.spec.apiEndpoint }}"
+      tokenData: "{{ .references.secret.data.token }}"
+      caData: "{{ .references.secret.data.caBundle }}"
+      syncResources:
+        - group: ""
+          resources:
+            - "pods"
+            - "services"
+            - "configmaps"
+            - "secrets"
+            - "namespaces"
+        - group: "apps"
+          resources:
+            - "*"
+      syncResourcesRefName: ""
+  creationCondition: |
+    {{ if ne .source.spec.apiEndpoint "" }}
+      {{ range .source.status.conditions }}
+        {{ if eq .type "Ready" }}
+          {{ if eq .status "True" }} true {{ end }}
+        {{ end }}
+      {{ end }}
+    {{ end }}
