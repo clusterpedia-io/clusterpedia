@@ -9,11 +9,18 @@ import (
 )
 
 const (
+	CollectionResourceAny           = "any"
 	CollectionResourceWorkloads     = "workloads"
 	CollectionResourceKubeResources = "kuberesources"
 )
 
 var collectionResources = []internal.CollectionResource{
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: CollectionResourceAny,
+		},
+		ResourceTypes: []internal.CollectionResourceType{},
+	},
 	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: CollectionResourceWorkloads,
