@@ -163,18 +163,24 @@ func (s *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 	case *internal.CollectionResourceList:
 		var rows []metav1.TableRow
 		for _, item := range obj.Items {
-			name := item.Name
+			if len(item.ResourceTypes) == 0 {
+				rows = append(rows, metav1.TableRow{
+					Object: runtime.RawExtension{Object: item.DeepCopy()},
+					Cells:  []interface{}{item.Name, "*"},
+				})
+				continue
+			}
+
 			var grs []string
 			for _, rt := range item.ResourceTypes {
 				if rt.Resource == "" {
 					rt.Resource = "*"
 				}
-				grs = append(grs, rt.GroupResource().String())
+				grs = append(grs, rt.Group+"."+rt.Resource)
 			}
-
 			rows = append(rows, metav1.TableRow{
 				Object: runtime.RawExtension{Object: item.DeepCopy()},
-				Cells:  []interface{}{name, strings.Join(grs, ",")},
+				Cells:  []interface{}{item.Name, strings.Join(grs, ",")},
 			})
 		}
 
