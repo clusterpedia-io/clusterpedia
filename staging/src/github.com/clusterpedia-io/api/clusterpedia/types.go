@@ -82,6 +82,9 @@ type CollectionResource struct {
 
 	ResourceTypes []CollectionResourceType
 	Items         []runtime.Object
+
+	Continue           string
+	RemainingItemCount *int64
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

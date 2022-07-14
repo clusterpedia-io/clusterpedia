@@ -24,7 +24,7 @@ func testApplyListOptionsToQuery(t *testing.T, name string, options *internal.Li
 	t.Run(fmt.Sprintf("%s postgres", name), func(t *testing.T) {
 		postgreSQL, err := toSQL(postgresDB, options,
 			func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
-				_, query, err := applyListOptionsToQuery(query, options, nil)
+				_, _, query, err := applyListOptionsToQuery(query, options, nil)
 				return query, err
 			},
 		)
@@ -39,7 +39,7 @@ func testApplyListOptionsToQuery(t *testing.T, name string, options *internal.Li
 		t.Run(fmt.Sprintf("%s mysql-%s", name, version), func(t *testing.T) {
 			mysqlSQL, err := toSQL(mysqlDBs[version], options,
 				func(query *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
-					_, query, err := applyListOptionsToQuery(query, options, nil)
+					_, _, query, err := applyListOptionsToQuery(query, options, nil)
 					return query, err
 				},
 			)

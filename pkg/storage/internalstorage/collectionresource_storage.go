@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -98,7 +99,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 	if err != nil {
 		return nil, err
 	}
-	_, query, err = applyListOptionsToCollectionResourceQuery(query, opts)
+	offset, amount, query, err := applyListOptionsToCollectionResourceQuery(query, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -106,22 +107,26 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 	if err := list.From(query); err != nil {
 		return nil, InterpretDBError(s.collectionResource.Name, err)
 	}
+	items := list.Items()
+	collection := &internal.CollectionResource{
+		TypeMeta:   s.collectionResource.TypeMeta,
+		ObjectMeta: s.collectionResource.ObjectMeta,
+		Items:      make([]runtime.Object, 0, len(items)),
+	}
 
 	gvrs := make(map[schema.GroupVersionResource]struct{})
-	types := []internal.CollectionResourceType{}
-	objs := make([]runtime.Object, 0)
-	for _, resource := range list.Items() {
+	for _, resource := range items {
 		obj, err := resource.ConvertToUnstructured()
 		if err != nil {
 			return nil, err
 		}
-		objs = append(objs, obj)
+		collection.Items = append(collection.Items, obj)
 
 		if resourceType := resource.GetResourceType(); !resourceType.Empty() {
 			gvr := resourceType.GroupVersionResource()
 			if _, ok := gvrs[gvr]; !ok {
 				gvrs[gvr] = struct{}{}
-				types = append(types, internal.CollectionResourceType{
+				collection.ResourceTypes = append(collection.ResourceTypes, internal.CollectionResourceType{
 					Group:    resourceType.Group,
 					Resource: resourceType.Resource,
 					Version:  resourceType.Version,
@@ -130,14 +135,22 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 			}
 		}
 	}
-	sortCollectionResourceTypes(types)
+	sortCollectionResourceTypes(collection.ResourceTypes)
 
-	return &internal.CollectionResource{
-		TypeMeta:      s.collectionResource.TypeMeta,
-		ObjectMeta:    s.collectionResource.ObjectMeta,
-		ResourceTypes: types,
-		Items:         objs,
-	}, nil
+	if opts.WithContinue != nil && *opts.WithContinue {
+		if int64(len(items)) == opts.Limit {
+			collection.Continue = strconv.FormatInt(offset+opts.Limit, 10)
+		}
+	}
+
+	if amount != nil {
+		// When offset is too large, the data in the response is empty and the remaining count is negative.
+		// This ensures that `amount = offset + len(objects) + remain`
+		remain := *amount - offset - int64(len(items))
+		collection.RemainingItemCount = &remain
+	}
+
+	return collection, nil
 }
 
 func resolveGVRsFromURLQuery(query url.Values) (gvrs []schema.GroupVersionResource, err error) {
@@ -230,8 +243,7 @@ func parseGroupVersionResource(gvr string) (schema.GroupVersionResource, error) 
 	return schema.GroupVersionResource{}, fmt.Errorf("unexpected GroupVersionResource string: %v, expect <group>/<resource> or <group>/<version>/<resource>", gvr)
 }
 
-// TODO(iceber): support with remaining count and continue
-func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *internal.ListOptions) (int64, *gorm.DB, error) {
+func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	return applyListOptionsToQuery(query, opts, nil)
 }
 

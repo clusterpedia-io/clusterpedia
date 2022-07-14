@@ -88,6 +88,8 @@ func autoConvert_v1beta1_CollectionResource_To_clusterpedia_CollectionResource(i
 	} else {
 		out.Items = nil
 	}
+	out.Continue = in.Continue
+	out.RemainingItemCount = (*int64)(unsafe.Pointer(in.RemainingItemCount))
 	return nil
 }
 
@@ -110,6 +112,8 @@ func autoConvert_clusterpedia_CollectionResource_To_v1beta1_CollectionResource(i
 	} else {
 		out.Items = nil
 	}
+	out.Continue = in.Continue
+	out.RemainingItemCount = (*int64)(unsafe.Pointer(in.RemainingItemCount))
 	return nil
 }
 

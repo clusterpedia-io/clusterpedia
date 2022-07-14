@@ -27,7 +27,7 @@ var (
 	supportedOrderByFields = sets.NewString("cluster", "namespace", "name", "created_at", "resource_version")
 )
 
-func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error)) (int64, *gorm.DB, error) {
+func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error)) (int64, *int64, *gorm.DB, error) {
 	switch len(opts.ClusterNames) {
 	case 0:
 	case 1:
@@ -126,7 +126,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 				}
 
 				if len(fieldErrors) != 0 {
-					return 0, nil, apierrors.NewInvalid(schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
+					return 0, nil, nil, apierrors.NewInvalid(schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"}, "fieldSelector", fieldErrors)
 				}
 
 				values := requirement.Values().List()
@@ -156,8 +156,14 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 		var err error
 		query, err = applyFn(query, opts)
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, nil, err
 		}
+	}
+
+	var amount *int64
+	if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
+		amount = new(int64)
+		query = query.Count(amount)
 	}
 
 	// Due to performance reasons, the default order by is not set.
@@ -186,5 +192,5 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 	if err == nil {
 		query = query.Offset(offset)
 	}
-	return int64(offset), query, nil
+	return int64(offset), amount, query, nil
 }

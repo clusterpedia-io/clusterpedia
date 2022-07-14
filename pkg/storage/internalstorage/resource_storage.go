@@ -273,25 +273,16 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 }
 
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
-	var amount *int64
 	applyFn := func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
 		query, err := applyOwnerToResourceQuery(db, query, opts)
 		if err != nil {
 			return nil, err
 		}
 
-		if opts.WithRemainingCount != nil && *opts.WithRemainingCount {
-			amount = new(int64)
-			query = query.Count(amount)
-		}
 		return query, nil
 	}
 
-	offset, query, err := applyListOptionsToQuery(query, opts, applyFn)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	return offset, amount, query, nil
+	return applyListOptionsToQuery(query, opts, applyFn)
 }
 
 func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
