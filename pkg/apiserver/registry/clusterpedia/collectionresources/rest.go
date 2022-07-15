@@ -12,7 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/duration"
+	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/rest"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
@@ -104,9 +106,11 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 		}
 	}
 
-	// collection resources don't support with remaining count
-	// ignore opts.WithRemainingCount
-	opts.WithRemainingCount = nil
+	if opts.WithRemainingCount == nil {
+		if enabled := utilfeature.DefaultFeatureGate.Enabled(genericfeatures.RemainingItemCount); enabled {
+			opts.WithRemainingCount = &enabled
+		}
+	}
 
 	storage, ok := s.storages[name]
 	if !ok {

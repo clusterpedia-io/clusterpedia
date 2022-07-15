@@ -30,6 +30,11 @@ func (in *CollectionResource) DeepCopyInto(out *CollectionResource) {
 			}
 		}
 	}
+	if in.RemainingItemCount != nil {
+		in, out := &in.RemainingItemCount, &out.RemainingItemCount
+		*out = new(int64)
+		**out = **in
+	}
 	return
 }
 
