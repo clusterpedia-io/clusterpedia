@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -135,7 +134,6 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 			}
 		}
 	}
-	sortCollectionResourceTypes(collection.ResourceTypes)
 
 	if opts.WithContinue != nil && *opts.WithContinue {
 		if int64(len(items)) == opts.Limit {
@@ -245,11 +243,4 @@ func parseGroupVersionResource(gvr string) (schema.GroupVersionResource, error) 
 
 func applyListOptionsToCollectionResourceQuery(query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
 	return applyListOptionsToQuery(query, opts, nil)
-}
-
-func sortCollectionResourceTypes(types []internal.CollectionResourceType) {
-	sort.Slice(types, func(i, j int) bool {
-		left, right := types[i], types[j]
-		return left.Group > right.Group && left.Resource > right.Resource
-	})
 }
