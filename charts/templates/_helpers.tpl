@@ -22,7 +22,6 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- printf "%s-%s" (include "common.names.fullname" .) "controller-manager" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-
 {{/*
 Return the proper apiserver image name
 */}}
@@ -165,7 +164,7 @@ Return the proper Docker Image Registry Secret Names
      {{- if eq (include "clusterpedia.storage.type" .) "postgres" -}}
      {{- .Values.postgresql.primary.service.ports.postgresql -}}
           {{- else if eq (include "clusterpedia.storage.type" .) "mysql" -}}
-     {{- .Values.mysql.primary.service.ports.mysql -}}
+     {{- .Values.mysql.primary.service.ports -}}
      {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -279,18 +278,18 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- end -}}
 {{- end -}}
 
+{{/*
+Return the proper postgresql image name
+*/}}
 {{- define "clusterpedia.storage.postgresql.image" -}}
-{{- $registryName := .Values.postgresql.image.registry -}}
-{{- $repositoryName := .Values.postgresql.image.repository -}}
-{{- $tag := .Values.postgresql.image.tag -}}
-{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.postgresql.image "global" .Values.global) }}
 {{- end -}}
 
+{{/*
+Return the proper mysql image name
+*/}}
 {{- define "clusterpedia.storage.mysql.image" -}}
-{{- $registryName := .Values.mysql.image.registry -}}
-{{- $repositoryName := .Values.mysql.image.repository -}}
-{{- $tag := .Values.mysql.image.tag -}}
-{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.mysql.image "global" .Values.global) }}
 {{- end -}}
 
 {{- define "clusterpedia.storage.mountPath" -}}
