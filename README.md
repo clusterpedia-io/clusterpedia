@@ -24,7 +24,13 @@ Clusterpedia can synchronize resources with multiple clusters and provide more p
 
 ## Why Clusterpedia
 Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet) and other multi-cloud platforms
-> In the next, Clusterpedia will implemente the feature of automatically synchronizing resources within clusters managed by `Cluster API`, `Karmada`, `Clusternet` and other multi-cloud platforms.
+
+### Automatic synchronization of clusters managed by multi-cloud platforms
+The clusterpedia can automatically synchronize the resources within the cluster managed by the multi-cloud platform.
+
+Users do not need to maintain Clusterpedia manually, Clusterpedia can work as well as the internal components of the multi-cloud platforms.
+
+Lean More About [Interfacing to Multi-Cloud Platforms](https://clusterpedia.io/docs/usage/interfacing-to-multi-cloud-platforms/)
 
 ### More retrieval features and compatibility with **Kubernetes OpenAPI**
 * Support for retrieving resources using `kubectl`, `client-go` or `controller-runtime/client`, [client-go example](https://github.com/clusterpedia-io/client-go/blob/main/examples/list-clusterpedia-resources/main.go)
@@ -67,8 +73,9 @@ $ kubectl get --raw "/apis/clusterpedia.io/v1beta1/resources/apis/apps" | jq
 ```bash
 $ kubectl get collectionresources
 NAME            RESOURCES
+any             *
 workloads       deployments.apps,daemonsets.apps,statefulsets.apps
-kuberesources   *,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextensions.k8s.io,*.apps,*.authentication.k8s.io,*.authorization.k8s.io,*.autoscaling,*.batch,*.certificates.k8s.io,*.coordination.k8s.io,*.discovery.k8s.io,*.events.k8s.io,*.extensions,*.flowcontrol.apiserver.k8s.io,*.imagepolicy.k8s.io,*.internal.apiserver.k8s.io,*.networking.k8s.io,*.node.k8s.io,*.policy,*.rbac.authorization.k8s.io,*.scheduling.k8s.io,*.storage.k8s.io
+kuberesources   .*,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextensions.k8s.io,*.apps,*.authentication.k8s.io,*.authorization.k8s.io,*.autoscaling,*.batch,*.certificates.k8s.io,*.coordination.k8s.io,*.discovery.k8s.io,*.events.k8s.io,*.extensions,*.flowcontrol.apiserver.k8s.io,*.imagepolicy.k8s.io,*.internal.apiserver.k8s.io,*.networking.k8s.io,*.node.k8s.io,*.policy,*.rbac.authorization.k8s.io,*.scheduling.k8s.io,*.storage.k8s.io
 ```
 ### Diverse policies and intelligent synchronization
 * [Wildcards](https://clusterpedia.io/docs/usage/sync-resources/#using-wildcards-to-sync-resources) can be used to sync all types of resources within a specified group or cluster.
@@ -123,6 +130,9 @@ Clusterpedia also provides a `Default Storage Layer` that can connect with **MyS
 |Response include Continue|`search.clusterpedia.io/with-continue`|`withContinue`
 |Response include remaining count|`search.clusterpedia.io/with-remaining-count`|`withRemainingCount`
 |[Custom Where SQL](https://clusterpedia.io/docs/usage/search/#advanced-searchcustom-conditional-search)|-|`whereSQL`|
+|[Get only the metadata of the collection resource](https://clusterpedia.io/docs/usage/search/collection-resource#only-metadata) | - |`onlyMetadata` |
+|[Specify the groups of `any collectionresource`](https://clusterpedia.io/docs/usage/search/collection-resource#any-collectionresource) | - | `groups` |
+|[Specify the resources of `any collectionresource`](https://clusterpedia.io/docs/usage/search/collection-resource#any-collectionresource) | - | `resources` |
 
 **Both Search Labels and URL Query support same operators as Label Selector:**
 * `exist`, `not exist`
@@ -292,7 +302,9 @@ Let's first check which `Collection Resource` currently Clusterpedia supports:
 ```sh
 $ kubectl get collectionresources
 NAME        RESOURCES
-workloads   deployments.apps,daemonsets.apps,statefulsets.apps
+any             *
+workloads       deployments.apps,daemonsets.apps,statefulsets.apps
+kuberesources   .*,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextensions.k8s.io,*.apps,*.authentication.k8s.io,*.authorization.k8s.io,*.autoscaling,*.batch,*.certificates.k8s.io,*.coordination.k8s.io,*.discovery.k8s.io,*.events.k8s.io,*.extensions,*.flowcontrol.apiserver.k8s.io,*.imagepolicy.k8s.io,*.internal.apiserver.k8s.io,*.networking.k8s.io,*.node.k8s.io,*.policy,*.rbac.authorization.k8s.io,*.scheduling.k8s.io,*.storage.k8s.io
 ```
 
 By getting workloads, you can get a set of resources aggregated by `deployments`, `daemonsets`, and `statefulsets`, and `Collection Resource` also supports for all complex queries.
@@ -312,20 +324,6 @@ Due to the limitation of kubectl, you cannot use complex queries in kubectl and 
 [Lean More](https://clusterpedia.io/docs/usage/search/collection-resource/)
 
 ## Proposals
-### Automatic discovery and sync cluster resource<span id="discovery"></span>
-The resource used to represent the cluster in Clusterpedia is called *PediaCluster*, not a simple *Cluster*.
-
-**This is because Clusterpedia was originally designed to build on the existing multi-cluster management platform.**
-
-In order to keep the original intention, the first issue is that Clusterpedia should not conflict with the resources in the existing multi-cluster platform. Cluster is a very common resource name that represents a cluster.
-
-In addition, in order to better connect with the existing multi-cluster platform and enable the connected clusters automatically complete resource synchronization, we need a new mechanism to discover clusters. This discovery mechanism needs to solve the following issues:
-* Get the authentication info to access the cluster
-* Configure conditions that trigger the lifecycle of PediaCluster
-* Set the default policy and prefix name for resource synchronization
-
-This feature will be discussed and implemented in detail in Q1 or Q2 2022.
-
 ### Perform more complex control over resources<span id="complicated"></span>
 In addition to resource search, similar to Wikipedia, Clusterpedia should also have simple capability of resource control, such as watch, create, delete, update, and more.
 
