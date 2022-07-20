@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
       - name: manager
-        image: ghcr.io/clusterpedia-io/clusterpedia/controller-manager:latest
+        image: ghcr.io/clusterpedia-io/clusterpedia/controller-manager:v0.4.0
         command:
         - /usr/local/bin/controller-manager
       serviceAccountName: clusterpedia-controller-manager
