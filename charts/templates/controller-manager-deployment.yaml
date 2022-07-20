@@ -34,7 +34,7 @@ spec:
         image: {{ template "clusterpedia.controllerManager.image" . }}
         imagePullPolicy: {{ .Values.controllerManager.image.pullPolicy }}
         command:
-        - /usr/local/bin/clustersynchro-manager
+        - /usr/local/bin/controller-manager
         - --leader-elect-resource-namespace={{ .Release.Namespace }}
         {{- with (include "clusterpedia.controllerManager.featureGates" .) }}
         - {{ . }}
