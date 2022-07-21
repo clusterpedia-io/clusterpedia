@@ -53,6 +53,22 @@ conversion-gen \
 echo "change directory: ${REPO_ROOT}"
 cd "${REPO_ROOT}"
 
+go_path="${REPO_ROOT}/_go"
+cleanup() {
+  rm -rf "${go_path}"
+}
+trap "cleanup" EXIT SIGINT
+cleanup
+
+go_pkg="${go_path}/src/github.com/clusterpedia-io/clusterpedia"
+go_pkg_dir=$(dirname "${go_pkg}")
+mkdir -p "${go_pkg_dir}"
+
+if [[ ! -e "${go_pkg_dir}" || "$(readlink "${go_pkg_dir}")" != "${REPO_ROOT}" ]]; then
+  ln -snf "${REPO_ROOT}" "${go_pkg_dir}"
+fi
+export GOPATH="${go_path}"
+
 echo "Generating with client-gen"
 client-gen \
     --go-header-file="hack/boilerplate.go.txt" \
