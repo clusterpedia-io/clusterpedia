@@ -17,13 +17,20 @@ Currently, it is only a tentative roadmap and the specific schedule depends on t
 * Support synchronization of all CRD resources [#111](https://github.com/clusterpedia-io/clusterpedia/issues/111)
 * Use the template to configure the pediaCluster resource [#150](https://github.com/clusterpedia-io/clusterpedia/issues/150)
 * The internalstorage allows passing a piece of SQL to support more flexible query requirements [#151](https://github.com/clusterpedia-io/clusterpedia/issues/151)
-* Support for automatic discovery and synchronization (Create, Delete, Update cluster authentication information) of other resources that represent `Cluster`(other multi-cloud projects) to `PediaCluster` [proposal](/README.md#discovery)
-* Support for the plug-in storage layer
 
 ## Q3 2022
-* Support for custom resource columns when accepting data in Table format
-* Support for requests with relevant resources
+* Support for automatic discovery and synchronization (Create, Delete, Update cluster authentication information) of other resources that represent `Cluster`(other multi-cloud projects) to `PediaCluster` [#185](https://github.com/clusterpedia-io/clusterpedia/issues/185)
+* Build-in multi-cluster metrics server in the clusterpedia apiserver
 * The `Default Storage Layer` supports for Custom Collection Resource
+* Support filter namespaces when sync resources [#272](https://github.com/clusterpedia-io/clusterpedia/issues/272)
+
+## Q4 2022
+* Add Agent Mode to collect the cluster resources.
+* Support for custom resource columns when accepting data in Table format
+* Provide multi-cluster metrics server via OpenTelemery in Agent mode
 
 ## Others
+* Support **ES** and **Graph Database** Storage Layer
+* Support for the plug-in storage layer
+* Support for requests with relevant resources
 * Support for [more control over cluster resources](/README.md#complicated), such as watch/create/update/delete operations
