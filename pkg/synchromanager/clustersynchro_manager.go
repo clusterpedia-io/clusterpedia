@@ -3,6 +3,8 @@ package synchromanager
 import (
 	"context"
 	"errors"
+	"math"
+	"math/rand"
 	"reflect"
 	"sync"
 	"time"
@@ -23,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	"github.com/clusterpedia-io/clusterpedia/pkg/controller"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
@@ -34,7 +37,7 @@ import (
 
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
 
-const maxClusterSynchroRetry = 5
+const defaultRetryNum = 5
 
 type Manager struct {
 	runLock sync.Mutex
@@ -70,7 +73,7 @@ func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, s
 		clusterInformer:            clusterinformer.Informer(),
 		clusterSyncResourcesLister: clusterSyncResourcesInformer.Lister(),
 		queue: workqueue.NewRateLimitingQueue(
-			workqueue.NewItemExponentialFailureRateLimiter(2*time.Second, 5*time.Second),
+			NewItemExponentialFailureAndJitterSlowRateLimter(2*time.Second, 15*time.Second, 1*time.Minute, 1.0, defaultRetryNum),
 		),
 
 		synchros: make(map[string]*clustersynchro.ClusterSynchro),
@@ -198,9 +201,9 @@ func (manager *Manager) processNextCluster() (continued bool) {
 	}
 
 	cluster = cluster.DeepCopy()
-	if err := manager.reconcileCluster(cluster); err != nil {
-		klog.ErrorS(err, "Failed to reconcile cluster", "cluster", name, "num requeues", manager.queue.NumRequeues(key))
-		if manager.queue.NumRequeues(key) < maxClusterSynchroRetry {
+	if result := manager.reconcileCluster(cluster); result.Requeue() {
+		if num := manager.queue.NumRequeues(key); num < result.MaxRetryCount() {
+			klog.V(3).InfoS("requeue cluster", "cluster", name, "num requeues", num+1)
 			manager.queue.AddRateLimited(key)
 			return
 		}
@@ -211,34 +214,34 @@ func (manager *Manager) processNextCluster() (continued bool) {
 }
 
 // if err returned is not nil, cluster will be requeued
-func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) (err error) {
+func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) controller.Result {
 	if !cluster.DeletionTimestamp.IsZero() {
 		klog.InfoS("remove cluster", "cluster", cluster.Name)
 		if err := manager.removeCluster(cluster.Name); err != nil {
 			klog.ErrorS(err, "Failed to remove cluster", cluster.Name)
-			return err
+			return controller.RequeueResult(defaultRetryNum)
 		}
 
 		if !controllerutil.ContainsFinalizer(cluster, ClusterSynchroControllerFinalizer) {
-			return nil
+			return controller.NoRequeueResult
 		}
 
 		// remove finalizer
 		controllerutil.RemoveFinalizer(cluster, ClusterSynchroControllerFinalizer)
 		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to remove finializer", "cluster", cluster.Name)
-			return err
+			return controller.RequeueResult(defaultRetryNum)
 		}
-		return nil
+		return controller.NoRequeueResult
 	}
 
 	// ensure finalizer
 	if !controllerutil.ContainsFinalizer(cluster, ClusterSynchroControllerFinalizer) {
 		controllerutil.AddFinalizer(cluster, ClusterSynchroControllerFinalizer)
 
-		if _, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
+		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to add finializer", "cluster", cluster.Name)
-			return err
+			return controller.RequeueResult(defaultRetryNum)
 		}
 	}
 
@@ -246,7 +249,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if err != nil {
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
 		manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidConfigConditionReason, "invalid cluster config: "+err.Error(), metav1.ConditionFalse)
-		return nil
+		return controller.NoRequeueResult
 	}
 
 	// if `AllowSyncAllResources` is not enabled, then check whether the all-resource wildcard is used
@@ -260,7 +263,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 				// If have better suggestions can be discussed in the https://github.com/clusterpedia-io/clusterpedia/issues.
 				manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidSyncResourceConditionReason,
 					"ClusterSynchro Manager's feature gate `AllowSyncAllResources` is not enabled, cannot use all-resources wildcard", metav1.ConditionFalse)
-				return nil
+				return controller.NoRequeueResult
 			}
 		}
 	}
@@ -283,26 +286,29 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if synchro == nil {
 		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager)
 		if err != nil {
-			manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InitialFailedConditionReason, err.Error(), metav1.ConditionFalse)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)
-			// requeue
-			return err
+			manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InitialFailedConditionReason, err.Error(), metav1.ConditionFalse)
+
+			if _, ok := err.(clustersynchro.RetryableError); ok {
+				return controller.RequeueResult(math.MaxInt)
+			}
+			return controller.NoRequeueResult
 		}
 
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 	}
-
 	manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.RunningConditionReason, "", metav1.ConditionTrue)
+
 	syncResources := cluster.Spec.SyncResources
 	if refName := cluster.Spec.SyncResourcesRefName; refName != "" {
-		ref, err := manager.clusterSyncResourcesLister.Get(refName)
-		if err != nil {
+		if ref, err := manager.clusterSyncResourcesLister.Get(refName); err != nil {
 			if !apierrors.IsNotFound(err) {
 				klog.ErrorS(err, "Failed to get SyncResourcesRef of cluster", "cluster", cluster.Name, "SyncResourcesRef", refName)
-				return err
+				return controller.RequeueResult(defaultRetryNum)
 			}
+
 			// TODO: Use more obvious method to let users know.
-			klog.Warningf("Failed to get SyncResourcesRef of cluster %s: %v", cluster.Name, err)
+			klog.Warningf("cluster(%s)'s SyncResourcesRef is not found", cluster.Name)
 		} else {
 			syncResources = append(syncResources, ref.Spec.SyncResources...)
 		}
@@ -313,7 +319,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	manager.synchrolock.Lock()
 	manager.synchros[cluster.Name] = synchro
 	manager.synchrolock.Unlock()
-	return nil
+	return controller.NoRequeueResult
 }
 
 func (manager *Manager) removeCluster(name string) error {
@@ -438,4 +444,68 @@ func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, er
 		config.BearerToken = string(cluster.Spec.TokenData)
 	}
 	return config, nil
+}
+
+type ItemExponentialFailureAndJitterSlowRateLimter struct {
+	failuresLock sync.Mutex
+	failures     map[interface{}]int
+
+	maxFastAttempts int
+
+	fastBaseDelay time.Duration
+	fastMaxDelay  time.Duration
+
+	slowBaseDelay time.Duration
+	slowMaxFactor float64
+}
+
+func NewItemExponentialFailureAndJitterSlowRateLimter(fastBaseDelay, fastMaxDelay, slowBaseDeploy time.Duration, slowMaxFactor float64, maxFastAttempts int) workqueue.RateLimiter {
+	if slowMaxFactor <= 0.0 {
+		slowMaxFactor = 1.0
+	}
+	return &ItemExponentialFailureAndJitterSlowRateLimter{
+		failures:        map[interface{}]int{},
+		maxFastAttempts: maxFastAttempts,
+		fastBaseDelay:   fastBaseDelay,
+		fastMaxDelay:    fastMaxDelay,
+		slowBaseDelay:   slowBaseDeploy,
+		slowMaxFactor:   slowMaxFactor,
+	}
+}
+
+func (r *ItemExponentialFailureAndJitterSlowRateLimter) When(item interface{}) time.Duration {
+	r.failuresLock.Lock()
+	defer r.failuresLock.Unlock()
+
+	fastExp, num := r.failures[item], r.failures[item]+1
+	r.failures[item] = num
+	if num > r.maxFastAttempts {
+		return r.slowBaseDelay + time.Duration(rand.Float64()*r.slowMaxFactor*float64(r.slowBaseDelay))
+	}
+
+	// The backoff is capped such that 'calculated' value never overflows.
+	backoff := float64(r.fastBaseDelay.Nanoseconds()) * math.Pow(2, float64(fastExp))
+	if backoff > math.MaxInt64 {
+		return r.fastMaxDelay
+	}
+
+	calculated := time.Duration(backoff)
+	if calculated > r.fastMaxDelay {
+		return r.fastMaxDelay
+	}
+	return calculated
+}
+
+func (r *ItemExponentialFailureAndJitterSlowRateLimter) NumRequeues(item interface{}) int {
+	r.failuresLock.Lock()
+	defer r.failuresLock.Unlock()
+
+	return r.failures[item]
+}
+
+func (r *ItemExponentialFailureAndJitterSlowRateLimter) Forget(item interface{}) {
+	r.failuresLock.Lock()
+	defer r.failuresLock.Unlock()
+
+	delete(r.failures, item)
 }
