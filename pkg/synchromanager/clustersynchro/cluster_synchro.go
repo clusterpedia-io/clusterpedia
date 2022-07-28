@@ -65,6 +65,8 @@ type ClusterStatusUpdater interface {
 	UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error
 }
 
+type RetryableError error
+
 func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
 	clusterclient, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -73,7 +75,12 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 	dynamicDiscoveryManager, err := discovery.NewDynamicDiscoveryManager(name, clusterclient.Discovery())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamic discovery manager: %w", err)
+		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
+	}
+
+	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
+	if err != nil {
+		return nil, RetryableError(fmt.Errorf("failed to get resource versions from storage: %w", err))
 	}
 
 	_, crdVersions := dynamicDiscoveryManager.GetAPIResourceAndVersions(schema.GroupResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
@@ -94,11 +101,6 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	listWatchFactory, err := informer.NewDynamicListerWatcherFactory(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lister watcher factory: %w", err)
-	}
-
-	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resource versions from storage: %w", err)
 	}
 
 	synchro := &ClusterSynchro{
