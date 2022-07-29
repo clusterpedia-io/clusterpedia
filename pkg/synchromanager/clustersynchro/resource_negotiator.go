@@ -112,7 +112,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 				syncGVR := syncGR.WithVersion(version)
 				syncCondition := clusterv1alpha2.ClusterResourceSyncCondition{
 					Version: syncGVR.Version,
-					Status:  clusterv1alpha2.SyncStatusPending,
+					Status:  clusterv1alpha2.ResourceSyncStatusPending,
 					Reason:  "SynchroCreating",
 				}
 

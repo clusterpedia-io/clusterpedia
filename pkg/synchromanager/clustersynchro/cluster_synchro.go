@@ -58,7 +58,8 @@ type ClusterSynchro struct {
 	resourceNegotiator  *ResourceNegotiator
 	groupResourceStatus atomic.Value // *GroupResourceStatus
 
-	readyCondition atomic.Value // metav1.Condition
+	runningCondition atomic.Value // metav1.Condition
+	healthyCondition atomic.Value // metav1.Condition
 }
 
 type ClusterStatusUpdater interface {
@@ -136,13 +137,23 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	synchro.syncResources.Store([]clusterv1alpha2.ClusterGroupResources(nil))
 	synchro.setSyncResourcesCh = make(chan struct{}, 1)
 
-	condition := metav1.Condition{
-		Type:               clusterv1alpha2.ClusterReadyCondition,
+	runningCondition := metav1.Condition{
+		Type:               clusterv1alpha2.SynchroRunningCondition,
 		Status:             metav1.ConditionFalse,
-		Reason:             clusterv1alpha2.PendingReason,
+		Reason:             clusterv1alpha2.SynchroPendingReason,
+		Message:            "cluster synchro is created, wait running",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
-	synchro.readyCondition.Store(condition)
+	synchro.runningCondition.Store(runningCondition)
+
+	healthyCondition := metav1.Condition{
+		Type:               clusterv1alpha2.ClusterHealthyCondition,
+		Status:             metav1.ConditionUnknown,
+		Reason:             clusterv1alpha2.ClusterMonitorStopReason,
+		Message:            "wait cluster synchro's healthy monitor running",
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	}
+	synchro.healthyCondition.Store(healthyCondition)
 
 	synchro.initWithResourceVersions(resourceversions)
 	return synchro, nil
@@ -164,6 +175,15 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 }
 
 func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
+	runningCondition := metav1.Condition{
+		Type:               clusterv1alpha2.SynchroRunningCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             clusterv1alpha2.SynchroRunningReason,
+		Message:            "cluster synchro is running",
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	}
+	s.runningCondition.Store(runningCondition)
+
 	// TODO(iceber): The start and stop of dynamicDiscoveryManager, crdController, apiServiceController
 	// should be controlled by cluster healthy.
 	go s.dynamicDiscoveryManager.Run(s.closer)
@@ -187,41 +207,44 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 
 	s.waitGroup.Start(s.monitor)
 	s.waitGroup.Start(s.resourceSynchroRunner)
-	go s.clusterStatusUpdater()
+
+	go func() {
+		defer close(s.closed)
+
+		for range s.updateStatusCh {
+			status := s.genClusterStatus()
+			if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
+				klog.ErrorS(err, "Failed to update cluster conditions and sync resources status", "cluster", s.name, "conditions", status.Conditions)
+			}
+		}
+	}()
 
 	select {
+	case <-s.closer:
 	case <-shutdown:
 		s.Shutdown(true)
-	case <-s.closer:
 	}
 	<-s.closed
 }
 
-func (s *ClusterSynchro) Shutdown(updateReadyCondition bool) {
+func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 	s.closeOnce.Do(func() {
 		close(s.closer)
 	})
-
 	s.waitGroup.Wait()
 
-	if updateReadyCondition {
-		var message string
-		lastReadyCondition := s.readyCondition.Load().(metav1.Condition)
-		if lastReadyCondition.Status == metav1.ConditionFalse {
-			message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
-		}
-		condition := metav1.Condition{
-			Type:               clusterv1alpha2.ClusterReadyCondition,
-			Status:             metav1.ConditionFalse,
-			Reason:             clusterv1alpha2.ClusterSynchroStopReason,
-			Message:            message,
-			LastTransitionTime: metav1.Now(),
-		}
-		s.readyCondition.Store(condition)
+	runningCondition := metav1.Condition{
+		Type:               clusterv1alpha2.SynchroRunningCondition,
+		Status:             metav1.ConditionFalse,
+		Reason:             clusterv1alpha2.SynchroShutdownReason,
+		Message:            "cluster synchro is shutdown",
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	}
+	s.runningCondition.Store(runningCondition)
 
+	if updateStatus {
 		s.updateStatus()
 	}
-
 	close(s.updateStatusCh)
 	<-s.closed
 }
@@ -229,6 +252,7 @@ func (s *ClusterSynchro) Shutdown(updateReadyCondition bool) {
 func (s *ClusterSynchro) SetResources(syncResources []clusterv1alpha2.ClusterGroupResources, syncAllCustomResources bool) {
 	s.syncResources.Store(syncResources)
 	s.resourceNegotiator.SetSyncAllCustomResources(syncAllCustomResources)
+
 	s.resetSyncResources()
 }
 
@@ -286,7 +310,7 @@ func (s *ClusterSynchro) setSyncResources() {
 			resourceStorage, err := s.storage.NewResourceStorage(config.storageConfig)
 			if err != nil {
 				klog.ErrorS(err, "Failed to create resource storage", "cluster", s.name, "storage resource", storageGVR)
-				updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource storage failed: %s", err))
+				updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource storage failed: %s", err))
 				continue
 			}
 
@@ -310,7 +334,7 @@ func (s *ClusterSynchro) setSyncResources() {
 
 			// After the synchronizer is successfully created,
 			// clean up the reasons and message initialized in the sync condition
-			updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusUnknown, "", "")
+			updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusUnknown, "", "")
 
 			if s.handlerStopCh != nil {
 				select {
@@ -339,7 +363,7 @@ func (s *ClusterSynchro) setSyncResources() {
 				return
 			}
 
-			updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusStop, "SynchroRemoved", "the resource synchro is moved")
+			updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusStop, "SynchroRemoved", "the resource synchro is moved")
 			s.storageResourceSynchros.Delete(storageGVR)
 		}
 	}
@@ -360,7 +384,7 @@ func (s *ClusterSynchro) setSyncResources() {
 
 		// even if err != nil, the resource may have been cleaned up
 		klog.ErrorS(err, "Failed to clean cluster resource", "cluster", s.name, "storage resource", storageGVR)
-		updateSyncConditions(storageGVR, clusterv1alpha2.SyncStatusStop, "CleanResourceFailed", err.Error())
+		updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusStop, "CleanResourceFailed", err.Error())
 		for gvr := range storageGVRToSyncGVRs[storageGVR] {
 			// not delete failed gvr
 			delete(deleted, gvr)
@@ -440,41 +464,21 @@ func (synchro *ClusterSynchro) stopResourceSynchro() {
 	}
 }
 
-func (s *ClusterSynchro) clusterStatusUpdater() {
-	defer close(s.closed)
-
-	for range s.updateStatusCh {
-		status := s.genClusterStatus()
-		if err := s.ClusterStatusUpdater.UpdateClusterStatus(context.TODO(), s.name, status); err != nil {
-			klog.ErrorS(err, "Failed to update cluster ready condition and sync resources status", "cluster", s.name, "conditions", status.Conditions)
-		}
-	}
-}
-
 func (s *ClusterSynchro) updateStatus() {
 	select {
 	case s.updateStatusCh <- struct{}{}:
 	default:
-		return
 	}
 }
 
 func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 	status := &clusterv1alpha2.ClusterStatus{
 		Version: s.dynamicDiscoveryManager.StorageVersion().GitVersion,
+		Conditions: []metav1.Condition{
+			s.runningCondition.Load().(metav1.Condition),
+			s.healthyCondition.Load().(metav1.Condition),
+		},
 	}
-
-	readyCondition := s.readyCondition.Load().(metav1.Condition)
-	if readyCondition.Reason == clusterv1alpha2.ClusterSynchroStopReason {
-		synchroCondition := metav1.Condition{
-			Type:    clusterv1alpha2.ClusterSynchroCondition,
-			Reason:  clusterv1alpha2.ClusterSynchroStopReason,
-			Status:  metav1.ConditionFalse,
-			Message: "",
-		}
-		status.Conditions = append(status.Conditions, synchroCondition)
-	}
-	status.Conditions = append(status.Conditions, readyCondition)
 
 	groupResourceStatuses := s.groupResourceStatus.Load().(*GroupResourceStatus)
 	if groupResourceStatuses == nil {
@@ -504,10 +508,10 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 					cond.LastTransitionTime = status.LastTransitionTime
 				} else {
 					if cond.Status == "" {
-						cond.Status = clusterv1alpha2.SyncStatusUnknown
+						cond.Status = clusterv1alpha2.ResourceSyncStatusUnknown
 					}
 					if cond.Reason == "" {
-						cond.Reason = "SynchroNotFound"
+						cond.Reason = "ResourceSynchroNotFound"
 					}
 					if cond.Message == "" {
 						cond.Message = "not found resource synchro"

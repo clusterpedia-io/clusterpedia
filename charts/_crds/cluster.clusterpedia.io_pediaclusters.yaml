@@ -16,14 +16,26 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.apiserver
-      name: APIServer
+    - jsonPath: .status.conditions[?(@.type == 'Ready')].status
+      name: Ready
       type: string
     - jsonPath: .status.version
       name: Version
       type: string
-    - jsonPath: .status.conditions[?(@.type == 'Ready')].reason
-      name: Status
+    - jsonPath: .spec.apiserver
+      name: APIServer
+      type: string
+    - jsonPath: .status.conditions[?(@.type == 'Validated')].reason
+      name: Validated
+      priority: 10
+      type: string
+    - jsonPath: .status.conditions[?(@.type == 'SynchroRunning')].reason
+      name: SynchroRunning
+      priority: 10
+      type: string
+    - jsonPath: .status.conditions[?(@.type == 'ClusterHealthy')].reason
+      name: ClusterHealthy
+      priority: 10
       type: string
     name: v1alpha2
     schema:

@@ -176,14 +176,14 @@ func TestGroupResourceStatus_LoadGroupResourcesStatuses(t *testing.T) {
 	// only add sync condition for resource with version
 	gr = schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "configmaps"}
 	status.addSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
-		Status: clusterv1alpha2.SyncStatusPending,
+		Status: clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// add resource and sync condition
 	gr = schema.GroupResource{Group: "", Resource: "pods"}
 	status.addResource(gr, "Pod", true)
 	status.addSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
-		Status: clusterv1alpha2.SyncStatusPending,
+		Status: clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	statuses := status.LoadGroupResourcesStatuses()
@@ -207,7 +207,7 @@ func TestGroupResourceStatus_LoadGroupResourcesStatuses(t *testing.T) {
 					Namespaced: true,
 					SyncConditions: []clusterv1alpha2.ClusterResourceSyncCondition{
 						{
-							Status: clusterv1alpha2.SyncStatusPending,
+							Status: clusterv1alpha2.ResourceSyncStatusPending,
 						},
 					},
 				},
@@ -224,22 +224,22 @@ func TestGroupResourceStatus_UpdateSyncCondition(t *testing.T) {
 	status.addResource(gr, "Deployment", true)
 	status.addSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 	status.addSyncCondition(gr.WithVersion("v1beta1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1beta1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// update the sync condition of added version
-	status.UpdateSyncCondition(gr.WithVersion("v1beta1"), clusterv1alpha2.SyncStatusStop, "", "")
+	status.UpdateSyncCondition(gr.WithVersion("v1beta1"), clusterv1alpha2.ResourceSyncStatusStop, "", "")
 
 	// update the sync condition of unadded version
-	status.UpdateSyncCondition(gr.WithVersion("v1beta2"), clusterv1alpha2.SyncStatusStop, "", "")
+	status.UpdateSyncCondition(gr.WithVersion("v1beta2"), clusterv1alpha2.ResourceSyncStatusStop, "", "")
 
 	// update the sync condition of unadded resources
 	gr = schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "configmaps"}
-	status.UpdateSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.SyncStatusStop, "", "")
+	status.UpdateSyncCondition(gr.WithVersion("v1"), clusterv1alpha2.ResourceSyncStatusStop, "", "")
 
 	statuses := status.LoadGroupResourcesStatuses()
 	expected := []clusterv1alpha2.ClusterGroupResourcesStatus{
@@ -253,11 +253,11 @@ func TestGroupResourceStatus_UpdateSyncCondition(t *testing.T) {
 					SyncConditions: []clusterv1alpha2.ClusterResourceSyncCondition{
 						{
 							Version: "v1",
-							Status:  clusterv1alpha2.SyncStatusPending,
+							Status:  clusterv1alpha2.ResourceSyncStatusPending,
 						},
 						{
 							Version: "v1beta1",
-							Status:  clusterv1alpha2.SyncStatusStop,
+							Status:  clusterv1alpha2.ResourceSyncStatusStop,
 						},
 					},
 				},
@@ -274,18 +274,18 @@ func TestGroupResourceStatus_DeleteVersion(t *testing.T) {
 	status.addResource(deploymentGR, "Deployment", true)
 	status.addSyncCondition(deploymentGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 	status.addSyncCondition(deploymentGR.WithVersion("v1beta1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1beta1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// add pod resource
 	podGR := schema.GroupResource{Group: "", Resource: "pods"}
 	status.addResource(podGR, "Pod", true)
 	status.addSyncCondition(podGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
-		Status: clusterv1alpha2.SyncStatusPending,
+		Status: clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// delete version
@@ -311,7 +311,7 @@ func TestGroupResourceStatus_DeleteVersion(t *testing.T) {
 					SyncConditions: []clusterv1alpha2.ClusterResourceSyncCondition{
 						{
 							Version: "v1",
-							Status:  clusterv1alpha2.SyncStatusPending,
+							Status:  clusterv1alpha2.ResourceSyncStatusPending,
 						},
 					},
 				},
@@ -329,16 +329,16 @@ func TestGroupResourceStatus_GetStorageGVRToSyncGVRs(t *testing.T) {
 	status.addSyncCondition(deploymentGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusSyncing,
+		Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 	})
 	status.addSyncCondition(deploymentGR.WithVersion("v1beta1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1beta1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusPending,
+		Status:         clusterv1alpha2.ResourceSyncStatusPending,
 	})
 	status.addSyncCondition(deploymentGR.WithVersion("v1alpha1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1alpha1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// add pod resource
@@ -347,7 +347,7 @@ func TestGroupResourceStatus_GetStorageGVRToSyncGVRs(t *testing.T) {
 	status.addSyncCondition(podGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusSyncing,
+		Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 	})
 
 	gvrSetMap := status.GetStorageGVRToSyncGVRs()
@@ -366,12 +366,12 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 	status.addSyncCondition(deploymentGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusSyncing,
+		Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 	})
 	status.addSyncCondition(deploymentGR.WithVersion("v1beta1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1beta1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusPending,
+		Status:         clusterv1alpha2.ResourceSyncStatusPending,
 	})
 
 	// build old GroupResourceStatus
@@ -380,11 +380,11 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 	old.addResource(deploymentGR, "Deployment", true)
 	old.addSyncCondition(deploymentGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 	old.addSyncCondition(deploymentGR.WithVersion("v1beta2"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version: "v1beta2",
-		Status:  clusterv1alpha2.SyncStatusPending,
+		Status:  clusterv1alpha2.ResourceSyncStatusPending,
 	})
 	// add pod resource
 	podGR := schema.GroupResource{Group: "", Resource: "pods"}
@@ -392,7 +392,7 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 	old.addSyncCondition(podGR.WithVersion("v1"), clusterv1alpha2.ClusterResourceSyncCondition{
 		Version:        "v1",
 		StorageVersion: "v1",
-		Status:         clusterv1alpha2.SyncStatusSyncing,
+		Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 	})
 
 	// merge to `status`
@@ -411,16 +411,16 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 						{
 							Version:        "v1",
 							StorageVersion: "v1",
-							Status:         clusterv1alpha2.SyncStatusSyncing,
+							Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 						},
 						{
 							Version:        "v1beta1",
 							StorageVersion: "v1",
-							Status:         clusterv1alpha2.SyncStatusPending,
+							Status:         clusterv1alpha2.ResourceSyncStatusPending,
 						},
 						{
 							Version: "v1beta2",
-							Status:  clusterv1alpha2.SyncStatusPending,
+							Status:  clusterv1alpha2.ResourceSyncStatusPending,
 						},
 					},
 				},
@@ -437,7 +437,7 @@ func TestGroupResourceStatus_Merge(t *testing.T) {
 						{
 							Version:        "v1",
 							StorageVersion: "v1",
-							Status:         clusterv1alpha2.SyncStatusSyncing,
+							Status:         clusterv1alpha2.ResourceSyncStatusSyncing,
 						},
 					},
 				},

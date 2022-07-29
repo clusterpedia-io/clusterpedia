@@ -6,7 +6,7 @@ function ready() {
     for ((i = 0; i < 300; i++)); do
         sleep 5
         got="$(kubectl get pediacluster)"
-        unexpect="$(echo "${got}" | tail -n +2 | grep -v Healthy)"
+        unexpect="$(echo "${got}" | tail -n +2 | awk '{print $1,$2}' | grep -v True)"
         if [[ "${unexpect}" == "" ]]; then
             return 0
         fi

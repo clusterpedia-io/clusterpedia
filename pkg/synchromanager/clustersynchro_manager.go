@@ -3,6 +3,7 @@ package synchromanager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
@@ -164,6 +165,25 @@ func (manager *Manager) enqueue(obj interface{}) {
 	manager.queue.Add(key)
 }
 
+func (manager *Manager) handleClusterSyncResources(obj interface{}) {
+	// ClusterSyncResources is cluster scoped resource, key is name
+	refName, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		klog.ErrorS(err, "handle clustersyncresources failed")
+		return
+	}
+	clusters, err := manager.clusterlister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "list clusters failed while handling clustersyncresources", "clustersyncresources", refName)
+		return
+	}
+	for _, cluster := range clusters {
+		if cluster.Spec.SyncResourcesRefName == refName {
+			manager.enqueue(cluster)
+		}
+	}
+}
+
 func (manager *Manager) worker() {
 	for manager.processNextCluster() {
 		select {
@@ -245,35 +265,58 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		}
 	}
 
+	manager.synchrolock.RLock()
+	synchro := manager.synchros[cluster.Name]
+	manager.synchrolock.RUnlock()
+
 	config, err := buildClusterConfig(cluster)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
-		manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidConfigConditionReason, "invalid cluster config: "+err.Error(), metav1.ConditionFalse)
+		manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidConfigReason,
+			"invalid cluster config: "+err.Error(), metav1.ConditionFalse)
 		return controller.NoRequeueResult
+	}
+
+	var warnMsg string
+	syncResources := cluster.Spec.SyncResources
+	if refName := cluster.Spec.SyncResourcesRefName; refName != "" {
+		if ref, err := manager.clusterSyncResourcesLister.Get(refName); err != nil {
+			if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to get SyncResourcesRef of cluster", "cluster", cluster.Name, "SyncResourcesRef", refName)
+				manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
+					fmt.Sprintf("Failed to get cluster sync resources of cluster: %v", err), metav1.ConditionFalse)
+				return controller.RequeueResult(defaultRetryNum)
+			}
+
+			// TODO: Use more obvious method to let users know.
+			klog.Warningf("cluster(%s)'s SyncResourcesRef is not found", cluster.Name)
+			warnMsg = "Warning: sync resource ref is not found"
+		} else {
+			syncResources = append(syncResources, ref.Spec.SyncResources...)
+		}
 	}
 
 	// if `AllowSyncAllResources` is not enabled, then check whether the all-resource wildcard is used
 	if !clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllResources) {
-		for _, groupResources := range cluster.Spec.SyncResources {
+		for _, groupResources := range syncResources {
 			if groupResources.Group == "*" {
 				// When using the all-resource wildcard without feature gate enabled,
 				// it just updates the condition information and
 				// does not stop it if cluster synchro is already running.
 				//
 				// If have better suggestions can be discussed in the https://github.com/clusterpedia-io/clusterpedia/issues.
-				manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InvalidSyncResourceConditionReason,
+				manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
 					"ClusterSynchro Manager's feature gate `AllowSyncAllResources` is not enabled, cannot use all-resources wildcard", metav1.ConditionFalse)
 				return controller.NoRequeueResult
 			}
 		}
 	}
 
-	manager.synchrolock.RLock()
-	synchro := manager.synchros[cluster.Name]
-	manager.synchrolock.RUnlock()
+	manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.ValidatedReason, warnMsg, metav1.ConditionTrue)
+
+	// check cluster config
 	if synchro != nil && !reflect.DeepEqual(synchro.RESTConfig, config) {
 		klog.InfoS("cluster config is changed, rebuild cluster synchro", "cluster", cluster.Name)
-
 		synchro.Shutdown(true)
 		synchro = nil
 
@@ -286,39 +329,44 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if synchro == nil {
 		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager)
 		if err != nil {
+			_, forever := err.(clustersynchro.RetryableError)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)
-			manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.InitialFailedConditionReason, err.Error(), metav1.ConditionFalse)
 
-			if _, ok := err.(clustersynchro.RetryableError); ok {
+			runningCondition := metav1.Condition{
+				Type:    clusterv1alpha2.SynchroRunningCondition,
+				Reason:  clusterv1alpha2.SynchroInitialFailedReason,
+				Status:  metav1.ConditionFalse,
+				Message: err.Error(),
+			}
+			healthyCondition := metav1.Condition{
+				Type:    clusterv1alpha2.ClusterHealthyCondition,
+				Reason:  clusterv1alpha2.ClusterMonitorStopReason,
+				Status:  metav1.ConditionUnknown,
+				Message: "wait cluster synchro",
+			}
+			clusterStatus := &clusterv1alpha2.ClusterStatus{Conditions: []metav1.Condition{runningCondition, healthyCondition}}
+			if err := manager.UpdateClusterStatus(context.TODO(), cluster.Name, clusterStatus); err != nil {
+				klog.ErrorS(err, "Failed to update cluster synchro running condition status", "cluster", cluster.Name)
+				if forever {
+					// if initial failed error is retryable, retry forever
+					return controller.RequeueResult(math.MaxInt)
+				}
+				return controller.RequeueResult(defaultRetryNum)
+			}
+
+			if forever {
 				return controller.RequeueResult(math.MaxInt)
 			}
 			return controller.NoRequeueResult
 		}
-
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
-	}
-	manager.UpdateClusterSynchroCondition(cluster.Name, clusterv1alpha2.RunningConditionReason, "", metav1.ConditionTrue)
 
-	syncResources := cluster.Spec.SyncResources
-	if refName := cluster.Spec.SyncResourcesRefName; refName != "" {
-		if ref, err := manager.clusterSyncResourcesLister.Get(refName); err != nil {
-			if !apierrors.IsNotFound(err) {
-				klog.ErrorS(err, "Failed to get SyncResourcesRef of cluster", "cluster", cluster.Name, "SyncResourcesRef", refName)
-				return controller.RequeueResult(defaultRetryNum)
-			}
-
-			// TODO: Use more obvious method to let users know.
-			klog.Warningf("cluster(%s)'s SyncResourcesRef is not found", cluster.Name)
-		} else {
-			syncResources = append(syncResources, ref.Spec.SyncResources...)
-		}
+		manager.synchrolock.Lock()
+		manager.synchros[cluster.Name] = synchro
+		manager.synchrolock.Unlock()
 	}
 
 	synchro.SetResources(syncResources, cluster.Spec.SyncAllCustomResources)
-
-	manager.synchrolock.Lock()
-	manager.synchros[cluster.Name] = synchro
-	manager.synchrolock.Unlock()
 	return controller.NoRequeueResult
 }
 
@@ -329,51 +377,115 @@ func (manager *Manager) removeCluster(name string) error {
 	manager.synchrolock.Unlock()
 
 	if synchro != nil {
-		// not update removed cluster,
+		// not update removed cluster status,
 		// and ensure that no more data is being synchronized to the resource storage
 		synchro.Shutdown(false)
 	}
-	return manager.cleanCluster(name)
-}
 
-func (manager *Manager) cleanCluster(name string) error {
+	// clean cluster from storage
 	return manager.storage.CleanCluster(context.TODO(), name)
 }
 
-func (manager *Manager) UpdateClusterSynchroCondition(name, reason, message string, status metav1.ConditionStatus) {
-	synchroCondition := metav1.Condition{
-		Type:    clusterv1alpha2.ClusterSynchroCondition,
+func (manager *Manager) UpdateClusterValidatedCondition(name string, synchro *clustersynchro.ClusterSynchro, reason, message string, status metav1.ConditionStatus) {
+	validatedCondition := metav1.Condition{
+		Type:    clusterv1alpha2.ValidatedCondition,
 		Reason:  reason,
 		Status:  status,
 		Message: message,
 	}
+	if err := manager.updateClusterStatus(context.TODO(), name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+		meta.SetStatusCondition(&clusterStatus.Conditions, validatedCondition)
+		if synchro != nil {
+			return
+		}
 
-	clusterStatus := &clusterv1alpha2.ClusterStatus{Conditions: []metav1.Condition{synchroCondition}}
+		// if the cluster synchro is nil, update SynchroRunning and ClusterHealthy conditions.
+		runningCondition := meta.FindStatusCondition(clusterStatus.Conditions, clusterv1alpha2.SynchroRunningCondition)
+		if validatedCondition.Status != metav1.ConditionTrue {
+			condition := metav1.Condition{
+				Type:    clusterv1alpha2.SynchroRunningCondition,
+				Reason:  validatedCondition.Reason,
+				Status:  metav1.ConditionFalse,
+				Message: validatedCondition.Message,
+			}
+			meta.SetStatusCondition(&clusterStatus.Conditions, condition)
+		} else if runningCondition == nil || runningCondition.Reason != clusterv1alpha2.SynchroInitialFailedReason {
+			condition := metav1.Condition{
+				Type:    clusterv1alpha2.SynchroRunningCondition,
+				Reason:  clusterv1alpha2.SynchroWaitInitReason,
+				Status:  metav1.ConditionFalse,
+				Message: "pediacluster is validated",
+			}
+			meta.SetStatusCondition(&clusterStatus.Conditions, condition)
+		}
 
-	if err := manager.UpdateClusterStatus(context.TODO(), name, clusterStatus); err != nil {
-		klog.ErrorS(err, "Failed to update cluster synchro condition status", "cluster", name, "condition", synchroCondition)
+		healthyCondition := metav1.Condition{
+			Type:    clusterv1alpha2.ClusterHealthyCondition,
+			Reason:  clusterv1alpha2.ClusterMonitorStopReason,
+			Status:  metav1.ConditionUnknown,
+			Message: "wait cluster synchro",
+		}
+		meta.SetStatusCondition(&clusterStatus.Conditions, healthyCondition)
+	}); err != nil {
+		klog.ErrorS(err, "Failed to update cluster validated condition status", "cluster", name, "condition", validatedCondition)
 	}
 }
 
 func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error {
+	return manager.updateClusterStatus(ctx, name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+		if status.Version != "" {
+			clusterStatus.Version = status.Version
+		}
+		if status.SyncResources != nil {
+			clusterStatus.SyncResources = status.SyncResources
+		}
+		for _, condition := range status.Conditions {
+			meta.SetStatusCondition(&clusterStatus.Conditions, condition)
+		}
+	})
+}
+
+func (manager *Manager) updateClusterStatus(ctx context.Context, name string, updateFunc func(status *clusterv1alpha2.ClusterStatus)) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		cluster, err := manager.clusterlister.Get(name)
 		if err != nil {
 			return err
 		}
-
 		lastStatus := cluster.Status
-		cluster = cluster.DeepCopy()
 
-		if status.Version != "" {
-			cluster.Status.Version = status.Version
+		cluster = cluster.DeepCopy()
+		updateFunc(&cluster.Status)
+
+		// remove deprecated conditions
+		meta.RemoveStatusCondition(&cluster.Status.Conditions, clusterv1alpha2.ClusterSynchroInitializedCondition)
+
+		// TODO: need optimize?
+		readyCondition := metav1.Condition{
+			Type:    clusterv1alpha2.ReadyCondition,
+			Status:  metav1.ConditionTrue,
+			Reason:  clusterv1alpha2.ReadyReason,
+			Message: "",
 		}
-		if status.SyncResources != nil {
-			cluster.Status.SyncResources = status.SyncResources
+		for _, condType := range []string{
+			clusterv1alpha2.ValidatedCondition,
+			clusterv1alpha2.SynchroRunningCondition,
+			clusterv1alpha2.ClusterHealthyCondition,
+		} {
+			cond := meta.FindStatusCondition(cluster.Status.Conditions, condType)
+			if cond != nil && cond.Status == metav1.ConditionTrue {
+				continue
+			}
+
+			readyCondition.Status = metav1.ConditionFalse
+			readyCondition.Reason = clusterv1alpha2.NotReadyReason
+			if cond == nil {
+				readyCondition.Message = fmt.Sprintf("%s condition is not found", condType)
+			} else {
+				readyCondition.Message = fmt.Sprintf("%s condition is %s, reason is %s", condType, cond.Status, cond.Reason)
+			}
+			break
 		}
-		for _, condition := range status.Conditions {
-			meta.SetStatusCondition(&cluster.Status.Conditions, condition)
-		}
+		meta.SetStatusCondition(&cluster.Status.Conditions, readyCondition)
 
 		if equality.Semantic.DeepEqual(cluster.Status, lastStatus) {
 			return nil
@@ -381,30 +493,10 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 
 		_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().UpdateStatus(ctx, cluster, metav1.UpdateOptions{})
 		if err == nil {
-			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "conditions", status.Conditions)
-			return nil
+			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "conditions", cluster.Status.Conditions)
 		}
 		return err
 	})
-}
-
-func (manager *Manager) handleClusterSyncResources(obj interface{}) {
-	// ClusterSyncResources is cluster scoped resource, key is name
-	refName, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-	if err != nil {
-		klog.ErrorS(err, "handle clustersyncresources failed")
-		return
-	}
-	clusters, err := manager.clusterlister.List(labels.Everything())
-	if err != nil {
-		klog.ErrorS(err, "list clusters failed while handling clustersyncresources", "clustersyncresources", refName)
-		return
-	}
-	for _, cluster := range clusters {
-		if cluster.Spec.SyncResourcesRefName == refName {
-			manager.enqueue(cluster)
-		}
-	}
 }
 
 func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {

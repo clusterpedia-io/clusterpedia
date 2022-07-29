@@ -85,12 +85,12 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		var msg string
-		readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterReadyCondition)
+		healthyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterHealthyCondition)
 		switch {
-		case readyCondition == nil:
+		case healthyCondition == nil:
 			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", clusterName)
-		case readyCondition.Status != metav1.ConditionTrue:
-			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate, reason: %s", clusterName, readyCondition.Reason)
+		case healthyCondition.Status != metav1.ConditionTrue:
+			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate, reason: %s", clusterName, healthyCondition.Reason)
 		}
 		/*
 			TODO(scyda): Determine the synchronization status of a specific resource

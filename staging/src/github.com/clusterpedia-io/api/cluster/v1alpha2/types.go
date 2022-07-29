@@ -6,25 +6,41 @@ import (
 )
 
 const (
-	ClusterReadyCondition   = "Ready"
-	ClusterSynchroCondition = "ClusterSynchroInitialized"
+	ValidatedCondition      = "Validated"
+	SynchroRunningCondition = "SynchroRunning"
+	ClusterHealthyCondition = "ClusterHealthy"
+	ReadyCondition          = "Ready"
 
-	SyncStatusPending = "Pending"
-	SyncStatusSyncing = "Syncing"
-	SyncStatusStop    = "Stop"
-	SyncStatusUnknown = "Unknown"
-	SyncStatusError   = "Error"
+	// deprecated
+	ClusterSynchroInitializedCondition = "ClusterSynchroInitialized"
+)
 
-	InvalidConfigConditionReason       = "InvalidConfig"
-	InvalidSyncResourceConditionReason = "InvalidSyncResources"
-	InitialFailedConditionReason       = "InitialFailed"
-	RunningConditionReason             = "Running"
+const (
+	InvalidConfigReason        = "InvalidConfig"
+	InvalidSyncResourcesReason = "InvalidSyncResources"
+	ValidatedReason            = "Validated"
 
-	HealthyReason            = "Healthy"
-	PendingReason            = "Pending"
-	UnhealthyReason          = "Unhealthy"
-	NotReachableReason       = "NotReachable"
-	ClusterSynchroStopReason = "ClusterSynchroStop"
+	SynchroWaitInitReason      = "WaitInit"
+	SynchroInitialFailedReason = "InitialFailed"
+	SynchroPendingReason       = "Pending"
+	SynchroRunningReason       = "Running"
+	SynchroShutdownReason      = "Shutdown"
+
+	ClusterMonitorStopReason  = "MonitorStop"
+	ClusterHealthyReason      = "Healthy"
+	ClusterUnhealthyReason    = "Unhealthy"
+	ClusterNotReachableReason = "NotReachable"
+
+	ReadyReason    = "Ready"
+	NotReadyReason = "NotReady"
+)
+
+const (
+	ResourceSyncStatusPending = "Pending"
+	ResourceSyncStatusSyncing = "Syncing"
+	ResourceSyncStatusStop    = "Stop"
+	ResourceSyncStatusUnknown = "Unknown"
+	ResourceSyncStatusError   = "Error"
 )
 
 // +genclient
@@ -32,9 +48,12 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
-// +kubebuilder:printcolumn:name="APIServer",type=string,JSONPath=".spec.apiserver"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type == 'Ready')].status"
 // +kubebuilder:printcolumn:name="Version",type=string,JSONPath=".status.version"
-// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=".status.conditions[?(@.type == 'Ready')].reason"
+// +kubebuilder:printcolumn:name="APIServer",type=string,JSONPath=".spec.apiserver"
+// +kubebuilder:printcolumn:name="Validated",type=string,JSONPath=".status.conditions[?(@.type == 'Validated')].reason",priority=10
+// +kubebuilder:printcolumn:name="SynchroRunning",type=string,JSONPath=".status.conditions[?(@.type == 'SynchroRunning')].reason",priority=10
+// +kubebuilder:printcolumn:name="ClusterHealthy",type=string,JSONPath=".status.conditions[?(@.type == 'ClusterHealthy')].reason",priority=10
 type PediaCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
