@@ -2,6 +2,7 @@ package clustersynchro
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -17,11 +18,23 @@ func (synchro *ClusterSynchro) monitor() {
 	klog.V(2).InfoS("Cluster Synchro Monitor Running...", "cluster", synchro.name)
 
 	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, false, synchro.closer)
+
+	healthyCondition := metav1.Condition{
+		Type:               clusterv1alpha2.ClusterHealthyCondition,
+		Status:             metav1.ConditionUnknown,
+		Reason:             clusterv1alpha2.ClusterMonitorStopReason,
+		Message:            "cluster synchro is shutdown",
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	}
+	if lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition); lastReadyCondition.Status == metav1.ConditionFalse {
+		healthyCondition.Message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
+	}
+	synchro.healthyCondition.Store(healthyCondition)
 }
 
 func (synchro *ClusterSynchro) checkClusterHealthy() {
 	defer synchro.updateStatus()
-	lastReadyCondition := synchro.readyCondition.Load().(metav1.Condition)
+	lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition)
 
 	if ready, err := checkKubeHealthy(synchro.clusterclient); !ready {
 		// if the last status was not ConditionTrue, stop resource synchros
@@ -30,19 +43,19 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		}
 
 		condition := metav1.Condition{
-			Type:    clusterv1alpha2.ClusterReadyCondition,
+			Type:    clusterv1alpha2.ClusterHealthyCondition,
 			Status:  metav1.ConditionFalse,
-			Reason:  clusterv1alpha2.UnhealthyReason,
+			Reason:  clusterv1alpha2.ClusterUnhealthyReason,
 			Message: "cluster health responded without ok",
 		}
 		if err != nil {
-			condition.Reason = clusterv1alpha2.NotReachableReason
+			condition.Reason = clusterv1alpha2.ClusterNotReachableReason
 			condition.Message = err.Error()
 		}
 
 		if lastReadyCondition.Status != condition.Status || lastReadyCondition.Reason != condition.Reason || lastReadyCondition.Message != condition.Message {
 			condition.LastTransitionTime = metav1.Now().Rfc3339Copy()
-			synchro.readyCondition.Store(condition)
+			synchro.healthyCondition.Store(condition)
 		}
 		return
 	}
@@ -54,17 +67,18 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	}
 
 	condition := metav1.Condition{
-		Type:               clusterv1alpha2.ClusterReadyCondition,
+		Type:               clusterv1alpha2.ClusterHealthyCondition,
 		Status:             metav1.ConditionTrue,
-		Reason:             clusterv1alpha2.HealthyReason,
+		Reason:             clusterv1alpha2.ClusterHealthyReason,
+		Message:            "cluster health responded with ok",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	defer func() {
-		synchro.readyCondition.Store(condition)
+		synchro.healthyCondition.Store(condition)
 	}()
 
 	if _, err := synchro.dynamicDiscoveryManager.GetAndFetchServerVersion(); err != nil {
-		condition.Message = err.Error()
+		condition.Message = fmt.Sprintf("cluster health responded with ok, but get server version: %v", err)
 		klog.ErrorS(err, "Failed to get cluster version", "cluster", synchro.name)
 	}
 }

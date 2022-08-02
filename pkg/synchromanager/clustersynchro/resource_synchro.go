@@ -85,7 +85,7 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	synchro.example = example
 
 	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.SyncStatusPending,
+		Status:             clusterv1alpha2.ResourceSyncStatusPending,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -120,7 +120,7 @@ func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
 	synchro.startlock.Unlock()
 
 	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.SyncStatusStop,
+		Status:             clusterv1alpha2.ResourceSyncStatusStop,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
 	synchro.status.Store(status)
@@ -208,7 +208,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 	).Run(informerStopCh)
 
 	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.SyncStatusStop,
+		Status:             clusterv1alpha2.ResourceSyncStatusStop,
 		Reason:             "Pause",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
@@ -401,7 +401,7 @@ func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErro
 		if err != nil {
 			// TODO(iceber): Use `k8s.io/apimachinery/pkg/api/errors` to resolve the error type and update it to `status.Reason`
 			status := clusterv1alpha2.ClusterResourceSyncCondition{
-				Status:             clusterv1alpha2.SyncStatusError,
+				Status:             clusterv1alpha2.ResourceSyncStatusError,
 				Reason:             "ResourceWatchFailed",
 				Message:            err.Error(),
 				LastTransitionTime: metav1.Now().Rfc3339Copy(),
@@ -415,9 +415,9 @@ func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErro
 		// `reflector` sets a default timeout when watching,
 		// then when re-watching the error handler is called again and the `err` is nil.
 		// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
-		if status := synchro.Status(); status.Status != clusterv1alpha2.SyncStatusSyncing {
+		if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
 			status = clusterv1alpha2.ClusterResourceSyncCondition{
-				Status:             clusterv1alpha2.SyncStatusSyncing,
+				Status:             clusterv1alpha2.ResourceSyncStatusSyncing,
 				Reason:             "",
 				LastTransitionTime: metav1.Now().Rfc3339Copy(),
 			}
