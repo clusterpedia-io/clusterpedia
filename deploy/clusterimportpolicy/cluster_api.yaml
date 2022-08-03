@@ -1,0 +1,38 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: cluster-api
+spec:
+  source:
+    group: cluster.x-k8s.io
+    resource: clusters
+    versions: []
+  references:
+  - group: ""
+    key: kubeconfig
+    nameTemplate: '{{ .source.metadata.name}}-kubeconfig'
+    namespaceTemplate: '{{ .source.metadata.namespace }}'
+    resource: secrets
+  nameTemplate: 'capi-{{ .source.metadata.namespace }}-{{ .source.metadata.name }}'
+  template: |
+    spec:
+      kubeconfig: "{{ .references.kubeconfig.data.value }}"
+      syncResources:
+        - group: ""
+          resources:
+            - "pods"
+            - "services"
+            - "configmaps"
+            - "secrets"
+            - "namespaces"
+            - "nodes"
+        - group: "apps"
+          resources:
+            - "*"
+      syncResourcesRefName: ""
+  creationCondition: |
+    {{ range .source.status.conditions }}
+      {{ if eq .type "ControlPlaneInitialized" }}
+        {{ if eq .status "True" }} true {{ end }}
+      {{ end }}
+    {{ end }}
