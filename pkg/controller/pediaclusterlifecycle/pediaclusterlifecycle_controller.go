@@ -326,51 +326,50 @@ func (c *Controller) reconcileLifecycle(lifecycle *policyv1alpha1.PediaClusterLi
 		return NoRequeueResult
 	}
 
-	references := make([]policyv1alpha1.DependentResource, 0, len(lifecycle.Spec.References))
 	referencesTemplateData := make(map[string]interface{}, len(lifecycle.Spec.References))
 	templateData := map[string]interface{}{
 		"source":     sourceObj.UnstructuredContent(),
 		"references": referencesTemplateData,
 	}
 
-	// resolve and get reference resource
 	var writer bytes.Buffer
-	for _, ref := range lifecycle.Spec.References {
-		reference, err := ref.Resolve(&writer, templateData)
-		if err != nil {
-			condition.Reason = "FailedReferenceResourceParse"
-			condition.Message = fmt.Sprintf("failed to ressolve <%s> namespace and name: %v", ref, err)
+	if reason, message := func() (reason, message string) {
+		references := make([]policyv1alpha1.DependentResource, 0, len(lifecycle.Spec.References))
+		dependents := make(map[policyv1alpha1.DependentResource]struct{}, len(references)+1)
+		dependents[source] = struct{}{}
+		defer func() {
+			lifecycle.Status.References = references
+			c.dependentManager.SetLifecycleDependentResources(lifecycle.Name, dependents)
+		}()
 
-			klog.ErrorS(err, "failed to resolve reference namespacce and name", "lifecycle", lifecycle.Name, "reference", ref)
-			return NoRequeueResult
+		// resolve and get reference resource
+		for _, ref := range lifecycle.Spec.References {
+			reference, err := ref.Resolve(&writer, templateData)
+			if err != nil {
+				klog.ErrorS(err, "failed to resolve reference namespacce and name", "lifecycle", lifecycle.Name, "reference", ref)
+				return "FailedReferenceResourceParse", fmt.Sprintf("failed to ressolve <%s> namespace and name: %v", ref, err)
+			}
+			if reference.Name == "" {
+				klog.ErrorS(fmt.Errorf("reference resource name is empty"), "invalid reference resource", "lifecycle", lifecycle.Name, "reference", ref)
+				return "FailedReferenceResourceParse", fmt.Sprintf("<%s> resource name is empty", ref)
+			}
+
+			dependents[reference] = struct{}{}
+			references = append(references, reference)
+
+			refObject, err := c.dependentManager.Get(reference)
+			if err != nil {
+				klog.ErrorS(err, "failed to get reference resource", "lifecycle", lifecycle.Name, "ref", ref)
+				return "ReferenceResourceNotFound", fmt.Sprintf("<%v>: %v", reference, err)
+			}
+
+			referencesTemplateData[ref.Key] = refObject.UnstructuredContent()
 		}
-		if reference.Name == "" {
-			condition.Reason = "FailedReferenceResourceParse"
-			condition.Message = fmt.Sprintf("<%s> resource name is empty", ref)
-
-			klog.ErrorS(fmt.Errorf("reference resource name is empty"), "invalid reference resource", "lifecycle", lifecycle.Name, "reference", ref)
-			return NoRequeueResult
-		}
-
-		refObject, err := c.dependentManager.Get(reference)
-		if err != nil {
-			condition.Reason = "ReferenceResourceNotFound"
-			condition.Message = fmt.Sprintf("<%v>: %v", reference, err)
-
-			klog.ErrorS(err, "failed to get reference resource", "lifecycle", lifecycle.Name, "ref", ref)
-			return NoRequeueResult
-		}
-
-		referencesTemplateData[ref.Key] = refObject.UnstructuredContent()
-		references = append(references, reference)
+		return
+	}(); reason != "" {
+		condition.Reason, condition.Message = reason, message
+		return NoRequeueResult
 	}
-
-	referenceSet := make(map[policyv1alpha1.DependentResource]struct{}, len(references)+1)
-	referenceSet[source] = struct{}{}
-	for _, ref := range references {
-		referenceSet[ref] = struct{}{}
-	}
-	c.dependentManager.SetLifecycleDependentResources(lifecycle.Name, referenceSet)
 
 	if current == nil {
 		couldCreate, err := lifecycle.Spec.CouldCreate(&writer, templateData)
@@ -416,7 +415,6 @@ func (c *Controller) reconcileLifecycle(lifecycle *policyv1alpha1.PediaClusterLi
 		condition.Reason = "PediaClusterCreated"
 		condition.Message = ""
 		condition.Status = metav1.ConditionTrue
-		lifecycle.Status.References = references
 		klog.InfoS("pediacluster is created", "lifecycle", lifecycle.Name, "pediacluster", pediacluster.Name)
 		return NoRequeueResult
 	}
@@ -473,7 +471,6 @@ func (c *Controller) reconcileLifecycle(lifecycle *policyv1alpha1.PediaClusterLi
 	condition.Reason = "PediaClusterUpdated"
 	condition.Message = ""
 	condition.Status = metav1.ConditionTrue
-	lifecycle.Status.References = references
 	klog.InfoS("pediacluster is updated", "lifecycle", lifecycle.Name, "pediacluster", current.Name)
 	return NoRequeueResult
 }
