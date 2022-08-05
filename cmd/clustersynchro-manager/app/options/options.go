@@ -127,7 +127,6 @@ func (o *Options) Config() (*config.Config, error) {
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: ClusterSynchroManagerUserAgent})
 
 	return &config.Config{
-		Client:         client,
 		CRDClient:      crdclient,
 		Kubeconfig:     kubeconfig,
 		EventRecorder:  eventRecorder,
