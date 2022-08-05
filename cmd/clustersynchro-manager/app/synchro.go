@@ -79,7 +79,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 }
 
 func Run(ctx context.Context, c *config.Config) error {
-	synchromanager := synchromanager.NewManager(c.Client, c.CRDClient, c.StorageFactory)
+	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory)
 	if !c.LeaderElection.LeaderElect {
 		synchromanager.Run(1, ctx.Done())
 		return nil

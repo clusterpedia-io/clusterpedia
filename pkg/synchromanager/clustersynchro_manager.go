@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -44,7 +43,6 @@ type Manager struct {
 	runLock sync.Mutex
 	stopCh  <-chan struct{}
 
-	kubeclient         clientset.Interface
 	clusterpediaclient crdclientset.Interface
 	informerFactory    externalversions.SharedInformerFactory
 
@@ -59,14 +57,13 @@ type Manager struct {
 	synchroWaitGroup wait.Group
 }
 
-func NewManager(kubeclient clientset.Interface, client crdclientset.Interface, storage storage.StorageFactory) *Manager {
+func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
 
 	manager := &Manager{
 		informerFactory:    factory,
-		kubeclient:         kubeclient,
 		clusterpediaclient: client,
 
 		storage:                    storage,
