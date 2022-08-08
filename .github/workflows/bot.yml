@@ -56,10 +56,14 @@ env:
   GH_REPOSITORY: ${{ github.repository }}
   DETAILS: |-
     <details>
+
     <summary>Details</summary>
+
     Instructions for interacting with me using comments are available here.
-    If you have questions or suggestions related to my behavior, please file an issue against the [gh-ci-bot](https://github.com/wzshiming/gh-ci-bot) repository.
+    If you have questions or suggestions related to my behavior, please file an issue against the [gh-ci-bot](https://github.com/clusterpedia-io/gh-ci-bot) repository.
+
     </details>
+
 jobs:
 
   issue_opened:
