@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericstorage "k8s.io/apiserver/pkg/storage"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -23,7 +24,6 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ResourceSynchro struct {
@@ -218,11 +218,11 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
 func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
-	if clusterpediafeature.FeatureGate.Enabled(features.PruneManagedFields) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.PruneManagedFields) {
 		obj.SetManagedFields(nil)
 	}
 
-	if clusterpediafeature.FeatureGate.Enabled(features.PruneLastAppliedConfiguration) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.PruneLastAppliedConfiguration) {
 		annotations := obj.GetAnnotations()
 		if _, ok := annotations[LastAppliedConfigurationAnnotation]; ok {
 			delete(annotations, LastAppliedConfigurationAnnotation)

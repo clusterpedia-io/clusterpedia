@@ -10,6 +10,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
@@ -30,12 +31,11 @@ import (
 	clientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
 
 func init() {
-	utilruntime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+	utilruntime.Must(logs.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 }
 
 func NewControllerManagerCommand() *cobra.Command {
@@ -56,7 +56,7 @@ func NewControllerManagerCommand() *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
+			if err := opts.Logs.ValidateAndApply(utilfeature.DefaultMutableFeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())
@@ -76,7 +76,7 @@ func NewControllerManagerCommand() *cobra.Command {
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
-	clusterpediafeature.MutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
+	utilfeature.DefaultMutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
 	for _, f := range namedFlagSets.FlagSets {

@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -32,7 +33,6 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
@@ -294,7 +294,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	}
 
 	// if `AllowSyncAllResources` is not enabled, then check whether the all-resource wildcard is used
-	if !clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllResources) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.AllowSyncAllResources) {
 		for _, groupResources := range syncResources {
 			if groupResources.Group == "*" {
 				// When using the all-resource wildcard without feature gate enabled,

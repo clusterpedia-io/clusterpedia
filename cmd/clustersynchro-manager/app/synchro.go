@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -20,12 +21,11 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
 
 func init() {
-	runtime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+	runtime.Must(logs.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 }
 
 func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
@@ -46,7 +46,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
+			if err := opts.Logs.ValidateAndApply(utilfeature.DefaultMutableFeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())
@@ -66,7 +66,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
-	clusterpediafeature.MutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
+	utilfeature.DefaultMutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
 	for _, f := range namedFlagSets.FlagSets {

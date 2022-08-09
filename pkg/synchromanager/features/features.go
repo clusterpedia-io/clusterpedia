@@ -2,9 +2,8 @@ package features
 
 import (
 	"k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/featuregate"
-
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 const (
@@ -43,7 +42,7 @@ const (
 )
 
 func init() {
-	runtime.Must(clusterpediafeature.MutableFeatureGate.Add(defaultClusterSynchroManagerFeatureGates))
+	runtime.Must(utilfeature.DefaultMutableFeatureGate.Add(defaultClusterSynchroManagerFeatureGates))
 }
 
 // defaultClusterSynchroManagerFeatureGates consists of all known clustersynchro-manager-specific feature keys.

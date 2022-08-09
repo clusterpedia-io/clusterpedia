@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
@@ -18,7 +19,6 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
-	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ResourceNegotiator struct {
@@ -74,7 +74,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 
 	if syncAllResources {
 		syncResources = negotiator.discoveryManager.GetAllResourcesAsSyncResources()
-	} else if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
+	} else if negotiator.syncAllCustomResources && utilfeature.DefaultFeatureGate.Enabled(features.AllowSyncAllCustomResources) {
 		syncResources = negotiator.discoveryManager.AttachAllCustomResourcesToSyncResources(syncResources)
 	}
 
