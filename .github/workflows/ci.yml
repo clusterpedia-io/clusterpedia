@@ -29,7 +29,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: 1.18
       - run: hack/verify-import-aliases.sh
       - run: hack/verify-vendor.sh
       - run: hack/verify-codegen.sh
@@ -47,7 +47,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: 1.18
       - name: Compile
         run: make all
   test:
@@ -60,7 +60,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: 1.18
       - run: make test
   e2e-test:
     name: E2e test
@@ -72,6 +72,6 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17
+          go-version: 1.18
       - name: Run e2e test
         run: ./test/test.sh
