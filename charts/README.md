@@ -6,57 +6,92 @@ Clusterpedia can synchronize resources with multiple clusters and provide more p
 # Prerequisites
 * [Insall Helm version 3 or later](https://helm.sh/docs/intro/install/)
 
-# Install
-## Install CRDs
-clusterpedia requires CRD resources, which can be installed manually using kubectl, or using the `installCRDs` option when installing the Helm Chart
-> This way references the [cert-manager](https://cert-manager.io/docs/installation/helm/)
+Pull the Clusterpedia repository.
 
-**Option 1: install CRDs with `kubectl`**
+> Currently, the chart has not been uploaded to the public charts repository.
+
 ```bash
-$ kubectl apply -f ./_crds
+git clone https://github.com/clusterpedia-io/clusterpedia.git
+cd clusterpedia/charts
 ```
 
-**Option 2: install CRDs as part of the Helm release**
-To automatically install and manage the CRDs as part of your Helm release, you must add the `--set installCRDs=true` flag to your Helm installation command.
+Since Clusterpedia uses `bitnami/postgresql` and `bitnami/mysql` as subcharts of storage components, it is necessary to add the bitnami repository and update the dependencies of the clusterpedia chart.
 
-Uncomment the relevant line in the next steps to enable this.
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm dependency build
+```
+
+# Choose storage components
+
+The Clusterpedia chart provides two storage components such as `bitnami/postgresql` and `bitnami/mysql` to choose from as sub-charts.
+
+`postgresql` is the default storage component. IF you want to use MySQL, you can add `--set postgresql.enabled=false --set mysql.enabled=true` in the subsequent installation command.
+
+For specific configuration about storage components, see [bitnami/postgresql](https://github.com/bitnami/charts/tree/master/bitnami/postgresql) and [bitnami/mysql](https://github.com/bitnami/charts/tree/master/bitnami/mysql).
+
+**You can also choose not to install any storage component, but use external components. For related settings, see charts/values.yaml**
+
+# Choose a installation or management mode for CRDs
+
+Clusterpedia requires proper CRD resources to be created in the retrieval environment. You can choose to manually deploy CRDs by using YAML, or you can manage it with Helm.
+
+## Manage manually
+
+```bash
+kubectl apply -f ./_crds
+```
+
+## Manage with Helm
+
+Manually add `--set installCRDs=true` in the subsequent installation command.
 
 
-## Select a storage component
-Clusterpedia uses sub charts to install [postgresql](https://github.com/bitnami/charts/tree/master/bitnami/postgresql) or [mysql](https://github.com/bitnami/charts/tree/master/bitnami/postgresql), and `postgresql` is installed by default.
+# Check if you need to create a local PV
 
-If you need to select `mysql` as the storage component, then you need to add the `--set postgresql.enabled=false --set mysql.enabled=true` to you Helm installation command.
+Through the Clusterpedia chart, you can create storage components to use a local PV.
 
-More configurations of the storage components can be found in [bitnami/postgresql](https://github.com/bitnami/charts/tree/master/bitnami/postgresql) and [bitnami/mysql](https://github.com/bitnami/charts/tree/master/bitnami/mysql).
+**You need to specify the node where the local PV is located through `--set persistenceMatchNode=<selected node name>` during installation.**
 
-### Create Local PV
-This chart creates a local pv for the storage component, but you need to specify the node using the `persistenceMatchNode` option, eg. `--set persistenceMatchNode=master-1`.
-
-If you don't need to create a local pv, add the `--set persistenceMatchNode=None` flag.
+If you need not to create the local PV, you can use `--set persistenceMatchNode=None` to declare it explicitly.
 
 ## Install Clusterpedia
 
-```bash
-$ helm install clusterpedia . \
-  --namespace clusterpedia-system \
-  --create-namespace \
-  --set persistenceMatchNode={{ LOCAL_PV_NODE }} \
-  # --set installCRDs=true
-```
-
-# Uninstall
-Before continuing, ensure that all clusterpedia resources that have been created by users have been deleted.
-You can check for any existing resources with the following command:
-```bash
-$ kubectl get pediaclusters
-```
-Once all these resources have been deleted you are ready to unisntall clusterpedia.
+After the above procedure is completed, you can run the following command to install Clusterpedia:
 
 ```bash
-$ helm --namespace clusterpedia-system uninstall clusterpedia
+helm install clusterpedia . \
+--namespace clusterpedia-system \
+--create-namespace \
+--set persistenceMatchNode={{ LOCAL_PV_NODE }} \
+--set installCRDs=true
 ```
 
-If the CRDs is not managed through Helm, then you need to delete the crd manually:
+## Uninstall Clusterpedia
+
+Before uninstallation, you shall manually clear all `PediaCluster` resources.
+
 ```bash
-$ kubectl delete -f ./_crds
+kubectl get pediacluster
+```
+
+You can run the command to uninstall it after the `PediaCluster` resources are cleared.
+
+```bash
+helm -n clusterpedia-system uninstall clusterpedia
+```
+
+If you use any CRD resource that is manually created, you also need to manually clear the CRDs.
+
+```bash
+kubectl delete -f ./_crds
+```
+
+**Note that PVC and PV will not be deleted. You need to manually delete them.**
+
+If you created a local PV, you need log in to the node and remove all remained data about the local PV.
+
+```bash
+# Log in to the node with Local PV
+rm /var/local/clusterpedia/internalstorage/<storage type>
 ```
