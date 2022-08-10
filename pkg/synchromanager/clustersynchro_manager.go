@@ -243,9 +243,18 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 			return controller.NoRequeueResult
 		}
 
-		// remove finalizer
-		controllerutil.RemoveFinalizer(cluster, ClusterSynchroControllerFinalizer)
-		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			cluster, err := manager.clusterlister.Get(cluster.Name)
+			if err != nil {
+				return err
+			}
+			cluster = cluster.DeepCopy()
+
+			// remove finalizer
+			controllerutil.RemoveFinalizer(cluster, ClusterSynchroControllerFinalizer)
+			_, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+			return err
+		}); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to remove finializer", "cluster", cluster.Name)
 			return controller.RequeueResult(defaultRetryNum)
 		}
