@@ -25,6 +25,8 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
+// +kubebuilder:printcolumn:name="Validated",type=string,JSONPath=".status.conditions[?(@.type == 'Validated')].reason"
+// +kubebuilder:printcolumn:name="Reconciling",type=string,JSONPath=".status.conditions[?(@.type == 'Reconciling')].reason"
 type ClusterImportPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -69,6 +71,8 @@ type ClusterImportPolicyStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
+// +kubebuilder:printcolumn:name="Created",type=string,JSONPath=".status.conditions[?(@.type == 'Created')].reason"
+// +kubebuilder:printcolumn:name="Updating",type=string,JSONPath=".status.conditions[?(@.type == 'Updating')].reason"
 type PediaClusterLifecycle struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
