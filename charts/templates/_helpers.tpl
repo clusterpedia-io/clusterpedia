@@ -280,17 +280,11 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- end -}}
 
 {{- define "clusterpedia.storage.postgresql.image" -}}
-{{- $registryName := .Values.postgresql.image.registry -}}
-{{- $repositoryName := .Values.postgresql.image.repository -}}
-{{- $tag := .Values.postgresql.image.tag -}}
-{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.postgresql.image "global" .Values.global) }}
 {{- end -}}
 
 {{- define "clusterpedia.storage.mysql.image" -}}
-{{- $registryName := .Values.mysql.image.registry -}}
-{{- $repositoryName := .Values.mysql.image.repository -}}
-{{- $tag := .Values.mysql.image.tag -}}
-{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.mysql.image "global" .Values.global) }}
 {{- end -}}
 
 {{- define "clusterpedia.storage.mountPath" -}}
