@@ -30,25 +30,25 @@ echo "Generating with deepcopy-gen"
 deepcopy-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./cluster/v1alpha2" \
-    --output-file-base="zz_generated.deepcopy"
+    --output-base="zz_generated.deepcopy"
 deepcopy-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./policy/v1alpha1" \
-    --output-file-base="zz_generated.deepcopy"
+    --output-base="zz_generated.deepcopy"
 deepcopy-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./clusterpedia/v1beta1" \
-    --output-file-base="zz_generated.deepcopy"
+    --output-base="zz_generated.deepcopy"
 deepcopy-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./clusterpedia" \
-    --output-file-base="zz_generated.deepcopy"
+    --output-base="zz_generated.deepcopy"
 
 echo "Generating with conversion-gen"
 conversion-gen \
     --go-header-file="${REPO_ROOT}/hack/boilerplate.go.txt" \
     --input-dirs="./clusterpedia/v1beta1" \
-    --output-file-base="zz_generated.conversion"
+    --output-base="zz_generated.conversion"
 
 echo "change directory: ${REPO_ROOT}"
 cd "${REPO_ROOT}"
