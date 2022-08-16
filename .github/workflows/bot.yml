@@ -23,13 +23,19 @@ env:
     assign
     auto-cc
     cc
+
+  # This plugins is for author of issue or PR
+  AUTHOR_PLUGINS: |-
     label-kind
+    retest
 
   # This plugins is for organization member or repository member
   MEMBERS_PLUGINS: |-
     label-lgtm
     label-good-first-issue
     label-help-wanted
+    label-kind
+    retest
 
   # This plugins is for in the REVIEWERS environment variable
   REVIEWERS_PLUGINS: |-
@@ -70,7 +76,7 @@ env:
 
 # https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
 permissions:
-  actions: read
+  actions: write
   checks: read
   contents: read
   deployments: none
@@ -95,6 +101,7 @@ jobs:
         if: ${{ github.event_name == 'issues' }}
         env:
           LOGIN: ${{ github.event.issue.user.login }}
+          AUTHOR: ${{ github.event.issue.user.login }}
           MESSAGE: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
@@ -110,6 +117,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         env:
           LOGIN: ${{ github.event.pull_request.user.login }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
           MESSAGE: ${{ github.event.pull_request.body }}
           ISSUE_NUMBER: ${{ github.event.pull_request.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
@@ -126,6 +134,7 @@ jobs:
         if: ${{ github.event_name == 'issue_comment' && !github.event.issue.pull_request }}
         env:
           LOGIN: ${{ github.event.comment.user.login }}
+          AUTHOR: ${{ github.event.issue.user.login }}
           MESSAGE: ${{ github.event.comment.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
@@ -137,6 +146,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request_review_comment' }}
         env:
           LOGIN: ${{ github.event.comment.user.login }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
           MESSAGE: ${{ github.event.comment.body }}
           ISSUE_NUMBER: ${{ github.event.pull_request.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
@@ -148,6 +158,7 @@ jobs:
         if: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request }}
         env:
           LOGIN: ${{ github.event.comment.user.login }}
+          AUTHOR: ${{ github.event.issue.user.login }}
           MESSAGE: ${{ github.event.comment.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
