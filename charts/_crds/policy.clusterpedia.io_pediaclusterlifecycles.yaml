@@ -15,7 +15,14 @@ spec:
     singular: pediaclusterlifecycle
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type == 'Created')].reason
+      name: Created
+      type: string
+    - jsonPath: .status.conditions[?(@.type == 'Updating')].reason
+      name: Updating
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:

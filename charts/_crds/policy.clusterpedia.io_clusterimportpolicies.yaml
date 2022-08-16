@@ -15,7 +15,14 @@ spec:
     singular: clusterimportpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type == 'Validated')].reason
+      name: Validated
+      type: string
+    - jsonPath: .status.conditions[?(@.type == 'Reconciling')].reason
+      name: Reconciling
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
