@@ -26,8 +26,7 @@ function main() {
             name="${file##*/}"
             name="${name%.test.sh}"
             echo "::group::Running test ${name} on ${env_name}"
-            "${env}" "${file}"
-            if [[ "${?}" -ne 0 ]]; then
+            if ! "${env}" "${file}"; then
                 failed+=("'${name} on ${env_name}'")
             fi
             echo "::endgroup::"

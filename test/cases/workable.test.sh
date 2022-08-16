@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 # Waiting for Clusterpedia to be ready
 function ready() {
     local i
     for ((i = 0; i < 300; i++)); do
         sleep 5
         got="$(kubectl get pediacluster)"
-        unexpect="$(echo "${got}" | tail -n +2 | awk '{print $1,$2}' | grep -v True)"
+        unexpect="$(echo "${got}" | tail -n +2 | awk '{print $1,$2}' | grep -v True || :)"
         if [[ "${unexpect}" == "" ]]; then
             return 0
         fi
@@ -59,7 +63,7 @@ EOF
         original=$(kubectl --context="fake-k8s-${cluster}" get pod -o wide)
         echo "${original}"
 
-        diff <(echo "${original}" | awk '{print $1, $2, $3, $4, $6, $7}' | sort) <(echo "${query}" | awk '{print $2, $3, $4, $5, $7, $8}' | sort) || unsync+=("${cluster}")
+        diff <(echo "${original}" | awk '{print $1, $2, $3, $4, $6, $7}' | sort || :) <(echo "${query}" | awk '{print $2, $3, $4, $5, $7, $8}' | sort || :) || unsync+=("${cluster}")
     done
 
     if [[ "${#unsync[@]}" -gt 0 ]]; then
