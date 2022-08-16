@@ -77,6 +77,8 @@ spec:
                     type: string
                   resource:
                     type: string
+                  selectorTemplate:
+                    type: string
                   versions:
                     items:
                       type: string

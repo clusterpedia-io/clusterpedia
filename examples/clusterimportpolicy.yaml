@@ -6,6 +6,8 @@ spec:
   source:
     group: ""
     resource: secrets
+    selectorTemplate: |
+      {{ if eq .source.metadata.namespace "default" }} true {{ end }}
   nameTemplate: 'secret-{{ .source.metadata.namespace }}-{{ .source.metadata.name }}'
   template: |
     spec:
