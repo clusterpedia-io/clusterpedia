@@ -132,7 +132,7 @@ func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
 
 	klog.Info("wait for cluster synchros stop...")
 	manager.synchroWaitGroup.Wait()
-	klog.Info("cluster synchro manager stoped.")
+	klog.Info("cluster synchro manager stopped.")
 }
 
 func (manager *Manager) addCluster(obj interface{}) {
@@ -246,7 +246,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		// remove finalizer
 		controllerutil.RemoveFinalizer(cluster, ClusterSynchroControllerFinalizer)
 		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "Failed to remove finializer", "cluster", cluster.Name)
+			klog.ErrorS(err, "Failed to remove finalizer", "cluster", cluster.Name)
 			return controller.RequeueResult(defaultRetryNum)
 		}
 		return controller.NoRequeueResult
@@ -257,7 +257,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		controllerutil.AddFinalizer(cluster, ClusterSynchroControllerFinalizer)
 
 		if _, err := manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Update(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "Failed to add finializer", "cluster", cluster.Name)
+			klog.ErrorS(err, "Failed to add finalizer", "cluster", cluster.Name)
 			return controller.RequeueResult(defaultRetryNum)
 		}
 	}
