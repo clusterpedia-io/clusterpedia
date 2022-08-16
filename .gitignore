@@ -1,5 +1,5 @@
 /bin
-/charts/charts/*.tgz
+/charts/clusterpedia/charts/*.tgz
 .idea
 
 # OSX trash
