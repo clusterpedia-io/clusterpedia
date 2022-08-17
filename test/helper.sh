@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
 ROOT="$(dirname "${BASH_SOURCE[0]}")/.."
 
 # check whether command is installed.
@@ -148,7 +153,7 @@ function create_data_plane() {
 
     fake_k8s create --name "${name}" --kube-version "${version}" --quiet-pull
     ip="$(host_docker_internal)"
-    kubeconfig="$(kubectl --context="fake-k8s-${name}" config view --minify --raw | sed "s#/127.0.0.1:#/${ip}:#")"
+    kubeconfig="$(kubectl --context="fake-k8s-${name}" config view --minify --raw | sed "s#/127.0.0.1:#/${ip}:#" || :)"
     if [[ "${kubeconfig}" == "" ]]; then
         echo "kubeconfig is empty"
         return 1

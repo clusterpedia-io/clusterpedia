@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 # Create an environment that manages an multiple clusters of different versions
 
 cases="${1}"
