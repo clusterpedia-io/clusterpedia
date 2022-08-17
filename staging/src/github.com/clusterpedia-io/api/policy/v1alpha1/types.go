@@ -270,10 +270,19 @@ type SourceType struct {
 	// +required
 	// +kubebuilder:validation:Required
 	Resource string `json:"resource"`
+
+	// +optional
+	SelectorTemplate SelectorTemplate `json:"selectorTemplate,omitempty"`
 }
 
 func (st SourceType) GroupResource() schema.GroupResource {
 	return schema.GroupResource{Group: st.Group, Resource: st.Resource}
+}
+
+type SelectorTemplate string
+
+func (t SelectorTemplate) Template() (*template.Template, error) {
+	return newTemplate("select-source", string(t))
 }
 
 type DependentResource struct {

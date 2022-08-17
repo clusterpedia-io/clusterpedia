@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"math"
 	"strings"
 	"sync"
@@ -272,12 +273,23 @@ func (c *Controller) reconcilePolicy(policy *policyv1alpha1.ClusterImportPolicy)
 		}
 	}
 
-	tmpl, err := policy.Spec.NameTemplate.Template()
+	nameTmpl, err := policy.Spec.NameTemplate.Template()
 	if err != nil {
 		policy.Status.Conditions = []metav1.Condition{NewValidateCondition("FailedParseLifecycleName", err)}
 
 		klog.ErrorS(err, "failed to parse policy's name template", "policy", policy.Name, "name template", policy.Spec.NameTemplate)
 		return NoRequeueResult
+	}
+
+	var sourceSelectorTmpl *template.Template
+	if policy.Spec.Source.SelectorTemplate != "" {
+		sourceSelectorTmpl, err = policy.Spec.Source.SelectorTemplate.Template()
+		if err != nil {
+			policy.Status.Conditions = []metav1.Condition{NewValidateCondition("FailedParseSourceSelector", err)}
+
+			klog.ErrorS(err, "failed to parse policy's source selector template", "policy", policy.Name, "source selector template", policy.Spec.Source.SelectorTemplate)
+			return NoRequeueResult
+		}
 	}
 
 	// validate policy
@@ -351,8 +363,21 @@ func (c *Controller) reconcilePolicy(policy *policyv1alpha1.ClusterImportPolicy)
 	var wouldDeletedLifecycles = sets.NewString(lifecycles...)
 	var failedCount int
 	for _, object := range objects {
+		data := map[string]interface{}{"source": object.UnstructuredContent()}
+		if sourceSelectorTmpl != nil {
+			writer.Reset()
+			if err := sourceSelectorTmpl.Execute(&writer, data); err != nil {
+				failedCount++
+				klog.ErrorS(err, "failed to select source", "policy", policy.Name, "source namespace", object.GetNamespace(), "source name", object.GetName())
+				continue
+			}
+			if strings.TrimSpace(strings.ToLower(strings.ReplaceAll(writer.String(), "<no value>", ""))) != "true" {
+				continue
+			}
+		}
+
 		writer.Reset()
-		if err := tmpl.Execute(&writer, map[string]interface{}{"source": object.UnstructuredContent()}); err != nil {
+		if err := nameTmpl.Execute(&writer, data); err != nil {
 			failedCount++
 			klog.ErrorS(err, "failed to parse lifecycle name for source", "policy", policy.Name, "source namespace", object.GetNamespace(), "source name", object.GetName())
 			continue
