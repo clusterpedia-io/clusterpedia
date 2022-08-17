@@ -11,13 +11,13 @@ a quick and easy way.
 
 * [Install Helm version 3 or later](https://helm.sh/docs/intro/install/)
 
-Pull the Clusterpedia repository.
+### Local Installation
 
-> Currently, the chart has not been uploaded to the public charts repository.
+Pull the Clusterpedia repository.
 
 ```bash
 git clone https://github.com/clusterpedia-io/clusterpedia.git
-cd clusterpedia/charts
+cd clusterpedia/charts/clusterpedia
 ```
 
 Since Clusterpedia uses `bitnami/postgresql` and `bitnami/mysql` as subcharts of storage components, it is necessary to
@@ -26,6 +26,22 @@ add the bitnami repository and update the dependencies of the clusterpedia chart
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm dependency build
+```
+### Remote Installation
+
+First, add the Clusterpedia chart repo to your local repository.
+
+```bash
+$ helm repo add clusterpedia https://clusterpedia-io.github.io/clusterpedia/charts
+$ helm repo list
+NAME          	URL
+clusterpedia  	https://clusterpedia-io.github.io/clusterpedia/charts
+```
+
+With the repo added, available charts and versions can be viewed.
+
+```bash
+helm search repo clusterpedia
 ```
 
 ## Install
@@ -73,8 +89,22 @@ If you need not create the local PV, you can use `--set persistenceMatchNode=Non
 
 After the above procedure is completed, you can run the following command to install Clusterpedia:
 
+- local installation
+
 ```bash
 helm install clusterpedia . \
+--namespace clusterpedia-system \
+--create-namespace \
+--set persistenceMatchNode={{ LOCAL_PV_NODE }} \
+--set installCRDs=true
+```
+
+- remote installation
+
+> If you want to specify the version, you can install the chart with the `--version` argument.
+
+```bash
+helm install clusterpedia clusterpedia/clusterpedia \
 --namespace clusterpedia-system \
 --create-namespace \
 --set persistenceMatchNode={{ LOCAL_PV_NODE }} \
