@@ -1,0 +1,42 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: vcluster
+spec:
+  source:
+    group: ""
+    resource: secrets
+    selectorTemplate: |
+      {{ if hasPrefix "vc-" .source.metadata.name }}
+        {{ $ca := (get .source.data "certificate-authority") }}
+        {{ $clientca := (get .source.data "client-certificate") }}
+        {{ $clientkey := (get .source.data "client-key") }}
+
+        {{/* Use a specific data format tofilter out the vcluster's secret */}}
+        {{ if and $ca $clientca $clientkey (hasKey .source.data "config") }}
+          {{ $kubeconfig := (b64dec .source.data.config) }}
+          {{ and
+            (contains $ca $kubeconfig)
+            (contains $clientca $kubeconfig)
+            (contains $clientkey $kubeconfig)
+           }}
+        {{ end }}
+      {{ end }}
+  nameTemplate: 'vc-{{ .source.metadata.namespace }}-{{ trimPrefix "vc-" .source.metadata.name }}'
+  template: |
+    spec:
+      apiserver: 'https://{{ trimPrefix "vc-" .source.metadata.name }}.{{ .source.metadata.namespace }}.svc'
+      kubeconfig: '{{ .source.data.config }}'
+      syncResources:
+        - group: ""
+          resources:
+          - "pods"
+          - "services"
+          - "configmaps"
+          - "secrets"
+          - "namespaces"
+        - group: "apps"
+          resources:
+            - "*"
+      syncResourcesRefName: ""
+  creationCondition: "true"
