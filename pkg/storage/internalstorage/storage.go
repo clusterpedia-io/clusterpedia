@@ -9,6 +9,7 @@ import (
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/collection"
 )
 
 type StorageFactory struct {
@@ -27,8 +28,8 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 }
 
 func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionResource) (storage.CollectionResourceStorage, error) {
-	for i := range collectionResources {
-		if collectionResources[i].Name == cr.Name {
+	for i := range collection.CollectionResources {
+		if collection.CollectionResources[i].Name == cr.Name {
 			return NewCollectionResourceStorage(s.db, cr), nil
 		}
 	}
@@ -79,7 +80,7 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 
 func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error) {
 	var crs []*internal.CollectionResource
-	for _, cr := range collectionResources {
+	for _, cr := range collection.CollectionResources {
 		crs = append(crs, cr.DeepCopy())
 	}
 	return crs, nil

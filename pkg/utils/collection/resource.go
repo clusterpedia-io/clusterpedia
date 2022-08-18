@@ -1,4 +1,4 @@
-package internalstorage
+package collection
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +14,7 @@ const (
 	CollectionResourceKubeResources = "kuberesources"
 )
 
-var collectionResources = []internal.CollectionResource{
+var CollectionResources = []internal.CollectionResource{
 	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: CollectionResourceAny,
@@ -60,9 +60,9 @@ func init() {
 		})
 	}
 
-	for i := range collectionResources {
-		if collectionResources[i].Name == CollectionResourceKubeResources {
-			collectionResources[i].ResourceTypes = types
+	for i := range CollectionResources {
+		if CollectionResources[i].Name == CollectionResourceKubeResources {
+			CollectionResources[i].ResourceTypes = types
 		}
 	}
 }
