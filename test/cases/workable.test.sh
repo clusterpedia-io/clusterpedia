@@ -7,7 +7,7 @@ set -o pipefail
 # Waiting for Clusterpedia to be ready
 function ready() {
     local i
-    for ((i = 0; i < 300; i++)); do
+    for ((i = 0; i < 100; i++)); do
         sleep 5
         got="$(kubectl get pediacluster)"
         unexpect="$(echo "${got}" | tail -n +2 | awk '{print $1,$2}' | grep -v True || :)"
