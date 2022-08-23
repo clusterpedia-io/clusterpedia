@@ -10,7 +10,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -134,7 +133,7 @@ func Run(c *config.Config) error {
 	return nil
 }
 
-func run(config *rest.Config, stopCh <-chan struct{}) error {
+func run(config *restclient.Config, stopCh <-chan struct{}) error {
 	client, err := clientset.NewForConfig(config)
 	if err != nil {
 		return err
