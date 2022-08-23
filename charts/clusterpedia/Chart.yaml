@@ -23,6 +23,13 @@ version: 0.0.2
 # It is recommended to use it with quotes.
 appVersion: "v0.4.1"
 
+sources:
+  - "https://github.com/clusterpedia-io/clusterpedia"
+
+maintainers:
+  - name: clusterpedia-io
+    url: https://github.com/clusterpedia-io/clusterpedia
+
 # This is clusterpedia dependencies
 dependencies:
   - condition: postgresql.enabled
