@@ -269,7 +269,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	config, err := buildClusterConfig(cluster)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
-		manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidConfigReason,
+		manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, cluster.Spec.APIServer, synchro, clusterv1alpha2.InvalidConfigReason,
 			"invalid cluster config: "+err.Error(), metav1.ConditionFalse)
 		return controller.NoRequeueResult
 	}
@@ -280,7 +280,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		if ref, err := manager.clusterSyncResourcesLister.Get(refName); err != nil {
 			if !apierrors.IsNotFound(err) {
 				klog.ErrorS(err, "Failed to get SyncResourcesRef of cluster", "cluster", cluster.Name, "SyncResourcesRef", refName)
-				manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
+				manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, config.Host, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
 					fmt.Sprintf("Failed to get cluster sync resources of cluster: %v", err), metav1.ConditionFalse)
 				return controller.RequeueResult(defaultRetryNum)
 			}
@@ -302,14 +302,14 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 				// does not stop it if cluster synchro is already running.
 				//
 				// If have better suggestions can be discussed in the https://github.com/clusterpedia-io/clusterpedia/issues.
-				manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
+				manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, config.Host, synchro, clusterv1alpha2.InvalidSyncResourcesReason,
 					"ClusterSynchro Manager's feature gate `AllowSyncAllResources` is not enabled, cannot use all-resources wildcard", metav1.ConditionFalse)
 				return controller.NoRequeueResult
 			}
 		}
 	}
 
-	manager.UpdateClusterValidatedCondition(cluster.Name, synchro, clusterv1alpha2.ValidatedReason, warnMsg, metav1.ConditionTrue)
+	manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, config.Host, synchro, clusterv1alpha2.ValidatedReason, warnMsg, metav1.ConditionTrue)
 
 	// check cluster config
 	if synchro != nil && !reflect.DeepEqual(synchro.RESTConfig, config) {
@@ -383,7 +383,7 @@ func (manager *Manager) removeCluster(name string) error {
 	return manager.storage.CleanCluster(context.TODO(), name)
 }
 
-func (manager *Manager) UpdateClusterValidatedCondition(name string, synchro *clustersynchro.ClusterSynchro, reason, message string, status metav1.ConditionStatus) {
+func (manager *Manager) UpdateClusterAPIServerAndValidatedCondition(name string, apiServerEndpoint string, synchro *clustersynchro.ClusterSynchro, reason, message string, status metav1.ConditionStatus) {
 	validatedCondition := metav1.Condition{
 		Type:    clusterv1alpha2.ValidatedCondition,
 		Reason:  reason,
@@ -391,6 +391,11 @@ func (manager *Manager) UpdateClusterValidatedCondition(name string, synchro *cl
 		Message: message,
 	}
 	if err := manager.updateClusterStatus(context.TODO(), name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+		// set cluster apiserver endpoint to cluster status
+		if apiServerEndpoint != "" {
+			clusterStatus.APIServer = apiServerEndpoint
+		}
+
 		meta.SetStatusCondition(&clusterStatus.Conditions, validatedCondition)
 		if synchro != nil {
 			return
