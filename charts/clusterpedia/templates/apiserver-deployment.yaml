@@ -14,7 +14,7 @@ metadata:
 spec:
   replicas: {{ .Values.apiserver.replicaCount }}
   selector:
-    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+    matchLabels:
       app: {{ include "clusterpedia.apiserver.fullname" . }}
   template:
     metadata:
@@ -22,7 +22,7 @@ spec:
       annotations:
       {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.podAnnotations "context" $) | nindent 8 }}
       {{- end }}
-      labels: {{- include "common.labels.standard" . | nindent 8 }}
+      labels:
         app: {{ include "clusterpedia.apiserver.fullname" . }}
         {{- if .Values.podLabels }}
         {{- include "common.tplvalues.render" (dict "value" .Values.apiserver.podLabels "context" $) | nindent 8 }}
