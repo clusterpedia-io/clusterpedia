@@ -55,7 +55,7 @@ log:
   ## "4" indicates info
   level: "3"
   ## @param slowThreshold default 200ms
-  slowThreshold: 100ms 
+  slowThreshold: 100ms
   ## @param ignoreRecordNotFoundError indicates whether ignore error type `NotFound`
   ignoreRecordNotFoundError: false
 
@@ -113,7 +113,8 @@ apiserver:
     ##
     pullSecrets: []
   ## @param apiserver.resources
-  resources: {}
+  resources:
+    {}
     # If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     # limits:
@@ -170,7 +171,8 @@ clustersynchroManager:
     ##
     pullSecrets: []
   ## @param clustersynchroManager.resources
-  resources: {}
+  resources:
+    {}
     # If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     # limits:
@@ -241,7 +243,8 @@ controllerManager:
     ##
     pullSecrets: []
   ## @param controllerManager.resources
-  resources: {}
+  resources:
+    {}
     # If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     # limits:
