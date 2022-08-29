@@ -11,10 +11,14 @@ data:
     port: {{ include "clusterpedia.storage.port" . }}
     user: {{ include "clusterpedia.storage.user" . }}
     database: {{ include "clusterpedia.storage.database" . }}
-    {{- if .Values.log.enabled }}
+    {{ if .Values.storageConfig.log.enabled }}
     log:
-      stdout: {{ .Values.log.stdout }}
-      level: {{ .Values.log.level | default "Warn" | quote }}
-      slowThreshold: {{ .Values.log.slowThreshold }}
-      ignoreRecordNotFoundError: {{ .Values.log.ignoreRecordNotFoundError }}
-    {{- end -}}
+      stdout: {{ .Values.storageConfig.log.stdout }}
+      level: {{ .Values.storageConfig.log.level | default "Warn" | quote }}
+      slowThreshold: {{ .Values.storageConfig.log.slowThreshold }}
+      ignoreRecordNotFoundError: {{ .Values.storageConfig.log.ignoreRecordNotFoundError }}
+    {{ end }}
+    connPool:
+      maxIdleConns: {{ .Values.storageConfig.connPool.maxIdleConns | int }}
+      maxOpenConns: {{ .Values.storageConfig.connPool.maxOpenConns | int }}
+      connMaxLifetime: {{ .Values.storageConfig.connPool.connMaxLifetime }}

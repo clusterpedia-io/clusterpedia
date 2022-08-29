@@ -42,19 +42,31 @@ commonAnnotations: {}
 ## if defined, will create the pv on the node.
 persistenceMatchNode: ""
 
-## @param config of clusterpedia log
-log:
-  ## @param enabled indicates whether enable log
-  enabled: false
-  ## @param stdout indicates whether it is standard output
-  stdout: false
-  ## @param level indicates the level of log
-  ## Level must be one of [Silent, Error, Warn, Info], Default is 'Warn'
-  level: Warn
-  ## @param slowThreshold default 200ms
-  slowThreshold: 100ms
-  ## @param ignoreRecordNotFoundError indicates whether ignore error type `NotFound`
-  ignoreRecordNotFoundError: false
+## @param storageConfig StorageConfig for the apiserver and clustersynchro manger
+##
+storageConfig:
+  ## @param storageConfig.log Config of clusterpedia log
+  log:
+    ## @param storageConfig.log.enabled indicates whether enable log
+    enabled: false
+    ## @param storageConfig.log.stdout indicates whether it is standard output
+    stdout: false
+    ## @param level indicates the level of log
+    ## Level must be one of [Silent, Error, Warn, Info], Default is 'Warn'
+    level: Warn
+    ## @param storageConfig.log.slowThreshold default 200ms
+    slowThreshold: 100ms
+    ## @param storageConfig.log.ignoreRecordNotFoundError indicates whether ignore error type `NotFound`
+    ignoreRecordNotFoundError: false
+  ## @param storageConfig.connPool the connPoll config of storage
+  connPool:
+    ## @param storageConfig.connPool.maxIdleConns sets the maximum number of connections in the idle
+    ## connection pool
+    maxIdleConns: 5
+    ## @param storageConfig.connPool.maxOpenConns sets the maximum number of open connections to the database
+    maxOpenConns: 40
+    ## @param storageConfig.connPool.connMaxLifetime sets the maximum amount of time a connection may be reused
+    connMaxLifetime: 60m
 
 ## @param external define the auth param of external database
 ## if set the storageInstallMode to "external", the param must be set.
