@@ -145,6 +145,9 @@ func (c *APIServiceController) reconcile() {
 		}
 	}
 
+	// The kube-aggregator does not register `apiregistration.k8s.io` as an APIService resource, we need to add `apiregistration.k8s.io/v1` to the **groupVersions**
+	groupVersions[apiregistrationv1api.SchemeGroupVersion.Group] = []string{apiregistrationv1api.SchemeGroupVersion.Version}
+
 	// full update, ensuring version order
 	c.discoveryCache.SetGroupVersions(groupVersions, aggregatorGroups)
 }
