@@ -62,7 +62,7 @@ env:
   MAINTAINERS: |-
     Iceber
 
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GH_TOKEN: ${{ secrets.CLUSTERPEDIA_BOT_TOKEN }}
   GH_REPOSITORY: ${{ github.repository }}
   DETAILS: |-
 
