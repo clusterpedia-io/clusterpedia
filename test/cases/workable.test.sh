@@ -30,7 +30,7 @@ function check() {
     local unsync
     clusters="$(kubectl get pediacluster -o jsonpath="{.items[*].metadata.name}")"
     for cluster in ${clusters}; do
-        kubectl --context="fake-k8s-${cluster}" apply -f - <<EOF
+        kwokctl --name="${cluster}" kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -59,8 +59,8 @@ EOF
         echo kubectl --cluster "${cluster}" get pod -o wide
         query=$(kubectl --cluster "${cluster}" get pod -o wide)
         echo "${query}"
-        echo kubectl --context="fake-k8s-${cluster}" get pod -o wide
-        original=$(kubectl --context="fake-k8s-${cluster}" get pod -o wide)
+        echo kwokctl --name="${cluster}" kubectl get pod -o wide
+        original=$(kwokctl --name="${cluster}" kubectl get pod -o wide)
         echo "${original}"
 
         diff <(echo "${original}" | awk '{print $1, $2, $3, $4, $6, $7}' | sort || :) <(echo "${query}" | awk '{print $2, $3, $4, $5, $7, $8}' | sort || :) || unsync+=("${cluster}")

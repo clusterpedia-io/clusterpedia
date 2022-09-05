@@ -121,12 +121,13 @@ function host_docker_internal() {
 
 TMPDIR="${TMPDIR:-/tmp/}"
 
-# fake k8s tools
-function fake_k8s() {
-    if [[ ! -f "${TMPDIR}/fake-k8s.sh" ]]; then
-        wget https://github.com/wzshiming/fake-k8s/raw/v0.1.1/fake-k8s.sh -O "${TMPDIR}/fake-k8s.sh"
+# Install kwokctl tools
+function install_kwokctl() {
+    if cmd_exist kwokctl; then
+        return 0
     fi
-    bash "${TMPDIR}/fake-k8s.sh" "${@}"
+    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.0.1/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
+        chmod +x "/usr/local/bin/kwokctl"
 }
 
 # create a control plane cluster and install the Clusterpedia
@@ -151,13 +152,33 @@ function create_data_plane() {
     local pedia_cluster
     local ip
 
-    fake_k8s create --name "${name}" --kube-version "${version}" --quiet-pull
+    install_kwokctl
+
+    KWOK_KUBE_VERSION="${version}" kwokctl create cluster --name "${name}" --quiet-pull
     ip="$(host_docker_internal)"
-    kubeconfig="$(kubectl --context="fake-k8s-${name}" config view --minify --raw | sed "s#/127.0.0.1:#/${ip}:#" || :)"
+    kubeconfig="$(kwokctl get kubeconfig --name="${name}" | sed "s#/127.0.0.1:#/${ip}:#" || :)"
     if [[ "${kubeconfig}" == "" ]]; then
         echo "kubeconfig is empty"
         return 1
     fi
+    kwokctl --name="${name}" kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    kwok.x-k8s.io/node: fake
+    node.alpha.kubernetes.io/ttl: "0"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: fake-node
+    kubernetes.io/os: linux
+    kubernetes.io/role: agent
+    node-role.kubernetes.io/agent: ""
+    type: kwok-controller
+  name: fake-node
+EOF
     pedia_cluster="$(build_pedia_cluster "${name}" "${kubeconfig}")"
     echo "${pedia_cluster}" | kubectl apply -f -
 }
@@ -167,5 +188,5 @@ function delete_data_plane() {
     local name="${1}"
 
     kubectl delete PediaCluster "${name}"
-    fake_k8s delete --name "${name}"
+    kwokctl delete cluster --name "${name}"
 }
