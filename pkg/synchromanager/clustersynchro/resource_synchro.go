@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"go.uber.org/atomic"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,10 +33,12 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
-	workerNum     int
 	queue         queue.EventQueue
 	listerWatcher cache.ListerWatcher
-	cache         *informer.ResourceVersionStorage
+
+	cache   *informer.ResourceVersionStorage
+	rvs     map[string]interface{}
+	rvsLock sync.Mutex
 
 	memoryVersion schema.GroupVersion
 	storage       storage.ResourceStorage
@@ -47,6 +49,12 @@ type ResourceSynchro struct {
 	startlock sync.Mutex
 	stoped    chan struct{}
 
+	// TODO(Iceber): Optimize variable names
+	isRunnableForStorage *atomic.Bool
+	forStorageLock       sync.Mutex
+	runnableForStorage   chan struct{}
+	stopForStorage       chan struct{}
+
 	closeOnce sync.Once
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -54,45 +62,46 @@ type ResourceSynchro struct {
 	closed    chan struct{}
 }
 
-func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvcache *informer.ResourceVersionStorage,
+func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
 	convertor runtime.ObjectConvertor, storage storage.ResourceStorage,
 ) *ResourceSynchro {
 	storageConfig := storage.GetStorageConfig()
-	ctx, cancel := context.WithCancel(context.Background())
 	synchro := &ResourceSynchro{
 		cluster:         cluster,
 		syncResource:    syncResource,
 		storageResource: storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version),
-		workerNum:       1,
-		listerWatcher:   lw,
-		cache:           rvcache,
-		queue:           queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
+
+		listerWatcher: lw,
+		rvs:           rvs,
+
+		// all resources saved to the queue are `runtime.Object`
+		queue: queue.NewPressureQueue(cache.MetaNamespaceKeyFunc),
 
 		storage:       storage,
 		convertor:     convertor,
 		memoryVersion: storageConfig.MemoryVersion,
 
-		ctx:    ctx,
-		cancel: cancel,
+		stoped:               make(chan struct{}),
+		isRunnableForStorage: atomic.NewBool(true),
+		runnableForStorage:   make(chan struct{}),
+		stopForStorage:       make(chan struct{}),
+
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
-
-		stoped: make(chan struct{}),
 	}
+	close(synchro.runnableForStorage)
+	synchro.ctx, synchro.cancel = context.WithCancel(context.Background())
 
 	example := &unstructured.Unstructured{}
 	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
 	synchro.example = example
 
-	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.ResourceSyncStatusPending,
-		LastTransitionTime: metav1.Now().Rfc3339Copy(),
-	}
-	synchro.status.Store(status)
+	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
 	return synchro
 }
 
 func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
+	defer close(synchro.closed)
 	go func() {
 		select {
 		case <-shutdown:
@@ -103,29 +112,15 @@ func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
 
 	// make `synchro.Start` runable
 	close(synchro.stoped)
-
-	var waitGroup sync.WaitGroup
-	for i := 0; i < synchro.workerNum; i++ {
-		waitGroup.Add(1)
-
-		go wait.Until(func() {
-			defer waitGroup.Done()
-			synchro.processResources()
-		}, time.Second, synchro.closer)
-	}
-	waitGroup.Wait()
+	wait.Until(func() {
+		synchro.processResources()
+	}, time.Second, synchro.closer)
 
 	synchro.startlock.Lock()
 	<-synchro.stoped
 	synchro.startlock.Unlock()
 
-	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.ResourceSyncStatusStop,
-		LastTransitionTime: metav1.Now().Rfc3339Copy(),
-	}
-	synchro.status.Store(status)
-
-	close(synchro.closed)
+	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "", "")
 }
 
 func (synchro *ResourceSynchro) Close() <-chan struct{} {
@@ -181,38 +176,67 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 	}
 
 	defer close(synchro.stoped)
-	select {
-	case <-stopCh:
-		return
-	case <-synchro.closer:
-		return
-	default:
-	}
+	for {
+		synchro.forStorageLock.Lock()
+		runnableForStorage, stopForStorage := synchro.runnableForStorage, synchro.stopForStorage
+		synchro.forStorageLock.Unlock()
 
-	informerStopCh := make(chan struct{})
-	go func() {
 		select {
 		case <-stopCh:
+			synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "Pause", "")
+			return
 		case <-synchro.closer:
+			return
+		case <-runnableForStorage:
 		}
-		close(informerStopCh)
-	}()
 
-	informer.NewResourceVersionInformer(
-		synchro.cluster,
-		synchro.listerWatcher,
-		synchro.cache,
-		synchro.example,
-		synchro,
-		ErrorHandlerForResourceSynchro(synchro),
-	).Run(informerStopCh)
+		select {
+		case <-stopCh:
+			synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "Pause", "")
+			return
+		case <-synchro.closer:
+			return
+		case <-stopForStorage:
+			// stopForStorage is closed, storage is not runnable,
+			// continue to get `runnableForStorage` and `stopForStorage`
+			continue
+		default:
+		}
 
-	status := clusterv1alpha2.ClusterResourceSyncCondition{
-		Status:             clusterv1alpha2.ResourceSyncStatusStop,
-		Reason:             "Pause",
-		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+		informerStopCh := make(chan struct{})
+		go func() {
+			select {
+			case <-stopCh:
+			case <-synchro.closer:
+			case <-stopForStorage:
+			}
+			close(informerStopCh)
+		}()
+
+		synchro.rvsLock.Lock()
+		if synchro.cache == nil {
+			rvs := make(map[string]interface{}, len(synchro.rvs))
+			for r, v := range synchro.rvs {
+				rvs[r] = v
+			}
+			synchro.cache = informer.NewResourceVersionStorage()
+			synchro.rvsLock.Unlock()
+
+			_ = synchro.cache.Replace(rvs)
+		} else {
+			synchro.rvsLock.Unlock()
+		}
+
+		informer.NewResourceVersionInformer(
+			synchro.cluster, synchro.listerWatcher, synchro.cache,
+			synchro.example, synchro, synchro.ErrorHandler,
+		).Run(informerStopCh)
+
+		// TODO(Iceber): Optimize status updates in case of storage exceptions
+		if !synchro.isRunnableForStorage.Load() {
+			synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "StorageExpection", "")
+		}
 	}
-	synchro.status.Store(status)
 }
 
 const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
@@ -235,6 +259,10 @@ func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
 }
 
 func (synchro *ResourceSynchro) OnAdd(obj interface{}) {
+	if !synchro.isRunnableForStorage.Load() {
+		return
+	}
+
 	// `obj` will not be processed in parallel elsewhere,
 	// no deep copy is needed for now.
 	//
@@ -253,6 +281,10 @@ func (synchro *ResourceSynchro) OnAdd(obj interface{}) {
 }
 
 func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
+	if !synchro.isRunnableForStorage.Load() {
+		return
+	}
+
 	// `obj` will not be processed in parallel elsewhere,
 	// no deep copy is needed for now.
 	//
@@ -264,11 +296,26 @@ func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
 }
 
 func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
+	if !synchro.isRunnableForStorage.Load() {
+		return
+	}
+
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return
+	}
+
+	// Since it is not necessary to save the complete deleted object to the queue,
+	// we convert the object to `PartialObjectMetadata`
+	obj = &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
 	_ = synchro.queue.Delete(obj)
 }
 
-func (synchro *ResourceSynchro) OnSync(obj interface{}) {
-}
+func (synchro *ResourceSynchro) OnSync(obj interface{}) {}
 
 func (synchro *ResourceSynchro) processResources() {
 	for {
@@ -295,65 +342,135 @@ func (synchro *ResourceSynchro) processResources() {
 func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 	defer func() { _ = synchro.queue.Done(event) }()
 
-	if d, ok := event.Object.(cache.DeletedFinalStateUnknown); ok {
-		namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
-		if err != nil {
-			klog.Error(err)
-			return
-		}
-		obj := &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      name,
-			},
-		}
-
-		if err := synchro.deleteResource(obj); err != nil {
-			klog.ErrorS(err, "Failed to handler resource",
-				"cluster", synchro.cluster,
-				"action", event.Action,
-				"resource", synchro.storageResource,
-				"namespace", namespace,
-				"name", name,
-			)
-		}
+	obj, ok := event.Object.(runtime.Object)
+	if !ok {
 		return
 	}
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
 
-	var err error
-	obj := event.Object.(runtime.Object)
-
-	// if synchro.convertor == nil, it means no conversion is needed.
-	if synchro.convertor != nil {
+	var callback func(obj runtime.Object)
+	var handler func(ctx context.Context, obj runtime.Object) error
+	if event.Action != queue.Deleted {
+		var err error
 		if obj, err = synchro.convertToStorageVersion(obj); err != nil {
-			klog.Error(err)
+			klog.ErrorS(err, "Failed to convert resource", "cluster", synchro.cluster,
+				"action", event.Action, "resource", synchro.storageResource, "key", key)
 			return
 		}
-	}
-	utils.InjectClusterName(obj, synchro.cluster)
+		utils.InjectClusterName(obj, synchro.cluster)
 
-	switch event.Action {
-	case queue.Added:
-		err = synchro.createOrUpdateResource(obj)
-	case queue.Updated:
-		err = synchro.updateOrCreateResource(obj)
-	case queue.Deleted:
-		err = synchro.deleteResource(obj)
+		switch event.Action {
+		case queue.Added:
+			handler = synchro.createOrUpdateResource
+		case queue.Updated:
+			handler = synchro.updateOrCreateResource
+		}
+		callback = func(obj runtime.Object) {
+			metaobj, _ := meta.Accessor(obj)
+			synchro.rvsLock.Lock()
+			synchro.rvs[key] = metaobj.GetResourceVersion()
+			synchro.rvsLock.Unlock()
+		}
+	} else {
+		handler, callback = synchro.deleteResource, func(_ runtime.Object) {
+			synchro.rvsLock.Lock()
+			delete(synchro.rvs, key)
+			synchro.rvsLock.Unlock()
+		}
 	}
 
-	if err != nil && !errors.Is(err, context.Canceled) {
-		o, _ := meta.Accessor(obj)
-		klog.ErrorS(err, "Failed to handler resource",
-			"cluster", synchro.cluster,
-			"action", event.Action,
-			"resource", synchro.storageResource,
-			"namespace", o.GetNamespace(),
-			"name", o.GetName(),
-		)
+	// TODO(Iceber): put the event back into the queue to retry?
+	for i := 0; ; i++ {
+		ctx, cancel := context.WithTimeout(synchro.ctx, 30*time.Second)
+		err := handler(ctx, obj)
+		cancel()
+		if err == nil {
+			callback(obj)
+
+			if synchro.isRunnableForStorage.Load() {
+				return
+			}
+
+			// Start the informer after processing the data in the queue to ensure that storage is up and running for a period of time.
+			if synchro.queue.Len() != 0 {
+				return
+			}
+
+			synchro.isRunnableForStorage.Store(true)
+			func() {
+				synchro.forStorageLock.Lock()
+				defer synchro.forStorageLock.Unlock()
+
+				select {
+				case <-synchro.runnableForStorage:
+				default:
+					close(synchro.runnableForStorage)
+				}
+				select {
+				case <-synchro.stopForStorage:
+					synchro.stopForStorage = make(chan struct{})
+				default:
+				}
+			}()
+			return
+		}
+
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if !storage.IsRecoverableException(err) {
+			klog.ErrorS(err, "Failed to storage resource", "cluster", synchro.cluster,
+				"action", event.Action, "resource", synchro.storageResource, "key", key)
+			return
+		}
+
+		// Store component exceptions, control informer start/stop, and retry sync at regular intervals
+
+		// After five retries, if the data in the queue is greater than 5,
+		// keep only 5 items of data in the queue and stop informer to avoid a large accumulation of resources in memory
+		var retainInQueue = 5
+		if i >= 5 && synchro.queue.Len() > retainInQueue {
+			if synchro.isRunnableForStorage.Load() {
+				synchro.isRunnableForStorage.Store(false)
+				func() {
+					synchro.forStorageLock.Lock()
+					defer synchro.forStorageLock.Unlock()
+
+					select {
+					case <-synchro.runnableForStorage:
+						synchro.runnableForStorage = make(chan struct{})
+					default:
+					}
+					select {
+					case <-synchro.stopForStorage:
+					default:
+						close(synchro.stopForStorage)
+					}
+				}()
+			}
+
+			synchro.queue.DiscardAndRetain(retainInQueue)
+
+			// If the data in the queue is discarded,
+			// the data in the cache will be inconsistent with the data in the `rvs`,
+			// delete the cache, and trigger the reinitialization of the cache when the informer is started.
+			synchro.rvsLock.Lock()
+			synchro.cache = nil
+			synchro.rvsLock.Unlock()
+		}
+
+		//	klog.ErrorS(err, "will retry sync storage resource", "num", i, "cluster", synchro.cluster,
+		//		"action", event.Action, "resource", synchro.storageResource, "key", key)
+		time.Sleep(2 * time.Second)
 	}
 }
 
 func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
+	// if synchro.convertor == nil, it means no conversion is needed.
+	if synchro.convertor == nil {
+		return obj, nil
+	}
+
 	// convert to hub version
 	obj, err := synchro.convertor.ConvertToVersion(obj, synchro.memoryVersion)
 	if err != nil {
@@ -372,56 +489,51 @@ func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (run
 	return obj, nil
 }
 
-func (synchro *ResourceSynchro) createOrUpdateResource(obj runtime.Object) error {
-	err := synchro.storage.Create(synchro.ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) createOrUpdateResource(ctx context.Context, obj runtime.Object) error {
+	err := synchro.storage.Create(ctx, synchro.cluster, obj)
 	if genericstorage.IsExist(err) {
-		return synchro.storage.Update(synchro.ctx, synchro.cluster, obj)
+		return synchro.storage.Update(ctx, synchro.cluster, obj)
 	}
 	return err
 }
 
-func (synchro *ResourceSynchro) updateOrCreateResource(obj runtime.Object) error {
-	err := synchro.storage.Update(synchro.ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) updateOrCreateResource(ctx context.Context, obj runtime.Object) error {
+	err := synchro.storage.Update(ctx, synchro.cluster, obj)
 	if genericstorage.IsNotFound(err) {
-		return synchro.storage.Create(synchro.ctx, synchro.cluster, obj)
+		return synchro.storage.Create(ctx, synchro.cluster, obj)
 	}
 	return err
 }
 
-func (synchro *ResourceSynchro) deleteResource(obj runtime.Object) error {
-	return synchro.storage.Delete(synchro.ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) deleteResource(ctx context.Context, obj runtime.Object) error {
+	return synchro.storage.Delete(ctx, synchro.cluster, obj)
+}
+
+func (synchro *ResourceSynchro) setStatus(status string, reason, message string) {
+	synchro.status.Store(clusterv1alpha2.ClusterResourceSyncCondition{
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now().Rfc3339Copy(),
+	})
 }
 
 func (synchro *ResourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
 	return synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
 }
 
-func ErrorHandlerForResourceSynchro(synchro *ResourceSynchro) informer.WatchErrorHandler {
-	return func(r *informer.Reflector, err error) {
-		if err != nil {
-			// TODO(iceber): Use `k8s.io/apimachinery/pkg/api/errors` to resolve the error type and update it to `status.Reason`
-			status := clusterv1alpha2.ClusterResourceSyncCondition{
-				Status:             clusterv1alpha2.ResourceSyncStatusError,
-				Reason:             "ResourceWatchFailed",
-				Message:            err.Error(),
-				LastTransitionTime: metav1.Now().Rfc3339Copy(),
-			}
-			synchro.status.Store(status)
+func (synchro *ResourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
+	if err != nil {
+		// TODO(iceber): Use `k8s.io/apimachinery/pkg/api/errors` to resolve the error type and update it to `status.Reason`
+		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusError, "ResourceWatchFailed", err.Error())
+		informer.DefaultWatchErrorHandler(r, err)
+		return
+	}
 
-			informer.DefaultWatchErrorHandler(r, err)
-			return
-		}
-
-		// `reflector` sets a default timeout when watching,
-		// then when re-watching the error handler is called again and the `err` is nil.
-		// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
-		if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
-			status = clusterv1alpha2.ClusterResourceSyncCondition{
-				Status:             clusterv1alpha2.ResourceSyncStatusSyncing,
-				Reason:             "",
-				LastTransitionTime: metav1.Now().Rfc3339Copy(),
-			}
-			synchro.status.Store(status)
-		}
+	// `reflector` sets a default timeout when watching,
+	// then when re-watching the error handler is called again and the `err` is nil.
+	// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
+	if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
+		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusSyncing, "", "")
 	}
 }

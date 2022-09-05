@@ -12,5 +12,8 @@ type EventQueue interface {
 	Pop() (*Event, error)
 	Done(event *Event) error
 
+	Len() int
+	DiscardAndRetain(retain int) bool
+
 	Close()
 }

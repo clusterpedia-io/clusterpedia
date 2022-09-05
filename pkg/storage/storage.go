@@ -43,3 +43,16 @@ type ResourceStorageConfig struct {
 	StorageVersion schema.GroupVersion
 	MemoryVersion  schema.GroupVersion
 }
+
+type storageRecoverableExceptionError struct {
+	error
+}
+
+func NewRecoverableException(err error) error {
+	return storageRecoverableExceptionError{err}
+}
+
+func IsRecoverableException(err error) bool {
+	_, ok := err.(storageRecoverableExceptionError)
+	return ok
+}

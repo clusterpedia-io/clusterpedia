@@ -46,8 +46,8 @@ type ClusterSynchro struct {
 	handlerStopCh       chan struct{}
 	// Key is the storage resource.
 	// Sometimes the synchronized resource and the storage resource are different
-	storageResourceVersionCaches map[schema.GroupVersionResource]*informer.ResourceVersionStorage
-	storageResourceSynchros      sync.Map
+	storageResourceVersions map[schema.GroupVersionResource]map[string]interface{}
+	storageResourceSynchros sync.Map
 
 	crdController           *CRDController
 	apiServiceController    *APIServiceController
@@ -124,7 +124,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		runResourceSynchroCh:  make(chan struct{}),
 		stopResourceSynchroCh: make(chan struct{}),
 
-		storageResourceVersionCaches: make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage),
+		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
 	}
 
 	synchro.resourceNegotiator = &ResourceNegotiator{
@@ -164,14 +164,10 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 		return
 	}
 
-	storageResourceVersionCaches := make(map[schema.GroupVersionResource]*informer.ResourceVersionStorage, len(resourceversions))
+	s.storageResourceVersions = make(map[schema.GroupVersionResource]map[string]interface{}, len(resourceversions))
 	for gvr, rvs := range resourceversions {
-		cache := informer.NewResourceVersionStorage()
-		_ = cache.Replace(rvs)
-		storageResourceVersionCaches[gvr] = cache
+		s.storageResourceVersions[gvr] = rvs
 	}
-
-	s.storageResourceVersionCaches = storageResourceVersionCaches
 }
 
 func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
@@ -314,10 +310,10 @@ func (s *ClusterSynchro) setSyncResources() {
 				continue
 			}
 
-			resourceVersionCache, ok := s.storageResourceVersionCaches[storageGVR]
+			rvs, ok := s.storageResourceVersions[storageGVR]
 			if !ok {
-				resourceVersionCache = informer.NewResourceVersionStorage()
-				s.storageResourceVersionCaches[storageGVR] = resourceVersionCache
+				rvs = make(map[string]interface{})
+				s.storageResourceVersions[storageGVR] = rvs
 			}
 
 			synchro := newResourceSynchro(
@@ -325,7 +321,7 @@ func (s *ClusterSynchro) setSyncResources() {
 				config.syncResource,
 				config.kind,
 				s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
-				resourceVersionCache,
+				rvs,
 				config.convertor,
 				resourceStorage,
 			)
@@ -369,13 +365,13 @@ func (s *ClusterSynchro) setSyncResources() {
 	}
 
 	// clean up unstoraged resources
-	for storageGVR := range s.storageResourceVersionCaches {
+	for storageGVR := range s.storageResourceVersions {
 		if _, ok := storageResourceSyncConfigs[storageGVR]; ok {
 			continue
 		}
 
-		// Whether the storage resource is cleaned successfully or not, it needs to be deleted from `s.storageResourceVersionCaches`
-		delete(s.storageResourceVersionCaches, storageGVR)
+		// Whether the storage resource is cleaned successfully or not, it needs to be deleted from `s.storageResourceVersions`
+		delete(s.storageResourceVersions, storageGVR)
 
 		err := s.storage.CleanClusterResource(context.TODO(), s.name, storageGVR)
 		if err == nil {

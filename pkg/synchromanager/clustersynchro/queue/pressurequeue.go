@@ -164,6 +164,28 @@ func (q *pressurequeue) PopAll() ([]*Event, error) {
 	return events, nil
 }
 
+func (q *pressurequeue) Len() int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	return len(q.queue)
+}
+
+func (q *pressurequeue) DiscardAndRetain(retain int) bool {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	if len(q.queue) <= retain {
+		return false
+	}
+
+	q.queue = q.queue[:retain]
+	items := make(map[string]*Event, retain)
+	for _, key := range q.queue {
+		items[key] = q.items[key]
+	}
+	q.items = items
+	return true
+}
+
 func (q *pressurequeue) Close() {
 	q.lock.Lock()
 	defer q.lock.Unlock()
