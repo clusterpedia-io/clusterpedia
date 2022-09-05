@@ -1,16 +1,20 @@
 package datatypes
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )
 
-// JSONMap defiend JSON data type, need to implements driver.Valuer, sql.Scanner interface
+// JSONMap defined JSON data type, need to implements driver.Valuer, sql.Scanner interface
 type JSONMap map[string]interface{}
 
 // Value return json value, implement driver.Valuer interface
@@ -39,7 +43,7 @@ func (m *JSONMap) Scan(val interface{}) error {
 	}
 	t := map[string]interface{}{}
 	err := json.Unmarshal(ba, &t)
-	*m = JSONMap(t)
+	*m = t
 	return err
 }
 
@@ -74,6 +78,19 @@ func (JSONMap) GormDBDataType(db *gorm.DB, field *schema.Field) string {
 		return "JSON"
 	case "postgres":
 		return "JSONB"
+	case "sqlserver":
+		return "NVARCHAR(MAX)"
 	}
 	return ""
+}
+
+func (jm JSONMap) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+	data, _ := jm.MarshalJSON()
+	switch db.Dialector.Name() {
+	case "mysql":
+		if v, ok := db.Dialector.(*mysql.Dialector); ok && !strings.Contains(v.ServerVersion, "MariaDB") {
+			return gorm.Expr("CAST(? AS JSON)", string(data))
+		}
+	}
+	return gorm.Expr("?", string(data))
 }

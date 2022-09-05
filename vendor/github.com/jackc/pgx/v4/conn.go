@@ -50,6 +50,7 @@ func (cc *ConnConfig) Copy() *ConnConfig {
 	return newConfig
 }
 
+// ConnString returns the connection string as parsed by pgx.ParseConfig into pgx.ConnConfig.
 func (cc *ConnConfig) ConnString() string { return cc.connString }
 
 // BuildStatementCacheFunc is a function that can be used to create a stmtcache.Cache implementation for connection.
@@ -72,9 +73,8 @@ type Conn struct {
 
 	connInfo *pgtype.ConnInfo
 
-	wbuf             []byte
-	preallocatedRows []connRows
-	eqb              extendedQueryBuilder
+	wbuf []byte
+	eqb  extendedQueryBuilder
 }
 
 // Identifier a PostgreSQL identifier or name. Identifiers can be composed of
@@ -107,8 +107,8 @@ func Connect(ctx context.Context, connString string) (*Conn, error) {
 	return connect(ctx, connConfig)
 }
 
-// Connect establishes a connection with a PostgreSQL server with a configuration struct. connConfig must have been
-// created by ParseConfig.
+// ConnectConfig establishes a connection with a PostgreSQL server with a configuration struct.
+// connConfig must have been created by ParseConfig.
 func ConnectConfig(ctx context.Context, connConfig *ConnConfig) (*Conn, error) {
 	return connect(ctx, connConfig)
 }
@@ -324,6 +324,7 @@ func (c *Conn) WaitForNotification(ctx context.Context) (*pgconn.Notification, e
 	return n, err
 }
 
+// IsClosed reports if the connection has been closed.
 func (c *Conn) IsClosed() bool {
 	return c.pgConn.IsClosed()
 }
@@ -357,33 +358,11 @@ func quoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
+// Ping executes an empty sql statement against the *Conn
+// If the sql returns without error, the database Ping is considered successful, otherwise, the error is returned.
 func (c *Conn) Ping(ctx context.Context) error {
 	_, err := c.Exec(ctx, ";")
 	return err
-}
-
-func connInfoFromRows(rows Rows, err error) (map[string]uint32, error) {
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	nameOIDs := make(map[string]uint32, 256)
-	for rows.Next() {
-		var oid uint32
-		var name pgtype.Text
-		if err = rows.Scan(&oid, &name); err != nil {
-			return nil, err
-		}
-
-		nameOIDs[name.String] = oid
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return nameOIDs, err
 }
 
 // PgConn returns the underlying *pgconn.PgConn. This is an escape hatch method that allows lower level access to the
@@ -410,7 +389,8 @@ func (c *Conn) Exec(ctx context.Context, sql string, arguments ...interface{}) (
 	commandTag, err := c.exec(ctx, sql, arguments...)
 	if err != nil {
 		if c.shouldLog(LogLevelError) {
-			c.log(ctx, LogLevelError, "Exec", map[string]interface{}{"sql": sql, "args": logQueryArgs(arguments), "err": err})
+			endTime := time.Now()
+			c.log(ctx, LogLevelError, "Exec", map[string]interface{}{"sql": sql, "args": logQueryArgs(arguments), "err": err, "time": endTime.Sub(startTime)})
 		}
 		return commandTag, err
 	}
@@ -517,6 +497,7 @@ func (c *Conn) execParams(ctx context.Context, sd *pgconn.StatementDescription, 
 	}
 
 	result := c.pgConn.ExecParams(ctx, sd.SQL, c.eqb.paramValues, sd.ParamOIDs, c.eqb.paramFormats, c.eqb.resultFormats).Read()
+	c.eqb.Reset() // Allow c.eqb internal memory to be GC'ed as soon as possible.
 	return result.CommandTag, result.Err
 }
 
@@ -527,16 +508,12 @@ func (c *Conn) execPrepared(ctx context.Context, sd *pgconn.StatementDescription
 	}
 
 	result := c.pgConn.ExecPrepared(ctx, sd.Name, c.eqb.paramValues, c.eqb.paramFormats, c.eqb.resultFormats).Read()
+	c.eqb.Reset() // Allow c.eqb internal memory to be GC'ed as soon as possible.
 	return result.CommandTag, result.Err
 }
 
 func (c *Conn) getRows(ctx context.Context, sql string, args []interface{}) *connRows {
-	if len(c.preallocatedRows) == 0 {
-		c.preallocatedRows = make([]connRows, 64)
-	}
-
-	r := &c.preallocatedRows[len(c.preallocatedRows)-1]
-	c.preallocatedRows = c.preallocatedRows[0 : len(c.preallocatedRows)-1]
+	r := &connRows{}
 
 	r.ctx = ctx
 	r.logger = c
@@ -558,8 +535,12 @@ type QueryResultFormats []int16
 // QueryResultFormatsByOID controls the result format (text=0, binary=1) of a query by the result column OID.
 type QueryResultFormatsByOID map[uint32]int16
 
-// Query executes sql with args. If there is an error the returned Rows will be returned in an error state. So it is
-// allowed to ignore the error returned from Query and handle it in Rows.
+// Query executes sql with args. It is safe to attempt to read from the returned Rows even if an error is returned. The
+// error will be the available in rows.Err() after rows are closed. So it is allowed to ignore the error returned from
+// Query and handle it in Rows.
+//
+// Err() on the returned Rows must be checked after the Rows is closed to determine if the query executed successfully
+// as some errors can only be detected by reading the entire response. e.g. A divide by zero error on the last row.
 //
 // For extra control over how the query is executed, the types QuerySimpleProtocol, QueryResultFormats, and
 // QueryResultFormatsByOID may be used as the first args to control exactly how the query is executed. This is rarely
@@ -664,11 +645,13 @@ optionLoop:
 		resultFormats = c.eqb.resultFormats
 	}
 
-	if c.stmtcache != nil && c.stmtcache.Mode() == stmtcache.ModeDescribe {
+	if c.stmtcache != nil && c.stmtcache.Mode() == stmtcache.ModeDescribe && !ok {
 		rows.resultReader = c.pgConn.ExecParams(ctx, sql, c.eqb.paramValues, sd.ParamOIDs, c.eqb.paramFormats, resultFormats)
 	} else {
 		rows.resultReader = c.pgConn.ExecPrepared(ctx, sd.Name, c.eqb.paramValues, c.eqb.paramFormats, resultFormats)
 	}
+
+	c.eqb.Reset() // Allow c.eqb internal memory to be GC'ed as soon as possible.
 
 	return rows, rows.err
 }
@@ -785,8 +768,7 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) BatchResults {
 			var err error
 			sd, err = stmtCache.Get(ctx, bi.query)
 			if err != nil {
-				// the stmtCache was prefilled from distinctUnpreparedQueries above so we are guaranteed no errors
-				panic("BUG: unexpected error from stmtCache")
+				return &batchResults{ctx: ctx, conn: c, err: err}
 			}
 		}
 
@@ -816,6 +798,8 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) BatchResults {
 			batch.ExecPrepared(sd.Name, c.eqb.paramValues, c.eqb.paramFormats, c.eqb.resultFormats)
 		}
 	}
+
+	c.eqb.Reset() // Allow c.eqb internal memory to be GC'ed as soon as possible.
 
 	mrr := c.pgConn.ExecBatch(ctx, batch)
 

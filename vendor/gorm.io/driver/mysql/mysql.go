@@ -18,16 +18,18 @@ import (
 )
 
 type Config struct {
-	DriverName                string
-	DSN                       string
-	Conn                      gorm.ConnPool
-	SkipInitializeWithVersion bool
-	DefaultStringSize         uint
-	DefaultDatetimePrecision  *int
-	DisableDatetimePrecision  bool
-	DontSupportRenameIndex    bool
-	DontSupportRenameColumn   bool
-	DontSupportForShareClause bool
+	DriverName                    string
+	ServerVersion                 string
+	DSN                           string
+	Conn                          gorm.ConnPool
+	SkipInitializeWithVersion     bool
+	DefaultStringSize             uint
+	DefaultDatetimePrecision      *int
+	DisableDatetimePrecision      bool
+	DontSupportRenameIndex        bool
+	DontSupportRenameColumn       bool
+	DontSupportForShareClause     bool
+	DontSupportNullAsDefaultValue bool
 }
 
 type Dialector struct {
@@ -37,6 +39,8 @@ type Dialector struct {
 var (
 	// CreateClauses create clauses
 	CreateClauses = []string{"INSERT", "VALUES", "ON CONFLICT"}
+	// QueryClauses query clauses
+	QueryClauses = []string{}
 	// UpdateClauses update clauses
 	UpdateClauses = []string{"UPDATE", "SET", "WHERE", "ORDER BY", "LIMIT"}
 	// DeleteClauses delete clauses
@@ -61,7 +65,7 @@ func (dialector Dialector) Name() string {
 func (dialector Dialector) NowFunc(n int) func() time.Time {
 	return func() time.Time {
 		round := time.Second / time.Duration(math.Pow10(n))
-		return time.Now().Local().Round(round)
+		return time.Now().Round(round)
 	}
 }
 
@@ -85,6 +89,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 	// register callbacks
 	callbacks.RegisterDefaultCallbacks(db, &callbacks.Config{
 		CreateClauses: CreateClauses,
+		QueryClauses:  QueryClauses,
 		UpdateClauses: UpdateClauses,
 		DeleteClauses: DeleteClauses,
 	})
@@ -107,24 +112,24 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 	}
 
 	if !dialector.Config.SkipInitializeWithVersion {
-		var version string
-		err = db.ConnPool.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version)
+		err = db.ConnPool.QueryRowContext(ctx, "SELECT VERSION()").Scan(&dialector.ServerVersion)
 		if err != nil {
 			return err
 		}
 
-		if strings.Contains(version, "MariaDB") {
+		if strings.Contains(dialector.ServerVersion, "MariaDB") {
 			dialector.Config.DontSupportRenameIndex = true
 			dialector.Config.DontSupportRenameColumn = true
 			dialector.Config.DontSupportForShareClause = true
-		} else if strings.HasPrefix(version, "5.6.") {
+			dialector.Config.DontSupportNullAsDefaultValue = true
+		} else if strings.HasPrefix(dialector.ServerVersion, "5.6.") {
 			dialector.Config.DontSupportRenameIndex = true
 			dialector.Config.DontSupportRenameColumn = true
 			dialector.Config.DontSupportForShareClause = true
-		} else if strings.HasPrefix(version, "5.7.") {
+		} else if strings.HasPrefix(dialector.ServerVersion, "5.7.") {
 			dialector.Config.DontSupportRenameColumn = true
 			dialector.Config.DontSupportForShareClause = true
-		} else if strings.HasPrefix(version, "5.") {
+		} else if strings.HasPrefix(dialector.ServerVersion, "5.") {
 			dialector.Config.DisableDatetimePrecision = true
 			dialector.Config.DontSupportRenameIndex = true
 			dialector.Config.DontSupportRenameColumn = true
@@ -253,7 +258,7 @@ func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
 				shiftDelimiter = 0
 				underQuoted = false
 				continuousBacktick = 0
-				writer.WriteString("`")
+				writer.WriteByte('`')
 			}
 			writer.WriteByte(v)
 			continue
@@ -278,7 +283,7 @@ func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
 	if continuousBacktick > 0 && !selfQuoted {
 		writer.WriteString("``")
 	}
-	writer.WriteString("`")
+	writer.WriteByte('`')
 }
 
 func (dialector Dialector) Explain(sql string, vars ...interface{}) string {
@@ -299,9 +304,9 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 		return dialector.getSchemaTimeType(field)
 	case schema.Bytes:
 		return dialector.getSchemaBytesType(field)
+	default:
+		return dialector.getSchemaCustomType(field)
 	}
-
-	return string(field.DataType)
 }
 
 func (dialector Dialector) getSchemaFloatType(field *schema.Field) string {
@@ -387,6 +392,16 @@ func (dialector Dialector) getSchemaIntAndUnitType(field *schema.Field) string {
 	}
 
 	if field.AutoIncrement {
+		sqlType += " AUTO_INCREMENT"
+	}
+
+	return sqlType
+}
+
+func (dialector Dialector) getSchemaCustomType(field *schema.Field) string {
+	sqlType := string(field.DataType)
+
+	if field.AutoIncrement && !strings.Contains(strings.ToLower(sqlType), " auto_increment") {
 		sqlType += " AUTO_INCREMENT"
 	}
 
