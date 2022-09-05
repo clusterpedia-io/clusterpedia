@@ -21,6 +21,7 @@ type Backend struct {
 	describe       Describe
 	execute        Execute
 	flush          Flush
+	functionCall   FunctionCall
 	gssEncRequest  GSSEncRequest
 	parse          Parse
 	query          Query
@@ -125,6 +126,8 @@ func (b *Backend) Receive() (FrontendMessage, error) {
 		msg = &b.describe
 	case 'E':
 		msg = &b.execute
+	case 'F':
+		msg = &b.functionCall
 	case 'f':
 		msg = &b.copyFail
 	case 'd':
@@ -143,6 +146,8 @@ func (b *Backend) Receive() (FrontendMessage, error) {
 			msg = &SASLResponse{}
 		case AuthTypeSASLFinal:
 			msg = &SASLResponse{}
+		case AuthTypeGSS, AuthTypeGSSCont:
+			msg = &GSSResponse{}
 		case AuthTypeCleartextPassword, AuthTypeMD5Password:
 			fallthrough
 		default:

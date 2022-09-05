@@ -21,7 +21,7 @@ func SetupUpdateReflectValue(db *gorm.DB) {
 			if dest, ok := db.Statement.Dest.(map[string]interface{}); ok {
 				for _, rel := range db.Statement.Schema.Relationships.BelongsTo {
 					if _, ok := dest[rel.Name]; ok {
-						rel.Field.Set(db.Statement.ReflectValue, dest[rel.Name])
+						db.AddError(rel.Field.Set(db.Statement.Context, db.Statement.ReflectValue, dest[rel.Name]))
 					}
 				}
 			}
@@ -29,6 +29,7 @@ func SetupUpdateReflectValue(db *gorm.DB) {
 	}
 }
 
+// BeforeUpdate before update hooks
 func BeforeUpdate(db *gorm.DB) {
 	if db.Error == nil && db.Statement.Schema != nil && !db.Statement.SkipHooks && (db.Statement.Schema.BeforeSave || db.Statement.Schema.BeforeUpdate) {
 		callMethod(db, func(value interface{}, tx *gorm.DB) (called bool) {
@@ -51,6 +52,7 @@ func BeforeUpdate(db *gorm.DB) {
 	}
 }
 
+// Update update hook
 func Update(config *Config) func(db *gorm.DB) {
 	supportReturning := utils.Contains(config.UpdateClauses, "RETURNING")
 
@@ -59,13 +61,13 @@ func Update(config *Config) func(db *gorm.DB) {
 			return
 		}
 
-		if db.Statement.Schema != nil && !db.Statement.Unscoped {
+		if db.Statement.Schema != nil {
 			for _, c := range db.Statement.Schema.UpdateClauses {
 				db.Statement.AddClause(c)
 			}
 		}
 
-		if db.Statement.SQL.String() == "" {
+		if db.Statement.SQL.Len() == 0 {
 			db.Statement.SQL.Grow(180)
 			db.Statement.AddClauseIfNotExists(clause.Update{})
 			if set := ConvertToAssignments(db.Statement); len(set) != 0 {
@@ -73,13 +75,11 @@ func Update(config *Config) func(db *gorm.DB) {
 			} else if _, ok := db.Statement.Clauses["SET"]; !ok {
 				return
 			}
+
 			db.Statement.Build(db.Statement.BuildClauses...)
 		}
 
-		if _, ok := db.Statement.Clauses["WHERE"]; !db.AllowGlobalUpdate && !ok {
-			db.AddError(gorm.ErrMissingWhereClause)
-			return
-		}
+		checkMissingWhereConditions(db)
 
 		if !db.DryRun && db.Error == nil {
 			if ok, mode := hasReturning(db, supportReturning); ok {
@@ -88,7 +88,7 @@ func Update(config *Config) func(db *gorm.DB) {
 					db.Statement.Dest = db.Statement.ReflectValue.Addr().Interface()
 					gorm.Scan(rows, db, mode)
 					db.Statement.Dest = dest
-					rows.Close()
+					db.AddError(rows.Close())
 				}
 			} else {
 				result, err := db.Statement.ConnPool.ExecContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...)
@@ -101,9 +101,17 @@ func Update(config *Config) func(db *gorm.DB) {
 	}
 }
 
+// AfterUpdate after update hooks
 func AfterUpdate(db *gorm.DB) {
 	if db.Error == nil && db.Statement.Schema != nil && !db.Statement.SkipHooks && (db.Statement.Schema.AfterSave || db.Statement.Schema.AfterUpdate) {
 		callMethod(db, func(value interface{}, tx *gorm.DB) (called bool) {
+			if db.Statement.Schema.AfterUpdate {
+				if i, ok := value.(AfterUpdateInterface); ok {
+					called = true
+					db.AddError(i.AfterUpdate(tx))
+				}
+			}
+
 			if db.Statement.Schema.AfterSave {
 				if i, ok := value.(AfterSaveInterface); ok {
 					called = true
@@ -111,12 +119,6 @@ func AfterUpdate(db *gorm.DB) {
 				}
 			}
 
-			if db.Statement.Schema.AfterUpdate {
-				if i, ok := value.(AfterUpdateInterface); ok {
-					called = true
-					db.AddError(i.AfterUpdate(tx))
-				}
-			}
 			return called
 		})
 	}
@@ -133,13 +135,13 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 	case reflect.Slice, reflect.Array:
 		assignValue = func(field *schema.Field, value interface{}) {
 			for i := 0; i < stmt.ReflectValue.Len(); i++ {
-				field.Set(stmt.ReflectValue.Index(i), value)
+				field.Set(stmt.Context, stmt.ReflectValue.Index(i), value)
 			}
 		}
 	case reflect.Struct:
 		assignValue = func(field *schema.Field, value interface{}) {
 			if stmt.ReflectValue.CanAddr() {
-				field.Set(stmt.ReflectValue, value)
+				field.Set(stmt.Context, stmt.ReflectValue, value)
 			}
 		}
 	default:
@@ -157,11 +159,11 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 		case reflect.Slice, reflect.Array:
 			if size := stmt.ReflectValue.Len(); size > 0 {
 				var primaryKeyExprs []clause.Expression
-				for i := 0; i < stmt.ReflectValue.Len(); i++ {
-					var exprs = make([]clause.Expression, len(stmt.Schema.PrimaryFields))
+				for i := 0; i < size; i++ {
+					exprs := make([]clause.Expression, len(stmt.Schema.PrimaryFields))
 					var notZero bool
 					for idx, field := range stmt.Schema.PrimaryFields {
-						value, isZero := field.ValueOf(stmt.ReflectValue.Index(i))
+						value, isZero := field.ValueOf(stmt.Context, stmt.ReflectValue.Index(i))
 						exprs[idx] = clause.Eq{Column: field.DBName, Value: value}
 						notZero = notZero || !isZero
 					}
@@ -170,11 +172,11 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 					}
 				}
 
-				stmt.AddClause(clause.Where{Exprs: []clause.Expression{clause.Or(primaryKeyExprs...)}})
+				stmt.AddClause(clause.Where{Exprs: []clause.Expression{clause.And(clause.Or(primaryKeyExprs...))}})
 			}
 		case reflect.Struct:
 			for _, field := range stmt.Schema.PrimaryFields {
-				if value, isZero := field.ValueOf(stmt.ReflectValue); !isZero {
+				if value, isZero := field.ValueOf(stmt.Context, stmt.ReflectValue); !isZero {
 					stmt.AddClause(clause.Where{Exprs: []clause.Expression{clause.Eq{Column: field.DBName, Value: value}}})
 				}
 			}
@@ -228,17 +230,17 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 							set = append(set, clause.Assignment{Column: clause.Column{Name: field.DBName}, Value: now.UnixNano()})
 						} else if field.AutoUpdateTime == schema.UnixMillisecond {
 							set = append(set, clause.Assignment{Column: clause.Column{Name: field.DBName}, Value: now.UnixNano() / 1e6})
-						} else if field.GORMDataType == schema.Time {
-							set = append(set, clause.Assignment{Column: clause.Column{Name: field.DBName}, Value: now})
-						} else {
+						} else if field.AutoUpdateTime == schema.UnixSecond {
 							set = append(set, clause.Assignment{Column: clause.Column{Name: field.DBName}, Value: now.Unix()})
+						} else {
+							set = append(set, clause.Assignment{Column: clause.Column{Name: field.DBName}, Value: now})
 						}
 					}
 				}
 			}
 		}
 	default:
-		var updatingSchema = stmt.Schema
+		updatingSchema := stmt.Schema
 		if !updatingValue.CanAddr() || stmt.Dest != stmt.Model {
 			// different schema
 			updatingStmt := &gorm.Statement{DB: stmt.DB}
@@ -254,16 +256,16 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 				if field := updatingSchema.LookUpField(dbName); field != nil {
 					if !field.PrimaryKey || !updatingValue.CanAddr() || stmt.Dest != stmt.Model {
 						if v, ok := selectColumns[field.DBName]; (ok && v) || (!ok && (!restricted || (!stmt.SkipHooks && field.AutoUpdateTime > 0))) {
-							value, isZero := field.ValueOf(updatingValue)
+							value, isZero := field.ValueOf(stmt.Context, updatingValue)
 							if !stmt.SkipHooks && field.AutoUpdateTime > 0 {
 								if field.AutoUpdateTime == schema.UnixNanosecond {
 									value = stmt.DB.NowFunc().UnixNano()
 								} else if field.AutoUpdateTime == schema.UnixMillisecond {
 									value = stmt.DB.NowFunc().UnixNano() / 1e6
-								} else if field.GORMDataType == schema.Time {
-									value = stmt.DB.NowFunc()
-								} else {
+								} else if field.AutoUpdateTime == schema.UnixSecond {
 									value = stmt.DB.NowFunc().Unix()
+								} else {
+									value = stmt.DB.NowFunc()
 								}
 								isZero = false
 							}
@@ -274,7 +276,7 @@ func ConvertToAssignments(stmt *gorm.Statement) (set clause.Set) {
 							}
 						}
 					} else {
-						if value, isZero := field.ValueOf(updatingValue); !isZero {
+						if value, isZero := field.ValueOf(stmt.Context, updatingValue); !isZero {
 							stmt.AddClause(clause.Where{Exprs: []clause.Expression{clause.Eq{Column: field.DBName, Value: value}}})
 						}
 					}
