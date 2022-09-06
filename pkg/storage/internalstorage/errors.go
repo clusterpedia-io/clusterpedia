@@ -3,12 +3,18 @@ package internalstorage
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"os"
+	"syscall"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 	"gorm.io/gorm"
 	genericstorage "k8s.io/apiserver/pkg/storage"
+
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
 func InterpretResourceDBError(cluster, name string, err error) error {
@@ -26,6 +32,15 @@ func InterpretDBError(key string, err error) error {
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return genericstorage.NewKeyNotFoundError(key, 0)
+	}
+
+	if _, isNetError := err.(net.Error); isNetError ||
+		errors.Is(err, io.ErrClosedPipe) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		os.IsTimeout(err) ||
+		errors.Is(err, os.ErrDeadlineExceeded) ||
+		errors.Is(err, syscall.ECONNREFUSED) {
+		return storage.NewRecoverableException(err)
 	}
 
 	// TODO(iceber): add dialector judgment
@@ -49,6 +64,9 @@ func InterpretMysqlError(key string, err error) error {
 	}
 
 	switch mysqlErr.Number {
+	// ER_SERVER_SHUTDOWN: Server shutdown in progress
+	case 1053:
+		return storage.NewRecoverableException(err)
 	case 1062:
 		return genericstorage.NewKeyExistsError(key, 0)
 	case 1040:
@@ -58,6 +76,10 @@ func InterpretMysqlError(key string, err error) error {
 }
 
 func InterpretPostgresError(key string, err error) error {
+	if pgconn.Timeout(err) {
+		return storage.NewRecoverableException(err)
+	}
+
 	var pgError *pgconn.PgError
 	if !errors.As(err, &pgError) {
 		return err
@@ -66,6 +88,8 @@ func InterpretPostgresError(key string, err error) error {
 	switch pgError.Code {
 	case pgerrcode.UniqueViolation:
 		return genericstorage.NewKeyExistsError(key, 0)
+	case pgerrcode.AdminShutdown:
+		return storage.NewRecoverableException(err)
 	}
 	return err
 }
