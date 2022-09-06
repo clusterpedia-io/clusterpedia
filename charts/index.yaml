@@ -2,7 +2,7 @@ apiVersion: v1
 entries:
   clusterpedia:
     - apiVersion: v2
-      appVersion: v0.4.1
+      appVersion: v0.5.0-beta.0
       created: "2022-08-17T14:17:49.111199+08:00"
       dependencies:
         - condition: postgresql.enabled
@@ -20,6 +20,6 @@ entries:
       name: clusterpedia
       type: application
       urls:
-        - https://github.com/clusterpedia-io/clusterpedia/releases/download/v0.4.1/clusterpedia-0.4.1.tgz
+        - https://github.com/clusterpedia-io/clusterpedia/releases/download/v0.5.0-beta.0/clusterpedia-0.5.0-beta.0.tgz
       version: 0.0.2
 generated: "2022-08-17T14:17:49.099224+08:00"
