@@ -14,7 +14,7 @@ data:
     {{- if .Values.log.enabled }}
     log:
       stdout: {{ .Values.log.stdout }}
-      level: {{ .Values.log.level | quote }}
+      level: {{ .Values.log.level | default "Warn" | quote }}
       slowThreshold: {{ .Values.log.slowThreshold }}
       ignoreRecordNotFoundError: {{ .Values.log.ignoreRecordNotFoundError }}
     {{- end -}}

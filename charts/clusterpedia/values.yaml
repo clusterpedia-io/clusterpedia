@@ -49,11 +49,8 @@ log:
   ## @param stdout indicates whether it is standard output
   stdout: false
   ## @param level indicates the level of log
-  ## "1" indicates silent
-  ## "2" indicates errot
-  ## "3" indicates warn
-  ## "4" indicates info
-  level: "3"
+  ## Level must be one of [Silent, Error, Warn, Info], Default is 'Warn'
+  level: Warn
   ## @param slowThreshold default 200ms
   slowThreshold: 100ms
   ## @param ignoreRecordNotFoundError indicates whether ignore error type `NotFound`
