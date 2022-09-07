@@ -13,12 +13,34 @@ GIT_DIFF = $(shell git diff --quiet >/dev/null 2>&1; if [ $$? -eq 1 ]; then echo
 ifeq ($(GIT_DIFF), 1)
     GIT_TREESTATE = "dirty"
 endif
-BUILDDATE = $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+BUILD_DATE = $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-LDFLAGS := "-X github.com/clusterpedia-io/clusterpedia/pkg/version.gitVersion=$(GIT_VERSION) \
-				-X github.com/clusterpedia-io/clusterpedia/pkg/version.gitCommit=$(GIT_COMMIT_HASH) \
-				-X github.com/clusterpedia-io/clusterpedia/pkg/version.gitTreeState=$(GIT_TREESTATE) \
-				-X github.com/clusterpedia-io/clusterpedia/pkg/version.buildDate=$(BUILDDATE)"
+KUBE_DEPENDENCE_VERSION = $(shell go list -m k8s.io/kubernetes | cut -d' ' -f2)
+
+LDFLAGS += -X github.com/clusterpedia-io/clusterpedia/pkg/version.gitVersion=$(GIT_VERSION)
+LDFLAGS += -X github.com/clusterpedia-io/clusterpedia/pkg/version.gitCommit=$(GIT_COMMIT_HASH)
+LDFLAGS += -X github.com/clusterpedia-io/clusterpedia/pkg/version.gitTreeState=$(GIT_TREESTATE)
+LDFLAGS += -X github.com/clusterpedia-io/clusterpedia/pkg/version.buildDate=$(BUILD_DATE)
+
+# The `client-go/pkg/version` effects the **User-Agent** when using client-go to request.
+# User-Agent="<bin name>/$(GIT_VERSION) ($(GOOS)/$(GOARCH)) kubernetes/$(GIT_COMMIT_HASH)[/<component name>]"
+#   eg. "clustersynchro-manager/0.4.0 (linux/amd64) kubernetes/fbf0f4f/clustersynchro-manager"
+LDFLAGS += -X k8s.io/client-go/pkg/version.gitVersion=$(GIT_VERSION)
+LDFLAGS += -X k8s.io/client-go/pkg/version.gitMajor=$(shell echo '$(subst v,,$(GIT_VERSION))' | cut -d. -f1)
+LDFLAGS += -X k8s.io/client-go/pkg/version.gitMinor=$(shell echo '$(subst v,,$(GIT_VERSION))' | cut -d. -f2)
+LDFLAGS += -X k8s.io/client-go/pkg/version.gitCommit=$(GIT_COMMIT_HASH)
+LDFLAGS += -X k8s.io/client-go/pkg/version.gitTreeState=$(GIT_TREESTATE)
+LDFLAGS += -X k8s.io/client-go/pkg/version.buildDate=$(BUILD_DATE)
+
+# The `component-base/version` effects the version obtained using Kubernetes OpenAPI.
+#   OpenAPI Path: /apis/clusterpedia.io/v1beta1/resources/version
+#   $ kubectl version
+LDFLAGS += -X k8s.io/component-base/version.gitVersion=$(KUBE_DEPENDENCE_VERSION)
+LDFLAGS += -X k8s.io/component-base/version.gitMajor=$(shell echo '$(subst v,,$(KUBE_DEPENDENCE_VERSION))' | cut -d. -f1)
+LDFLAGS += -X k8s.io/component-base/version.gitMinor=$(shell echo '$(subst v,,$(KUBE_DEPENDENCE_VERSION))' | cut -d. -f2)
+LDFLAGS += -X k8s.io/component-base/version.gitCommit=$(GIT_COMMIT_HASH)
+LDFLAGS += -X k8s.io/component-base/version.gitTreeState=$(GIT_TREESTATE)
+LDFLAGS += -X k8s.io/component-base/version.buildDate=$(BUILD_DATE)
 
 VERSION ?= "latest"
 LATEST_TAG=$(shell git describe --tags)
@@ -65,21 +87,21 @@ clean: clean-images
 .PHONY: apiserver
 apiserver:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-			   -ldflags $(LDFLAGS) \
+			   -ldflags "$(LDFLAGS)" \
 			   -o bin/apiserver \
 			   cmd/apiserver/main.go
 
 .PHONY: clustersynchro-manager
 clustersynchro-manager:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-			   -ldflags $(LDFLAGS) \
+			   -ldflags "$(LDFLAGS)" \
 			   -o  bin/clustersynchro-manager \
 			   cmd/clustersynchro-manager/main.go
 
 .PHONY: controller-manager
 controller-manager:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-			   -ldflags $(LDFLAGS) \
+			   -ldflags "$(LDFLAGS)" \
 			   -o  bin/controller-manager \
 			   cmd/controller-manager/main.go
 

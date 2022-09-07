@@ -745,10 +745,6 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 		// indicate to the client which resource version was returned
 		if returnedRV == 0 {
 			returnedRV = getResp.Header.Revision
-			// if returnedRV was not set previously then WithRev option was not either, so set here in case
-			// hasMore is true and we do a subsequent Get.  If we don't set this the next Get may give
-			// back inconsistent data because we are Get-ing the latest data and not at a specific revision
-			options = append(options, clientv3.WithRev(returnedRV))
 		}
 
 		// no more results remain or we didn't request paging
