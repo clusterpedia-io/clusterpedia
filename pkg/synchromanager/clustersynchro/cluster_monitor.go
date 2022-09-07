@@ -61,8 +61,18 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	}
 
 	synchro.startResourceSynchro()
-	if lastReadyCondition.Status == metav1.ConditionTrue {
-		// TODO: if lastReadyCondition.Message != "", need process
+	message := "cluster health responded with ok"
+	if lastReadyCondition.Status == metav1.ConditionTrue && lastReadyCondition.Message == message {
+		return
+	}
+
+	if _, err := synchro.dynamicDiscoveryManager.GetAndFetchServerVersion(); err != nil {
+		message = fmt.Sprintf("cluster health responded with ok, but get server version: %v", err)
+	}
+
+	if lastReadyCondition.Status == metav1.ConditionTrue && lastReadyCondition.Message == message {
+		// the ready status and message has not been modified,
+		// to reduce the cluster status updates, do not update the `synchro.healthyCondition`.
 		return
 	}
 
@@ -70,17 +80,10 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		Type:               clusterv1alpha2.ClusterHealthyCondition,
 		Status:             metav1.ConditionTrue,
 		Reason:             clusterv1alpha2.ClusterHealthyReason,
-		Message:            "cluster health responded with ok",
+		Message:            message,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
-	defer func() {
-		synchro.healthyCondition.Store(condition)
-	}()
-
-	if _, err := synchro.dynamicDiscoveryManager.GetAndFetchServerVersion(); err != nil {
-		condition.Message = fmt.Sprintf("cluster health responded with ok, but get server version: %v", err)
-		klog.ErrorS(err, "Failed to get cluster version", "cluster", synchro.name)
-	}
+	synchro.healthyCondition.Store(condition)
 }
 
 // TODO(iceber): resolve for more detailed error
