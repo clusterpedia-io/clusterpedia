@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage/watchcache"
 )
 
 type StorageFactory interface {
@@ -42,6 +43,9 @@ type ResourceStorageConfig struct {
 	Codec          runtime.Codec
 	StorageVersion schema.GroupVersion
 	MemoryVersion  schema.GroupVersion
+	WatchCache     *watchcache.WatchCache
+	Cluster        string
+	Namespaced     bool
 }
 
 type storageRecoverableExceptionError struct {
