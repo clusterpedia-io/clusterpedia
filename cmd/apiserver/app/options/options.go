@@ -3,9 +3,12 @@ package options
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
@@ -72,7 +75,7 @@ func (o *ClusterPediaServerOptions) Validate() error {
 	return utilerrors.NewAggregate(errors)
 }
 
-func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
+func (o *ClusterPediaServerOptions) Config(bindingSyncController bool) (*apiserver.Config, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err
 	}
@@ -95,13 +98,20 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	// genericConfig.OpenAPIConfig.Info.Title = openAPITitle
 	// genericConfig.OpenAPIConfig.Info.Version= openAPIVersion
 
+	// todo
+	// support watch to LongRunningFunc
+	genericConfig.LongRunningFunc = func(r *http.Request, requestInfo *genericrequest.RequestInfo) bool {
+		return strings.Contains(r.RequestURI, "watch")
+	}
+
 	if err := o.genericOptionsApplyTo(genericConfig); err != nil {
 		return nil, err
 	}
 
 	return &apiserver.Config{
-		GenericConfig:  genericConfig,
-		StorageFactory: storage,
+		GenericConfig:         genericConfig,
+		StorageFactory:        storage,
+		BindingSyncController: bindingSyncController,
 	}, nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	genericfeatures "k8s.io/apiserver/pkg/features"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/featuregate"
@@ -14,6 +13,7 @@ import (
 	"k8s.io/component-base/term"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
 
@@ -27,12 +27,12 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(utilfeature.DefaultFeatureGate); err != nil {
+			if err := opts.Logs.ValidateAndApply(clusterpediafeature.FeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())
 
-			config, err := opts.Config(false)
+			config, err := opts.Config(true)
 			if err != nil {
 				return err
 			}
@@ -52,7 +52,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
-	utilfeature.DefaultMutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
+	clusterpediafeature.MutableFeatureGate.AddFlag(namedFlagSets.FlagSet("mutable feature gate"))
 
 	fs := cmd.Flags()
 	for _, f := range namedFlagSets.FlagSets {
@@ -65,16 +65,16 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 }
 
 func init() {
-	runtime.Must(logs.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	runtime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
 
 	// The feature gate `RemainingItemCount` should default to false
 	// https://github.com/clusterpedia-io/clusterpedia/issues/196
-	gates := utilfeature.DefaultMutableFeatureGate.GetAll()
+	gates := clusterpediafeature.MutableFeatureGate.GetAll()
 	gate := gates[genericfeatures.RemainingItemCount]
 	gate.Default = false
 	gates[genericfeatures.RemainingItemCount] = gate
 
-	utilfeature.DefaultMutableFeatureGate = featuregate.NewFeatureGate()
-	runtime.Must(utilfeature.DefaultMutableFeatureGate.Add(gates))
-	utilfeature.DefaultFeatureGate = utilfeature.DefaultMutableFeatureGate
+	clusterpediafeature.MutableFeatureGate = featuregate.NewFeatureGate()
+	runtime.Must(clusterpediafeature.MutableFeatureGate.Add(gates))
+	clusterpediafeature.FeatureGate = clusterpediafeature.MutableFeatureGate
 }
