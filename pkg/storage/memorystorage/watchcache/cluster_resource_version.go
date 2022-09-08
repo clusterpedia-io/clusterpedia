@@ -53,6 +53,15 @@ func (crv *ClusterResourceVersion) GetClusterResourceVersion() string {
 	return base64.RawURLEncoding.EncodeToString(bytes)
 }
 
+// GetClusterResourceVersionFromEvent return a ClusterResourceVersion from watch event
+func GetClusterResourceVersionFromEvent(event *watch.Event) (*ClusterResourceVersion, error) {
+	accessor, err := meta.Accessor(event.Object)
+	if err != nil {
+		return nil, fmt.Errorf("unable to understand watch event %#v", event)
+	}
+	return NewClusterResourceVersionFromString(accessor.GetResourceVersion())
+}
+
 func (crv *ClusterResourceVersion) IsEqual(another *ClusterResourceVersion) bool {
 	if len(crv.rvmap) != len(another.rvmap) {
 		return false

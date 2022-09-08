@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -66,7 +67,12 @@ type WatchCache struct {
 
 	WatchersLock sync.RWMutex
 
-	IsNamespaced bool
+	// watchersBuffer is a list of watchers potentially interested in currently
+	// dispatched event.
+	WatchersBuffer []*CacheWatcher
+	// blockedWatchers is a list of watchers whose buffer is currently full.
+	BlockedWatchers []*CacheWatcher
+	IsNamespaced    bool
 }
 
 type keyFunc func(runtime.Object) (string, error)
@@ -160,7 +166,7 @@ func (w *WatchCache) GetStores() map[string]cache.Indexer {
 	return w.stores
 }
 
-func (w *WatchCache) processEvent(event watch.Event, updateFunc func(*StoreElement) error) error {
+func (w *WatchCache) processEvent(event watch.Event, resourceVersion *ClusterResourceVersion, updateFunc func(*StoreElement) error) error {
 	key, err := w.KeyFunc(event.Object)
 	if err != nil {
 		return fmt.Errorf("couldn't compute key: %v", err)
@@ -173,6 +179,8 @@ func (w *WatchCache) processEvent(event watch.Event, updateFunc func(*StoreEleme
 		}
 	}
 
+	wcEvent := event
+
 	if err := func() error {
 		// TODO: We should consider moving this lock below after the watchCacheEvent
 		// is created. In such situation, the only problematic scenario is Replace(
@@ -181,6 +189,8 @@ func (w *WatchCache) processEvent(event watch.Event, updateFunc func(*StoreEleme
 		w.Lock()
 		defer w.Unlock()
 
+		w.updateCache(&wcEvent)
+		w.resourceVersion = resourceVersion
 		return updateFunc(elem)
 	}(); err != nil {
 		return err
@@ -191,30 +201,70 @@ func (w *WatchCache) processEvent(event watch.Event, updateFunc func(*StoreEleme
 
 // Add takes runtime.Object as an argument.
 func (w *WatchCache) Add(obj interface{}, clusterName string) error {
-	event := watch.Event{Type: watch.Added, Object: obj.(runtime.Object)}
+	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
+	if err != nil {
+		return err
+	}
+	event := watch.Event{Type: watch.Added, Object: object}
 
 	f := func(elem *StoreElement) error {
 		return w.stores[clusterName].Add(elem)
 	}
-	return w.processEvent(event, f)
+	return w.processEvent(event, resourceVersion, f)
 }
 
 // Update takes runtime.Object as an argument.
 func (w *WatchCache) Update(obj interface{}, clusterName string) error {
-	event := watch.Event{Type: watch.Modified, Object: obj.(runtime.Object)}
+	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
+	if err != nil {
+		return err
+	}
+	event := watch.Event{Type: watch.Modified, Object: object}
 
 	f := func(elem *StoreElement) error {
 		return w.stores[clusterName].Update(elem)
 	}
-	return w.processEvent(event, f)
+	return w.processEvent(event, resourceVersion, f)
 }
 
 // Delete takes runtime.Object as an argument.
 func (w *WatchCache) Delete(obj interface{}, clusterName string) error {
-	event := watch.Event{Type: watch.Deleted, Object: obj.(runtime.Object)}
+	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
+	if err != nil {
+		return err
+	}
+	event := watch.Event{Type: watch.Deleted, Object: object}
 
 	f := func(elem *StoreElement) error { return w.stores[clusterName].Delete(elem) }
-	return w.processEvent(event, f)
+	return w.processEvent(event, resourceVersion, f)
+}
+
+func (w *WatchCache) objectToVersionedRuntimeObject(obj interface{}) (runtime.Object, *ClusterResourceVersion, error) {
+	object, ok := obj.(runtime.Object)
+	if !ok {
+		return nil, &ClusterResourceVersion{}, fmt.Errorf("obj does not implement runtime.Object interface: %v", obj)
+	}
+
+	resourceVersion, err := meta.NewAccessor().ResourceVersion(object)
+	if err != nil {
+		return nil, &ClusterResourceVersion{}, err
+	}
+
+	clusterRvStore, err := NewClusterResourceVersionFromString(resourceVersion)
+	if err != nil {
+		return nil, &ClusterResourceVersion{}, err
+	}
+	return object, clusterRvStore, nil
+}
+
+// Assumes that lock is already held for write.
+func (w *WatchCache) updateCache(event *watch.Event) {
+	if w.endIndex == w.startIndex+w.capacity {
+		// Cache is full - remove the oldest element.
+		w.startIndex++
+	}
+	w.cache[w.endIndex%w.capacity] = event
+	w.endIndex++
 }
 
 // WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
@@ -284,6 +334,68 @@ func (w *WatchCache) WaitUntilFreshAndGet(cluster, namespace, name string) (*Sto
 			} else {
 				continue
 			}
+		}
+	}
+
+	return result, nil
+}
+
+// GetAllEventsSinceThreadUnsafe returns watch event from slice window in watchCache by the resourceVersion
+func (w *WatchCache) GetAllEventsSinceThreadUnsafe(resourceVersion *ClusterResourceVersion) ([]*watch.Event, error) {
+	size := w.endIndex - w.startIndex
+	oldestObj := w.cache[w.startIndex%w.capacity]
+	if resourceVersion.IsEmpty() {
+		// resourceVersion = 0 means that we don't require any specific starting point
+		// and we would like to start watching from ~now.
+		// However, to keep backward compatibility, we additionally need to return the
+		// current state and only then start watching from that point.
+		//
+		// TODO: In v2 api, we should stop returning the current state - #13969.
+		var allItems []interface{}
+		for _, store := range w.stores {
+			allItems = append(allItems, store.List()...)
+		}
+		result := make([]*watch.Event, len(allItems))
+		for i, item := range allItems {
+			elem, ok := item.(*StoreElement)
+			if !ok {
+				return nil, fmt.Errorf("not a storeElement: %v", elem)
+			}
+			result[i] = &watch.Event{
+				Type:   watch.Added,
+				Object: elem.Object,
+			}
+		}
+		return result, nil
+	}
+
+	var index int
+	var founded bool
+	for index = 0; w.startIndex+index < w.endIndex; index++ {
+		rv, err := GetClusterResourceVersionFromEvent(w.cache[(w.startIndex+index)%w.capacity])
+		if err != nil {
+			return nil, err
+		}
+		if rv.IsEqual(resourceVersion) {
+			founded = true
+			index++
+			break
+		}
+	}
+
+	var result []*watch.Event
+	if !founded {
+		oldest, err := GetClusterResourceVersionFromEvent(oldestObj)
+		if err != nil {
+			return nil, err
+		}
+		return nil, apierrors.NewResourceExpired(fmt.Sprintf("too old resource version: %#v (%#v)", resourceVersion, oldest))
+	} else {
+		i := 0
+		result = make([]*watch.Event, size-index)
+		for ; w.startIndex+index < w.endIndex; index++ {
+			result[i] = w.cache[(w.startIndex+index)%w.capacity]
+			i++
 		}
 	}
 

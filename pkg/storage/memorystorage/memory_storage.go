@@ -2,12 +2,14 @@ package memorystorage
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	cache "github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage/watchcache"
+	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
 type StorageFactory struct {
@@ -68,6 +70,9 @@ func (s *StorageFactory) CleanCluster(ctx context.Context, cluster string) error
 	defer storages.Unlock()
 	for _, rs := range storages.resourceStorages {
 		rs.watchCache.DeleteIndexer(cluster)
+		// If a pediacluster is deleted from clusterpedia,then the informer of client-go should be list and watch again
+		errorEvent := utilwatch.NewErrorEvent(fmt.Errorf("PediaCluster %s is deleted", cluster))
+		rs.dispatchEvent(&errorEvent)
 	}
 	return nil
 }
@@ -77,6 +82,9 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 	defer storages.Unlock()
 	if rs, ok := storages.resourceStorages[gvr]; ok {
 		rs.watchCache.DeleteIndexer(cluster)
+		// If a gvr is deleted from clusterpedia,then the informer of client-go should be list and watch again
+		errorEvent := utilwatch.NewErrorEvent(fmt.Errorf("GVR %v is deleted", gvr))
+		rs.dispatchEvent(&errorEvent)
 	}
 	return nil
 }

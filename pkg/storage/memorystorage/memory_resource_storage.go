@@ -97,9 +97,18 @@ func (s *ResourceStorage) dispatchEvents() {
 				utilruntime.HandleError(fmt.Errorf("unable to understand watch event %#v", cwe.Event))
 				continue
 			}
+			s.dispatchEvent(&cwe.Event)
 		case <-s.stopCh:
 			return
 		}
+	}
+}
+
+func (s *ResourceStorage) dispatchEvent(event *watch.Event) {
+	s.watchCache.WatchersLock.RLock()
+	defer s.watchCache.WatchersLock.RUnlock()
+	for _, watcher := range s.watchCache.WatchersBuffer {
+		watcher.NonblockingAdd(event)
 	}
 }
 
