@@ -59,6 +59,9 @@ type WatchCache struct {
 	// NOTE: We assume that <store> is thread-safe.
 	stores map[string]cache.Indexer
 
+	// ResourceVersion up to which the watchCache is propagated.
+	resourceVersion *ClusterResourceVersion
+
 	//eventHandler func(*watchCacheEvent)
 
 	WatchersLock sync.RWMutex
@@ -215,7 +218,7 @@ func (w *WatchCache) Delete(obj interface{}, clusterName string) error {
 }
 
 // WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
-func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) []*StoreElement {
+func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) ([]*StoreElement, *ClusterResourceVersion, error) {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -233,8 +236,10 @@ func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) []*StoreE
 	for _, store := range w.stores {
 		for _, obj := range store.List() {
 			se := obj.(*StoreElement)
-			ns, _ := accessor.Namespace(se.Object)
-
+			ns, err := accessor.Namespace(se.Object)
+			if err != nil {
+				return result, w.resourceVersion, err
+			}
 			if opts.Namespaces != nil {
 				if slices.Contains(opts.Namespaces, ns) {
 					result = append(result, se)
@@ -246,7 +251,7 @@ func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) []*StoreE
 			result = append(result, se)
 		}
 	}
-	return result
+	return result, w.resourceVersion, nil
 }
 
 // WaitUntilFreshAndGet returns list of pointers to <storeElement> objects.

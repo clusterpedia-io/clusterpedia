@@ -33,6 +33,8 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 			resourceStorage.watchCache.AddIndexer(config.Cluster, nil)
 		}
 
+		resourceStorage.crvSynchro.SetClusterResourceVersion(config.Cluster, "0")
+
 		return resourceStorage, nil
 	}
 
@@ -41,9 +43,12 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 	resourceStorage := &ResourceStorage{
 		incoming:      make(chan ClusterWatchEvent, 100),
 		Codec:         config.Codec,
+		crvSynchro:    cache.NewClusterResourceVersionSynchro(config.Cluster),
 		watchCache:    watchCache,
 		storageConfig: config,
 	}
+
+	go resourceStorage.dispatchEvents()
 
 	storages.resourceStorages[gvr] = resourceStorage
 

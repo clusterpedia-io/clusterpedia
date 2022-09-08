@@ -1,0 +1,112 @@
+package watchcache
+
+import (
+	"encoding/base64"
+	"fmt"
+	"sync"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/klog/v2"
+)
+
+// ClusterResourceVersion holds the pediaCluster name and its latest resourceVersion
+type ClusterResourceVersion struct {
+	rvmap map[string]string
+}
+
+func NewClusterResourceVersion(cluster string) *ClusterResourceVersion {
+	return &ClusterResourceVersion{
+		rvmap: map[string]string{cluster: "0"},
+	}
+}
+
+func NewClusterResourceVersionFromString(rv string) (*ClusterResourceVersion, error) {
+	result := &ClusterResourceVersion{
+		rvmap: map[string]string{},
+	}
+	if rv == "0" || rv == "" {
+		return result, nil
+	}
+
+	decoded, err := base64.RawURLEncoding.DecodeString(rv)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode failed: %v", err)
+	}
+
+	err = json.Unmarshal(decoded, &result.rvmap)
+	if err != nil {
+		return nil, fmt.Errorf("json decode failed: %v", err)
+	}
+
+	return result, nil
+}
+
+// GetClusterResourceVersion return a base64 encode string of ClusterResourceVersion
+func (crv *ClusterResourceVersion) GetClusterResourceVersion() string {
+	bytes, err := json.Marshal(crv.rvmap)
+	if err != nil {
+		klog.Errorf("base64 encode failed: %v", err)
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes)
+}
+
+func (crv *ClusterResourceVersion) IsEqual(another *ClusterResourceVersion) bool {
+	if len(crv.rvmap) != len(another.rvmap) {
+		return false
+	}
+	for key, value := range crv.rvmap {
+		if another.rvmap[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func (crv *ClusterResourceVersion) IsEmpty() bool {
+	return len(crv.rvmap) == 0
+}
+
+type ClusterResourceVersionSynchro struct {
+	crv *ClusterResourceVersion
+
+	sync.RWMutex
+}
+
+func NewClusterResourceVersionSynchro(cluster string) *ClusterResourceVersionSynchro {
+	return &ClusterResourceVersionSynchro{
+		crv: NewClusterResourceVersion(cluster),
+	}
+}
+
+// UpdateClusterResourceVersion update the resourceVersion in ClusterResourceVersionSynchro to the latest
+func (crvs *ClusterResourceVersionSynchro) UpdateClusterResourceVersion(event *watch.Event, cluster string) {
+	crvs.Lock()
+	defer crvs.Unlock()
+
+	crv := crvs.crv
+	accessor := meta.NewAccessor()
+	rv, _ := accessor.ResourceVersion(event.Object)
+	crv.rvmap[cluster] = rv
+
+	bytes, err := json.Marshal(crv.rvmap)
+	if err != nil {
+		klog.Errorf("base64 encode failed: %v", err)
+		return
+	}
+
+	err = accessor.SetResourceVersion(event.Object, base64.RawURLEncoding.EncodeToString(bytes))
+	if err != nil {
+		klog.Warningf("set resourceVersion failed: %v, may be it's a clear watch cache order event", err)
+		return
+	}
+}
+
+func (crvs *ClusterResourceVersionSynchro) SetClusterResourceVersion(clusterName string, resourceVersion string) {
+	crvs.Lock()
+	defer crvs.Unlock()
+
+	crvs.crv.rvmap[clusterName] = resourceVersion
+}
