@@ -28,3 +28,6 @@ subjects:
   - kind: ServiceAccount
     name: clusterpedia-controller-manager
     namespace: clusterpedia-system
+  - kind: ServiceAccount
+    name: clusterpedia-binding-apiserver
+    namespace: clusterpedia-system

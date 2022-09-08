@@ -1,0 +1,13 @@
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.clusterpedia.io
+spec:
+  insecureSkipTLSVerify: true
+  group: clusterpedia.io
+  groupPriorityMinimum: 1000
+  versionPriority: 100
+  service:
+    name: clusterpedia-binding-apiserver
+    namespace: clusterpedia-system
+  version: v1beta1
