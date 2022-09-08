@@ -59,10 +59,20 @@ func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 }
 
 func (s *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
+	storages.Lock()
+	defer storages.Unlock()
+	for _, rs := range storages.resourceStorages {
+		rs.watchCache.DeleteIndexer(cluster)
+	}
 	return nil
 }
 
 func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error {
+	storages.Lock()
+	defer storages.Unlock()
+	if rs, ok := storages.resourceStorages[gvr]; ok {
+		rs.watchCache.DeleteIndexer(cluster)
+	}
 	return nil
 }
 

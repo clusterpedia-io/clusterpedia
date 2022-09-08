@@ -290,3 +290,34 @@ func (w *WatchCache) AddIndexer(clusterName string, indexers *cache.Indexers) {
 	defer w.Unlock()
 	w.stores[clusterName] = cache.NewIndexer(storeElementKey, storeElementIndexers(indexers))
 }
+
+func (w *WatchCache) DeleteIndexer(clusterName string) {
+	w.Lock()
+	defer w.Unlock()
+
+	if _, ok := w.stores[clusterName]; !ok {
+		return
+	}
+
+	delete(w.stores, clusterName)
+
+	//clear cache
+	w.startIndex = 0
+	w.endIndex = 0
+}
+
+func (w *WatchCache) ClearWatchCache(clusterName string) {
+	w.Lock()
+	defer w.Unlock()
+
+	if _, ok := w.stores[clusterName]; !ok {
+		return
+	}
+
+	delete(w.stores, clusterName)
+	w.stores[clusterName] = cache.NewIndexer(storeElementKey, storeElementIndexers(nil))
+
+	//clear cache
+	w.startIndex = 0
+	w.endIndex = 0
+}

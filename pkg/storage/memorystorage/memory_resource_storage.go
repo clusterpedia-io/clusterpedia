@@ -1,9 +1,14 @@
 package memorystorage
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"reflect"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -86,7 +91,26 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	// todo
+	var buffer bytes.Buffer
+	se, err := s.watchCache.WaitUntilFreshAndGet(cluster, namespace, name)
+	if err != nil {
+		return err
+	}
+
+	object := se.Object
+	err = s.Codec.Encode(object, &buffer)
+	if err != nil {
+		return err
+	}
+
+	obj, _, err := s.Codec.Decode(buffer.Bytes(), nil, into)
+	if err != nil {
+		return err
+	}
+
+	if obj != into {
+		return fmt.Errorf("Failed to decode resource, into is %T", into)
+	}
 	return nil
 }
 
@@ -101,6 +125,56 @@ func (s *ResourceStorage) newClusterWatchEvent(eventType watch.EventType, obj ru
 }
 
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
-	// todo
+	var buffer bytes.Buffer
+	objects := s.watchCache.WaitUntilFreshAndList(opts)
+
+	if len(objects) == 0 {
+		return nil
+	}
+
+	listPtr, err := meta.GetItemsPtr(listObject)
+	if err != nil {
+		return err
+	}
+
+	v, err := conversion.EnforcePtr(listPtr)
+	if err != nil || v.Kind() != reflect.Slice {
+		return fmt.Errorf("need ptr to slice: %v", err)
+	}
+
+	expected := reflect.New(v.Type().Elem()).Interface().(runtime.Object)
+	seen := map[string]struct{}{}
+	accessor := meta.NewAccessor()
+	deduplicated := make([]runtime.Object, 0, len(objects))
+	for _, object := range objects {
+		buffer.Reset()
+		obj := object.Object
+		err = s.Codec.Encode(obj, &buffer)
+		if err != nil {
+			return err
+		}
+
+		obj, _, err := s.Codec.Decode(buffer.Bytes(), nil, expected.DeepCopyObject())
+		if err != nil {
+			return err
+		}
+
+		name, err := accessor.Name(obj)
+		if err != nil {
+			return err
+		}
+
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			deduplicated = append(deduplicated, obj)
+		}
+	}
+
+	slice := reflect.MakeSlice(v.Type(), len(deduplicated), len(deduplicated))
+	for i, obj := range deduplicated {
+		slice.Index(i).Set(reflect.ValueOf(obj).Elem())
+	}
+
+	v.Set(slice)
 	return nil
 }
