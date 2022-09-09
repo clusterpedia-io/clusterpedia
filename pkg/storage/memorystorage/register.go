@@ -13,5 +13,8 @@ func init() {
 }
 
 func NewStorageFactory(_ string) (storage.StorageFactory, error) {
-	return &StorageFactory{}, nil
+	storageFactory := &StorageFactory{
+		clusters: make(map[string]bool),
+	}
+	return storageFactory, nil
 }

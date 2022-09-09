@@ -8,17 +8,17 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/klog/v2"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	cache "github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage/watchcache"
+	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
 var (
@@ -46,70 +46,9 @@ type ResourceStorage struct {
 
 	Codec         runtime.Codec
 	watchCache    *cache.WatchCache
-	stopCh        chan struct{}
-	crvSynchro    *cache.ClusterResourceVersionSynchro
+	CrvSynchro    *cache.ClusterResourceVersionSynchro
 	incoming      chan ClusterWatchEvent
 	storageConfig *storage.ResourceStorageConfig
-}
-
-func (s *ResourceStorage) convertEvent(event *ClusterWatchEvent) error {
-	klog.V(10).Infof("event: %s", event)
-	s.crvSynchro.UpdateClusterResourceVersion(&event.Event, event.ClusterName)
-
-	err := s.encodeEvent(&event.Event)
-	if err != nil {
-		return fmt.Errorf("encode event failed: %v", err)
-	}
-	s.incoming <- *event
-	return nil
-}
-
-func (s *ResourceStorage) dispatchEvents() {
-	for {
-		select {
-		case cwe, ok := <-s.incoming:
-			if !ok {
-				continue
-			}
-
-			switch cwe.Event.Type {
-			case watch.Added:
-				err := s.watchCache.Add(cwe.Event.Object, cwe.ClusterName)
-				if err != nil {
-					utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", cwe.Event.Object, err))
-				}
-			case watch.Modified:
-				err := s.watchCache.Update(cwe.Event.Object, cwe.ClusterName)
-				if err != nil {
-					utilruntime.HandleError(fmt.Errorf("unable to update watch event object (%#v) to store: %v", cwe.Event.Object, err))
-				}
-			case watch.Deleted:
-				// TODO: Will any consumers need access to the "last known
-				// state", which is passed in event.Object? If so, may need
-				// to change this.
-				err := s.watchCache.Delete(cwe.Event.Object, cwe.ClusterName)
-				if err != nil {
-					utilruntime.HandleError(fmt.Errorf("unable to delete watch event object (%#v) from store: %v", cwe.Event.Object, err))
-				}
-			case watch.Error:
-				s.watchCache.ClearWatchCache(cwe.ClusterName)
-			default:
-				utilruntime.HandleError(fmt.Errorf("unable to understand watch event %#v", cwe.Event))
-				continue
-			}
-			s.dispatchEvent(&cwe.Event)
-		case <-s.stopCh:
-			return
-		}
-	}
-}
-
-func (s *ResourceStorage) dispatchEvent(event *watch.Event) {
-	s.watchCache.WatchersLock.RLock()
-	defer s.watchCache.WatchersLock.RUnlock()
-	for _, watcher := range s.watchCache.WatchersBuffer {
-		watcher.NonblockingAdd(event)
-	}
 }
 
 func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
@@ -117,29 +56,44 @@ func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
 }
 
 func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtime.Object) error {
-	event := s.newClusterWatchEvent(watch.Added, obj, cluster)
-	err := s.convertEvent(event)
+	resourceVersion, err := s.CrvSynchro.UpdateClusterResourceVersion(obj, cluster)
 	if err != nil {
 		return err
 	}
+
+	err = s.watchCache.Add(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
+	}
+
 	return nil
 }
 
 func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtime.Object) error {
-	event := s.newClusterWatchEvent(watch.Modified, obj, cluster)
-	err := s.convertEvent(event)
+	resourceVersion, err := s.CrvSynchro.UpdateClusterResourceVersion(obj, cluster)
 	if err != nil {
 		return err
 	}
+
+	err = s.watchCache.Update(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
+	}
+
 	return nil
 }
 
 func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {
-	event := s.newClusterWatchEvent(watch.Deleted, obj, cluster)
-	err := s.convertEvent(event)
+	resourceVersion, err := s.CrvSynchro.UpdateClusterResourceVersion(obj, cluster)
 	if err != nil {
 		return err
 	}
+
+	err = s.watchCache.Delete(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
+	}
+
 	return nil
 }
 
@@ -167,6 +121,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	return nil
 }
 
+//nolint
 func (s *ResourceStorage) newClusterWatchEvent(eventType watch.EventType, obj runtime.Object, cluster string) *ClusterWatchEvent {
 	return &ClusterWatchEvent{
 		ClusterName: cluster,
@@ -240,33 +195,59 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	return nil
 }
 
-func (s *ResourceStorage) encodeEvent(event *watch.Event) error {
-	var buffer bytes.Buffer
-
-	gk := event.Object.GetObjectKind().GroupVersionKind().GroupKind()
-	config := s.storageConfig
-	if ok := resourcescheme.LegacyResourceScheme.IsGroupRegistered(gk.Group); ok {
-		dest, err := resourcescheme.LegacyResourceScheme.New(config.MemoryVersion.WithKind(gk.Kind))
-		if err != nil {
-			return err
-		}
-
-		object := event.Object
-		err = config.Codec.Encode(object, &buffer)
-		if err != nil {
-			return err
-		}
-
-		obj, _, err := config.Codec.Decode(buffer.Bytes(), nil, dest)
-		if err != nil {
-			return err
-		}
-
-		if obj != dest {
-			return err
-		}
-		event.Object = dest
+func (s *ResourceStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	resourceversion := options.ResourceVersion
+	watchRV, err := cache.NewClusterResourceVersionFromString(resourceversion)
+	if err != nil {
+		// To match the uncached watch implementation, once we have passed authn/authz/admission,
+		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
+		// rather than a directly returned error.
+		return newErrWatcher(err), nil
 	}
 
-	return nil
+	watcher := cache.NewCacheWatcher(100)
+	watchCache := s.watchCache
+	watchCache.Lock()
+	defer watchCache.Unlock()
+
+	initEvents, err := watchCache.GetAllEventsSinceThreadUnsafe(watchRV)
+	if err != nil {
+		// To match the uncached watch implementation, once we have passed authn/authz/admission,
+		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
+		// rather than a directly returned error.
+		return newErrWatcher(err), nil
+	}
+
+	func() {
+		watchCache.WatchersLock.Lock()
+		defer watchCache.WatchersLock.Unlock()
+
+		watchCache.WatchersBuffer = append(watchCache.WatchersBuffer, watcher)
+	}()
+
+	go watcher.Process(ctx, initEvents)
+	return watcher, nil
+}
+
+type errWatcher struct {
+	result chan watch.Event
+}
+
+func newErrWatcher(err error) *errWatcher {
+	errEvent := utilwatch.NewErrorEvent(err)
+
+	// Create a watcher with room for a single event, populate it, and close the channel
+	watcher := &errWatcher{result: make(chan watch.Event, 1)}
+	watcher.result <- errEvent
+	close(watcher.result)
+
+	return watcher
+}
+
+func (c *errWatcher) ResultChan() <-chan watch.Event {
+	return c.result
+}
+
+func (c *errWatcher) Stop() {
+	// no-op
 }

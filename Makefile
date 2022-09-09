@@ -94,7 +94,7 @@ apiserver:
 .PHONY: binding-apiserver
 binding-apiserver:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-			   -ldflags $(LDFLAGS) \
+			   -ldflags "$(LDFLAGS)" \
 			   -o bin/binding-apiserver \
 			   cmd/binding-apiserver/main.go
 

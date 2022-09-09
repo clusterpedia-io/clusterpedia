@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/component-base/term"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
+	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
@@ -32,12 +35,28 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 			}
 			cliflag.PrintFlags(cmd.Flags())
 
-			config, err := opts.Config(true)
+			config, err := opts.Config()
 			if err != nil {
 				return err
 			}
 
-			server, err := config.Complete().New()
+			completedConfig := config.Complete()
+			if completedConfig.ClientConfig == nil {
+				return fmt.Errorf("CompletedConfig.New() called with config.ClientConfig == nil")
+			}
+			if completedConfig.StorageFactory == nil {
+				return fmt.Errorf("CompletedConfig.New() called with config.StorageFactory == nil")
+			}
+
+			crdclient, err := versioned.NewForConfig(completedConfig.ClientConfig)
+			if err != nil {
+				return err
+			}
+
+			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory)
+			go synchromanager.Run(1, ctx.Done())
+
+			server, err := completedConfig.New()
 			if err != nil {
 				return err
 			}

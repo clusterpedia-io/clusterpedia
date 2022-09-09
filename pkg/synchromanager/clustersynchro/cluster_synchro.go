@@ -275,7 +275,6 @@ func (s *ClusterSynchro) setSyncResources() {
 	if syncResources == nil {
 		return
 	}
-
 	groupResourceStatus, storageResourceSyncConfigs := s.resourceNegotiator.NegotiateSyncResources(syncResources)
 
 	lastGroupResourceStatus := s.groupResourceStatus.Load().(*GroupResourceStatus)
@@ -302,10 +301,8 @@ func (s *ClusterSynchro) setSyncResources() {
 			if _, ok := s.storageResourceSynchros.Load(storageGVR); ok {
 				continue
 			}
-			resourceConfig := config.storageConfig
-			resourceConfig.Cluster = s.name
 
-			resourceStorage, err := s.storage.NewResourceStorage(resourceConfig)
+			resourceStorage, err := s.storage.NewResourceStorage(config.storageConfig)
 			if err != nil {
 				klog.ErrorS(err, "Failed to create resource storage", "cluster", s.name, "storage resource", storageGVR)
 				updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource storage failed: %s", err))

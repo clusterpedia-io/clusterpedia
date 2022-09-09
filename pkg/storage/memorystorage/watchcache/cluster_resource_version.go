@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -91,31 +92,41 @@ func NewClusterResourceVersionSynchro(cluster string) *ClusterResourceVersionSyn
 }
 
 // UpdateClusterResourceVersion update the resourceVersion in ClusterResourceVersionSynchro to the latest
-func (crvs *ClusterResourceVersionSynchro) UpdateClusterResourceVersion(event *watch.Event, cluster string) {
+func (crvs *ClusterResourceVersionSynchro) UpdateClusterResourceVersion(obj runtime.Object, cluster string) (*ClusterResourceVersion, error) {
 	crvs.Lock()
 	defer crvs.Unlock()
 
 	crv := crvs.crv
 	accessor := meta.NewAccessor()
-	rv, _ := accessor.ResourceVersion(event.Object)
+	rv, _ := accessor.ResourceVersion(obj)
 	crv.rvmap[cluster] = rv
 
 	bytes, err := json.Marshal(crv.rvmap)
 	if err != nil {
-		klog.Errorf("base64 encode failed: %v", err)
-		return
+		return nil, fmt.Errorf("base64 encode failed: %v", err)
 	}
 
-	err = accessor.SetResourceVersion(event.Object, base64.RawURLEncoding.EncodeToString(bytes))
+	version := base64.RawURLEncoding.EncodeToString(bytes)
+	err = accessor.SetResourceVersion(obj, version)
 	if err != nil {
-		klog.Warningf("set resourceVersion failed: %v, may be it's a clear watch cache order event", err)
-		return
+		return nil, fmt.Errorf("set resourceVersion failed: %v, may be it's a clear watch cache order event", err)
 	}
+
+	return NewClusterResourceVersionFromString(version)
 }
 
 func (crvs *ClusterResourceVersionSynchro) SetClusterResourceVersion(clusterName string, resourceVersion string) {
 	crvs.Lock()
 	defer crvs.Unlock()
 
-	crvs.crv.rvmap[clusterName] = resourceVersion
+	if _, ok := crvs.crv.rvmap[clusterName]; !ok {
+		crvs.crv.rvmap[clusterName] = resourceVersion
+	}
+}
+
+func (crvs *ClusterResourceVersionSynchro) RemoveCluster(clusterName string) {
+	crvs.Lock()
+	defer crvs.Unlock()
+
+	delete(crvs.crv.rvmap, clusterName)
 }

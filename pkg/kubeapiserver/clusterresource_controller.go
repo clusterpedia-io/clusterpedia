@@ -83,7 +83,7 @@ func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alp
 		return
 	}
 
-	discoveryapis := c.restManager.LoadResources(resources, cluster.Name)
+	discoveryapis := c.restManager.LoadResources(resources)
 	c.discoveryManager.SetClusterGroupResource(cluster.Name, discoveryapis)
 
 	c.clusterresources[cluster.Name] = resources

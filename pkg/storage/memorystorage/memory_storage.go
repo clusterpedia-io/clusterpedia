@@ -2,17 +2,16 @@ package memorystorage
 
 import (
 	"context"
-	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	cache "github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage/watchcache"
-	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
 type StorageFactory struct {
+	clusters map[string]bool
 }
 
 func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
@@ -25,36 +24,48 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 		Resource: config.GroupResource.Resource,
 	}
 
-	if resourceStorage, ok := storages.resourceStorages[gvr]; ok {
+	resourceStorage, ok := storages.resourceStorages[gvr]
+	if ok {
 		watchCache := resourceStorage.watchCache
-		if config.Namespaced {
+		if config.Namespaced && !watchCache.IsNamespaced {
 			watchCache.KeyFunc = cache.GetKeyFunc(gvr, config.Namespaced)
 			watchCache.IsNamespaced = true
 		}
-		if _, ok := watchCache.GetStores()[config.Cluster]; !ok {
-			resourceStorage.watchCache.AddIndexer(config.Cluster, nil)
+	} else {
+		watchCache := cache.NewWatchCache(100, gvr, config.Namespaced)
+		resourceStorage = &ResourceStorage{
+			incoming:      make(chan ClusterWatchEvent, 100),
+			Codec:         config.Codec,
+			watchCache:    watchCache,
+			storageConfig: config,
 		}
 
-		resourceStorage.crvSynchro.SetClusterResourceVersion(config.Cluster, "0")
-
-		return resourceStorage, nil
+		storages.resourceStorages[gvr] = resourceStorage
 	}
 
-	watchCache := cache.NewWatchCache(100, gvr, config.Namespaced, config.Cluster)
-	config.WatchCache = watchCache
-	resourceStorage := &ResourceStorage{
-		incoming:      make(chan ClusterWatchEvent, 100),
-		Codec:         config.Codec,
-		crvSynchro:    cache.NewClusterResourceVersionSynchro(config.Cluster),
-		watchCache:    watchCache,
-		storageConfig: config,
+	for cluster := range s.clusters {
+		resourceStorage.watchCache.AddIndexer(cluster, nil)
+
+		if resourceStorage.CrvSynchro == nil {
+			resourceStorage.CrvSynchro = cache.NewClusterResourceVersionSynchro(cluster)
+		} else {
+			resourceStorage.CrvSynchro.SetClusterResourceVersion(cluster, "0")
+		}
 	}
-
-	go resourceStorage.dispatchEvents()
-
-	storages.resourceStorages[gvr] = resourceStorage
 
 	return resourceStorage, nil
+}
+
+func (s *StorageFactory) PrepareCluster(cluster string) error {
+	storages.Lock()
+	defer storages.Unlock()
+
+	if _, ok := s.clusters[cluster]; ok {
+		return nil
+	}
+
+	s.clusters[cluster] = true
+	return nil
 }
 
 func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionResource) (storage.CollectionResourceStorage, error) {
@@ -69,11 +80,11 @@ func (s *StorageFactory) CleanCluster(ctx context.Context, cluster string) error
 	storages.Lock()
 	defer storages.Unlock()
 	for _, rs := range storages.resourceStorages {
-		rs.watchCache.DeleteIndexer(cluster)
-		// If a pediacluster is deleted from clusterpedia,then the informer of client-go should be list and watch again
-		errorEvent := utilwatch.NewErrorEvent(fmt.Errorf("PediaCluster %s is deleted", cluster))
-		rs.dispatchEvent(&errorEvent)
+		rs.CrvSynchro.RemoveCluster(cluster)
+		rs.watchCache.CleanCluster(cluster)
+		delete(s.clusters, cluster)
 	}
+
 	return nil
 }
 
@@ -81,11 +92,11 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 	storages.Lock()
 	defer storages.Unlock()
 	if rs, ok := storages.resourceStorages[gvr]; ok {
-		rs.watchCache.DeleteIndexer(cluster)
-		// If a gvr is deleted from clusterpedia,then the informer of client-go should be list and watch again
-		errorEvent := utilwatch.NewErrorEvent(fmt.Errorf("GVR %v is deleted", gvr))
-		rs.dispatchEvent(&errorEvent)
+		rs.CrvSynchro.RemoveCluster(cluster)
+		rs.watchCache.CleanCluster(cluster)
+		delete(s.clusters, cluster)
 	}
+
 	return nil
 }
 

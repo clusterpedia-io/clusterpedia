@@ -1,6 +1,7 @@
 package watchcache
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -18,6 +19,8 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
 // StoreElement keeping the structs of resource in k8s(key, object, labels, fields).
@@ -146,7 +149,7 @@ func storeElementObject(obj interface{}) (runtime.Object, error) {
 	return elem.Object, nil
 }
 
-func NewWatchCache(capacity int, gvr schema.GroupVersionResource, isNamespaced bool, newCluster string) *WatchCache {
+func NewWatchCache(capacity int, gvr schema.GroupVersionResource, isNamespaced bool) *WatchCache {
 	wc := &WatchCache{
 		capacity:     capacity,
 		KeyFunc:      GetKeyFunc(gvr, isNamespaced),
@@ -158,7 +161,6 @@ func NewWatchCache(capacity int, gvr schema.GroupVersionResource, isNamespaced b
 		IsNamespaced: isNamespaced,
 	}
 
-	wc.AddIndexer(newCluster, nil)
 	return wc
 }
 
@@ -200,61 +202,66 @@ func (w *WatchCache) processEvent(event watch.Event, resourceVersion *ClusterRes
 }
 
 // Add takes runtime.Object as an argument.
-func (w *WatchCache) Add(obj interface{}, clusterName string) error {
-	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
-	if err != nil {
-		return err
-	}
-	event := watch.Event{Type: watch.Added, Object: object}
-
+func (w *WatchCache) Add(obj runtime.Object, clusterName string, resourceVersion *ClusterResourceVersion,
+	codec runtime.Codec, memoryVersion schema.GroupVersion) error {
 	f := func(elem *StoreElement) error {
 		return w.stores[clusterName].Add(elem)
 	}
-	return w.processEvent(event, resourceVersion, f)
+	object, err := encodeEvent(obj, codec, memoryVersion)
+	if err != nil {
+		return err
+	}
+
+	event := watch.Event{Type: watch.Added, Object: object}
+	err = w.processEvent(event, resourceVersion, f)
+	if err != nil {
+		return err
+	}
+
+	w.dispatchEvent(&event)
+	return nil
 }
 
 // Update takes runtime.Object as an argument.
-func (w *WatchCache) Update(obj interface{}, clusterName string) error {
-	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
-	if err != nil {
-		return err
-	}
-	event := watch.Event{Type: watch.Modified, Object: object}
-
+func (w *WatchCache) Update(obj runtime.Object, clusterName string, resourceVersion *ClusterResourceVersion,
+	codec runtime.Codec, memoryVersion schema.GroupVersion) error {
 	f := func(elem *StoreElement) error {
 		return w.stores[clusterName].Update(elem)
 	}
-	return w.processEvent(event, resourceVersion, f)
-}
-
-// Delete takes runtime.Object as an argument.
-func (w *WatchCache) Delete(obj interface{}, clusterName string) error {
-	object, resourceVersion, err := w.objectToVersionedRuntimeObject(obj)
+	object, err := encodeEvent(obj, codec, memoryVersion)
 	if err != nil {
 		return err
 	}
-	event := watch.Event{Type: watch.Deleted, Object: object}
 
-	f := func(elem *StoreElement) error { return w.stores[clusterName].Delete(elem) }
-	return w.processEvent(event, resourceVersion, f)
+	event := watch.Event{Type: watch.Modified, Object: object}
+	err = w.processEvent(event, resourceVersion, f)
+	if err != nil {
+		return err
+	}
+
+	w.dispatchEvent(&event)
+	return nil
 }
 
-func (w *WatchCache) objectToVersionedRuntimeObject(obj interface{}) (runtime.Object, *ClusterResourceVersion, error) {
-	object, ok := obj.(runtime.Object)
-	if !ok {
-		return nil, &ClusterResourceVersion{}, fmt.Errorf("obj does not implement runtime.Object interface: %v", obj)
+// Delete takes runtime.Object as an argument.
+func (w *WatchCache) Delete(obj runtime.Object, clusterName string, resourceVersion *ClusterResourceVersion,
+	codec runtime.Codec, memoryVersion schema.GroupVersion) error {
+	f := func(elem *StoreElement) error {
+		return w.stores[clusterName].Delete(elem)
+	}
+	object, err := encodeEvent(obj, codec, memoryVersion)
+	if err != nil {
+		return err
 	}
 
-	resourceVersion, err := meta.NewAccessor().ResourceVersion(object)
+	event := watch.Event{Type: watch.Deleted, Object: object}
+	err = w.processEvent(event, resourceVersion, f)
 	if err != nil {
-		return nil, &ClusterResourceVersion{}, err
+		return err
 	}
 
-	clusterRvStore, err := NewClusterResourceVersionFromString(resourceVersion)
-	if err != nil {
-		return nil, &ClusterResourceVersion{}, err
-	}
-	return object, clusterRvStore, nil
+	w.dispatchEvent(&event)
+	return nil
 }
 
 // Assumes that lock is already held for write.
@@ -343,7 +350,6 @@ func (w *WatchCache) WaitUntilFreshAndGet(cluster, namespace, name string) (*Sto
 // GetAllEventsSinceThreadUnsafe returns watch event from slice window in watchCache by the resourceVersion
 func (w *WatchCache) GetAllEventsSinceThreadUnsafe(resourceVersion *ClusterResourceVersion) ([]*watch.Event, error) {
 	size := w.endIndex - w.startIndex
-	oldestObj := w.cache[w.startIndex%w.capacity]
 	if resourceVersion.IsEmpty() {
 		// resourceVersion = 0 means that we don't require any specific starting point
 		// and we would like to start watching from ~now.
@@ -385,11 +391,7 @@ func (w *WatchCache) GetAllEventsSinceThreadUnsafe(resourceVersion *ClusterResou
 
 	var result []*watch.Event
 	if !founded {
-		oldest, err := GetClusterResourceVersionFromEvent(oldestObj)
-		if err != nil {
-			return nil, err
-		}
-		return nil, apierrors.NewResourceExpired(fmt.Sprintf("too old resource version: %#v (%#v)", resourceVersion, oldest))
+		return nil, apierrors.NewResourceExpired("resource version not found")
 	} else {
 		i := 0
 		result = make([]*watch.Event, size-index)
@@ -405,15 +407,18 @@ func (w *WatchCache) GetAllEventsSinceThreadUnsafe(resourceVersion *ClusterResou
 func (w *WatchCache) AddIndexer(clusterName string, indexers *cache.Indexers) {
 	w.Lock()
 	defer w.Unlock()
-	w.stores[clusterName] = cache.NewIndexer(storeElementKey, storeElementIndexers(indexers))
+
+	if _, ok := w.stores[clusterName]; !ok {
+		w.stores[clusterName] = cache.NewIndexer(storeElementKey, storeElementIndexers(indexers))
+	}
 }
 
-func (w *WatchCache) DeleteIndexer(clusterName string) {
+func (w *WatchCache) DeleteIndexer(clusterName string) bool {
 	w.Lock()
 	defer w.Unlock()
 
 	if _, ok := w.stores[clusterName]; !ok {
-		return
+		return false
 	}
 
 	delete(w.stores, clusterName)
@@ -421,20 +426,54 @@ func (w *WatchCache) DeleteIndexer(clusterName string) {
 	//clear cache
 	w.startIndex = 0
 	w.endIndex = 0
+
+	return true
 }
 
-func (w *WatchCache) ClearWatchCache(clusterName string) {
-	w.Lock()
-	defer w.Unlock()
+func (w *WatchCache) dispatchEvent(event *watch.Event) {
+	w.WatchersLock.RLock()
+	defer w.WatchersLock.RUnlock()
+	for _, watcher := range w.WatchersBuffer {
+		watcher.NonblockingAdd(event)
+	}
+}
 
-	if _, ok := w.stores[clusterName]; !ok {
+func (w *WatchCache) CleanCluster(cluster string) {
+	if !w.DeleteIndexer(cluster) {
 		return
 	}
 
-	delete(w.stores, clusterName)
-	w.stores[clusterName] = cache.NewIndexer(storeElementKey, storeElementIndexers(nil))
+	errorEvent := utilwatch.NewErrorEvent(fmt.Errorf("cluster %s has been clean", cluster))
+	w.dispatchEvent(&errorEvent)
+}
 
-	//clear cache
-	w.startIndex = 0
-	w.endIndex = 0
+func encodeEvent(obj runtime.Object, codec runtime.Codec, memoryVersion schema.GroupVersion) (runtime.Object, error) {
+	var buffer bytes.Buffer
+
+	//gvk := obj.GetObjectKind().GroupVersionKind()
+	gk := obj.GetObjectKind().GroupVersionKind().GroupKind()
+	if ok := resourcescheme.LegacyResourceScheme.IsGroupRegistered(gk.Group); !ok {
+		return obj, nil
+	}
+
+	dest, err := resourcescheme.LegacyResourceScheme.New(memoryVersion.WithKind(gk.Kind))
+	if err != nil {
+		return nil, err
+	}
+
+	err = codec.Encode(obj, &buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	object, _, err := codec.Decode(buffer.Bytes(), nil, dest)
+	if err != nil {
+		return nil, err
+	}
+
+	if object != dest {
+		return nil, err
+	}
+
+	return dest, nil
 }

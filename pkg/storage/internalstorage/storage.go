@@ -84,3 +84,7 @@ func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*interna
 	}
 	return crs, nil
 }
+
+func (s *StorageFactory) PrepareCluster(cluster string) error {
+	return nil
+}

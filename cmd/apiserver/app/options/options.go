@@ -75,7 +75,7 @@ func (o *ClusterPediaServerOptions) Validate() error {
 	return utilerrors.NewAggregate(errors)
 }
 
-func (o *ClusterPediaServerOptions) Config(bindingSyncController bool) (*apiserver.Config, error) {
+func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err
 	}
@@ -109,9 +109,8 @@ func (o *ClusterPediaServerOptions) Config(bindingSyncController bool) (*apiserv
 	}
 
 	return &apiserver.Config{
-		GenericConfig:         genericConfig,
-		StorageFactory:        storage,
-		BindingSyncController: bindingSyncController,
+		GenericConfig:  genericConfig,
+		StorageFactory: storage,
 	}, nil
 }
 

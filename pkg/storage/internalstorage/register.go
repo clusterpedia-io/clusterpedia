@@ -29,6 +29,10 @@ func init() {
 }
 
 func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
+	if configPath == "" {
+		return nil, fmt.Errorf("configPath should not be empty")
+	}
+
 	cfg := &Config{}
 	if err := configor.Load(cfg, configPath); err != nil {
 		return nil, err

@@ -26,7 +26,6 @@ import (
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 )
 
@@ -65,8 +64,6 @@ type Config struct {
 	GenericConfig *genericapiserver.RecommendedConfig
 
 	StorageFactory storage.StorageFactory
-	// BindingSyncController means whether apiserver or binding_apiserver should process and sync events as clustersynchro_manager
-	BindingSyncController bool
 }
 
 type ClusterPediaServer struct {
@@ -78,8 +75,6 @@ type completedConfig struct {
 
 	ClientConfig   *clientrest.Config
 	StorageFactory storage.StorageFactory
-	// BindingSyncController means whether apiserver or binding_apiserver should process and sync events as clustersynchro_manager
-	BindingSyncController bool
 }
 
 // CompletedConfig embeds a private pointer that cannot be instantiated outside of this package.
@@ -93,7 +88,6 @@ func (cfg *Config) Complete() CompletedConfig {
 		cfg.GenericConfig.Complete(),
 		cfg.GenericConfig.ClientConfig,
 		cfg.StorageFactory,
-		cfg.BindingSyncController,
 	}
 
 	c.GenericConfig.Version = &version.Info{
@@ -166,11 +160,6 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	genericServer.AddPostStartHookOrDie("start-clusterpedia-informers", func(context genericapiserver.PostStartHookContext) error {
 		clusterpediaInformerFactory.Start(context.StopCh)
 		clusterpediaInformerFactory.WaitForCacheSync(context.StopCh)
-
-		if config.BindingSyncController {
-			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory)
-			synchromanager.Run(1, context.StopCh)
-		}
 
 		return nil
 	})

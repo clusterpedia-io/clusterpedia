@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/pflag"
 
 	_ "github.com/clusterpedia-io/clusterpedia/pkg/storage/internalstorage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage"
+	_ "github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage"
 )
 
 type StorageOptions struct {
@@ -24,7 +24,7 @@ func (o *StorageOptions) Validate() []error {
 		return nil
 	}
 
-	if o.Name == memorystorage.StorageName {
+	if o.ConfigPath == "" {
 		return nil
 	}
 

@@ -21,10 +21,8 @@ import (
 	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	cache "github.com/clusterpedia-io/clusterpedia/pkg/storage/memorystorage/watchcache"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/negotiation"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
-	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
 type RESTStorage struct {
@@ -127,58 +125,5 @@ func (s *RESTStorage) ConvertToTable(ctx context.Context, object runtime.Object,
 }
 
 func (s *RESTStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
-	resourceversion := options.ResourceVersion
-	watchRV, err := cache.NewClusterResourceVersionFromString(resourceversion)
-	if err != nil {
-		// To match the uncached watch implementation, once we have passed authn/authz/admission,
-		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
-		// rather than a directly returned error.
-		return newErrWatcher(err), nil
-	}
-
-	watcher := cache.NewCacheWatcher(100)
-	watchCache := s.Storage.GetStorageConfig().WatchCache
-	watchCache.Lock()
-	defer watchCache.Unlock()
-
-	initEvents, err := watchCache.GetAllEventsSinceThreadUnsafe(watchRV)
-	if err != nil {
-		// To match the uncached watch implementation, once we have passed authn/authz/admission,
-		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
-		// rather than a directly returned error.
-		return newErrWatcher(err), nil
-	}
-
-	func() {
-		watchCache.WatchersLock.Lock()
-		defer watchCache.WatchersLock.Unlock()
-
-		watchCache.WatchersBuffer = append(watchCache.WatchersBuffer, watcher)
-	}()
-
-	go watcher.Process(ctx, initEvents)
-	return watcher, nil
-}
-
-type errWatcher struct {
-	result chan watch.Event
-}
-
-func newErrWatcher(err error) *errWatcher {
-	errEvent := utilwatch.NewErrorEvent(err)
-
-	// Create a watcher with room for a single event, populate it, and close the channel
-	watcher := &errWatcher{result: make(chan watch.Event, 1)}
-	watcher.result <- errEvent
-	close(watcher.result)
-
-	return watcher
-}
-
-func (c *errWatcher) ResultChan() <-chan watch.Event {
-	return c.result
-}
-
-func (c *errWatcher) Stop() {
-	// no-op
+	return s.Storage.Watch(ctx, options)
 }

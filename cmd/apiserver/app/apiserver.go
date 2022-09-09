@@ -32,7 +32,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 			}
 			cliflag.PrintFlags(cmd.Flags())
 
-			config, err := opts.Config(false)
+			config, err := opts.Config()
 			if err != nil {
 				return err
 			}
