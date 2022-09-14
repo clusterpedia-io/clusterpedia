@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
       - name: apiserver
-        image: ghcr.io/clusterpedia-io/clusterpedia/apiserver:v0.5.0-beta.0
+        image: ghcr.io/clusterpedia-io/clusterpedia/apiserver:v0.5.0
         command:
         - /usr/local/bin/apiserver
         - --secure-port=443
