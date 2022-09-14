@@ -374,7 +374,7 @@ func TestApplyListOptionsToQuery_OrderBy(t *testing.T) {
 		expected expected
 	}{
 		{
-			"asec",
+			"asc",
 			[]internal.OrderBy{
 				{Field: "namespace"},
 				{Field: "name"},
@@ -388,7 +388,7 @@ func TestApplyListOptionsToQuery_OrderBy(t *testing.T) {
 			},
 		},
 		{
-			"dsec",
+			"desc",
 			[]internal.OrderBy{
 				{Field: "namespace"},
 				{Field: "name", Desc: true},
@@ -402,15 +402,36 @@ func TestApplyListOptionsToQuery_OrderBy(t *testing.T) {
 			},
 		},
 		{
-			"with not support fields",
+			"order by custom fields asc",
 			[]internal.OrderBy{
-				{Field: "name"},
-				{Field: "group"},
-				{Field: "cluster"},
+				{Field: "JSON_EXTRACT(object,'$.status.podIP')"},
 			},
 			expected{
-				`SELECT * FROM "resources" ORDER BY name,cluster `,
-				"SELECT * FROM `resources` ORDER BY name,cluster ",
+				`SELECT * FROM "resources" ORDER BY JSON_EXTRACT(object,'$.status.podIP') `,
+				"SELECT * FROM `resources` ORDER BY JSON_EXTRACT(object,'$.status.podIP') ",
+				"",
+			},
+		},
+		{
+			"order by custom fields desc",
+			[]internal.OrderBy{
+				{Field: "JSON_EXTRACT(object,'$.status.podIP')", Desc: true},
+			},
+			expected{
+				`SELECT * FROM "resources" ORDER BY JSON_EXTRACT(object,'$.status.podIP') DESC `,
+				"SELECT * FROM `resources` ORDER BY JSON_EXTRACT(object,'$.status.podIP') DESC ",
+				"",
+			},
+		},
+		{
+			"order by multiple fields",
+			[]internal.OrderBy{
+				{Field: "JSON_EXTRACT(object,'$.status.podIP')", Desc: true},
+				{Field: "name"},
+			},
+			expected{
+				`SELECT * FROM "resources" ORDER BY JSON_EXTRACT(object,'$.status.podIP') DESC,name `,
+				"SELECT * FROM `resources` ORDER BY JSON_EXTRACT(object,'$.status.podIP') DESC,name ",
 				"",
 			},
 		},
