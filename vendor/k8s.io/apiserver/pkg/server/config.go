@@ -301,8 +301,6 @@ type SecureServingInfo struct {
 	// A value of zero means to use the default provided by golang's HTTP/2 support.
 	HTTP2MaxStreamsPerConnection int
 
-	AdvertisePort int
-
 	// DisableHTTP2 indicates that http2 should not be enabled.
 	DisableHTTP2 bool
 }
@@ -905,9 +903,6 @@ func (s *SecureServingInfo) HostPort() (string, int, error) {
 	port, err := utilsnet.ParsePort(portStr, true)
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid non-numeric port %q", portStr)
-	}
-	if s.AdvertisePort != 0 {
-		port = s.AdvertisePort
 	}
 	return host, port, nil
 }
