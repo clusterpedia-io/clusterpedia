@@ -1,3 +1,16 @@
+# 1.12.0 (August 6, 2022)
+
+* Add JSONArray (Jakob Ackermann)
+* Support Inet from fmt.Stringer and encoding.TextMarshaler (Ville Skyttä)
+* Support UUID from fmt.Stringer interface (Lasse Hyldahl Jensen)
+* Fix: shopspring-numeric extension does not panic on NaN
+* Numeric can be assigned to string
+* Fix: Do not send IPv4 networks as IPv4-mapped IPv6 (William Storey)
+* Fix: PlanScan for interface{}(nil) (James Hartig)
+* Fix: *sql.Scanner for NULL handling (James Hartig)
+* Timestamp[tz].Set() supports string (Harmen)
+* Fix: Hstore AssignTo with map of *string (Diego Becciolini)
+
 # 1.11.0 (April 21, 2022)
 
 * Add multirange for numeric, int4, and int8 (Vu)
