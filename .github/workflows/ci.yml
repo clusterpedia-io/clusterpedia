@@ -27,7 +27,7 @@ jobs:
         with:
           path: ${{ env.WORKSPACE }}
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.18
       - run: hack/verify-import-aliases.sh
@@ -45,7 +45,7 @@ jobs:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.18
       - name: Compile
@@ -58,7 +58,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.18
       - run: make test
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Install Go
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v3
         with:
           go-version: 1.18
       - name: Run e2e test
