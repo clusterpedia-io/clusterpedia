@@ -110,8 +110,7 @@ type ClusterStatus struct {
 	// +optional
 	APIServer string `json:"apiserver,omitempty"`
 
-	// +required
-	// +kubebuilder:validation:Required
+	// +optional
 	Version string `json:"version,omitempty"`
 
 	// +optional
