@@ -2,6 +2,7 @@ package pgproto3
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -114,6 +115,9 @@ func (b *Backend) Receive() (FrontendMessage, error) {
 		b.msgType = header[0]
 		b.bodyLen = int(binary.BigEndian.Uint32(header[1:])) - 4
 		b.partialMsg = true
+		if b.bodyLen < 0 {
+			return nil, errors.New("invalid message with negative body length received")
+		}
 	}
 
 	var msg FrontendMessage
