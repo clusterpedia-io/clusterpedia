@@ -3,9 +3,12 @@ package options
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
@@ -94,6 +97,12 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	// genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(apiserver.Scheme))
 	// genericConfig.OpenAPIConfig.Info.Title = openAPITitle
 	// genericConfig.OpenAPIConfig.Info.Version= openAPIVersion
+
+	// todo
+	// support watch to LongRunningFunc
+	genericConfig.LongRunningFunc = func(r *http.Request, requestInfo *genericrequest.RequestInfo) bool {
+		return strings.Contains(r.RequestURI, "watch")
+	}
 
 	if err := o.genericOptionsApplyTo(genericConfig); err != nil {
 		return nil, err

@@ -59,14 +59,14 @@ func (g *StorageConfigFactory) GetStorageGroupResource(groupResource schema.Grou
 	return groupResource
 }
 
-func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
 	if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
-		return g.NewLegacyResourceConfig(gvr.GroupResource())
+		return g.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
 	}
-	return g.NewCustomResourceConfig(gvr)
+	return g.NewCustomResourceConfig(gvr, namespaced)
 }
 
-func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionResource) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
 	version := gvr.GroupVersion()
 	codec := versioning.NewCodec(
 		resourcescheme.UnstructuredCodecs,
@@ -85,10 +85,11 @@ func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionRe
 		Codec:                codec,
 		StorageVersion:       version,
 		MemoryVersion:        version,
+		Namespaced:           namespaced,
 	}, nil
 }
 
-func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
 	chosenStorageResource := g.GetStorageGroupResource(gr)
 
 	storageVersion, err := g.legacyResourceEncodingConfig.StorageEncodingFor(chosenStorageResource)
@@ -117,5 +118,6 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource) 
 		Codec:                codec,
 		StorageVersion:       codecConfig.StorageVersion,
 		MemoryVersion:        memoryVersion,
+		Namespaced:           namespaced,
 	}, nil
 }

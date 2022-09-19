@@ -118,6 +118,8 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		handler = handlers.GetResource(storage, reqScope)
 	case "list":
 		handler = handlers.ListResource(storage, nil, reqScope, false, r.minRequestTimeout)
+	case "watch":
+		handler = handlers.ListResource(storage, storage, reqScope, true, r.minRequestTimeout)
 	default:
 		responsewriters.ErrorNegotiated(
 			apierrors.NewMethodNotSupported(gvr.GroupResource(), requestInfo.Verb),

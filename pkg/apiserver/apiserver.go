@@ -160,6 +160,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	genericServer.AddPostStartHookOrDie("start-clusterpedia-informers", func(context genericapiserver.PostStartHookContext) error {
 		clusterpediaInformerFactory.Start(context.StopCh)
 		clusterpediaInformerFactory.WaitForCacheSync(context.StopCh)
+
 		return nil
 	})
 

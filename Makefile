@@ -48,7 +48,7 @@ ifeq ($(LATEST_TAG),$(shell git describe --abbrev=0 --tags))
 	VERSION=$(LATEST_TAG)
 endif
 
-all: apiserver clustersynchro-manager controller-manager
+all: apiserver binding-apiserver clustersynchro-manager controller-manager
 
 gen-clusterconfigs:
 	./hack/gen-clusterconfigs.sh
@@ -91,6 +91,13 @@ apiserver:
 			   -o bin/apiserver \
 			   cmd/apiserver/main.go
 
+.PHONY: binding-apiserver
+binding-apiserver:
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+			   -ldflags "$(LDFLAGS)" \
+			   -o bin/binding-apiserver \
+			   cmd/binding-apiserver/main.go
+
 .PHONY: clustersynchro-manager
 clustersynchro-manager:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
@@ -106,7 +113,7 @@ controller-manager:
 			   cmd/controller-manager/main.go
 
 .PHONY: images
-images: image-apiserver image-clustersynchro-manager image-controller-manager
+images: image-apiserver image-binding-apiserver image-clustersynchro-manager image-controller-manager
 
 image-apiserver:
 	GOOS="linux" $(MAKE) apiserver
@@ -116,7 +123,16 @@ image-apiserver:
 		--load \
 		--build-arg BASEIMAGE=$(BASEIMAGE) \
 		--build-arg BINNAME=apiserver .
-	    
+
+image-binding-apiserver:
+	GOOS="linux" $(MAKE) binding-apiserver
+	docker buildx build \
+		-t ${REGISTRY}/binding-apiserver-$(GOARCH):$(VERSION) \
+		--platform=linux/$(GOARCH) \
+		--load \
+		--build-arg BASEIMAGE=$(BASEIMAGE) \
+		--build-arg BINNAME=binding-apiserver .
+
 image-clustersynchro-manager: 
 	GOOS="linux" $(MAKE) clustersynchro-manager
 	docker buildx build \
@@ -136,7 +152,7 @@ image-controller-manager:
 		--build-arg BINNAME=controller-manager .
 
 .PHONY: push-images
-push-images: push-apiserver-image push-clustersynchro-manager-image push-controller-manager-image
+push-images: push-apiserver-image push-binding-apiserver-image push-clustersynchro-manager-image push-controller-manager-imag
 
 # clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
 push-apiserver-image: clean-apiserver-manifest
@@ -158,6 +174,28 @@ push-apiserver-image: clean-apiserver-manifest
 	if [ $(VERSION) != latest ]; then \
 		docker manifest create $(REGISTRY)/apiserver:latest $$images; \
 		docker manifest push $(REGISTRY)/apiserver:latest; \
+	fi;
+
+# clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
+push-binding-apiserver-image: clean-binding-apiserver-manifest
+	set -e; \
+	images=""; \
+	for arch in $(RELEASE_ARCHS); do \
+		GOARCH=$$arch $(MAKE) image-binding-apiserver; \
+		image=$(REGISTRY)/binding-apiserver-$$arch:$(VERSION); \
+		docker push $$image; \
+		images="$$images $$image"; \
+		if [ $(VERSION) != latest ]; then \
+			latest_image=$(REGISTRY)/binding-apiserver-$$arch:latest; \
+			docker tag $$image $$latest_image; \
+			docker push $$latest_image; \
+		fi; \
+	done; \
+	docker manifest create $(REGISTRY)/binding-apiserver:$(VERSION) $$images; \
+	docker manifest push $(REGISTRY)/binding-apiserver:$(VERSION); \
+	if [ $(VERSION) != latest ]; then \
+		docker manifest create $(REGISTRY)/binding-apiserver:latest $$images; \
+		docker manifest push $(REGISTRY)/binding-apiserver:latest; \
 	fi;
 
 # clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
@@ -211,6 +249,10 @@ clean-images: clean-apiserver-manifest clean-clustersynchro-manager-manifest
 clean-apiserver-manifest:
 	docker manifest rm $(REGISTRY)/apiserver:$(VERSION) 2>/dev/null;\
 	docker manifest rm $(REGISTRY)/apiserver:latest 2>/dev/null; exit 0
+
+clean-binding-apiserver-manifest:
+	docker manifest rm $(REGISTRY)/binding-apiserver:$(VERSION) 2>/dev/null;\
+	docker manifest rm $(REGISTRY)/binding-apiserver:latest 2>/dev/null; exit 0
 
 clean-clustersynchro-manager-manifest:
 	docker manifest rm $(REGISTRY)/clustersynchro-manager:$(VERSION) 2>/dev/null;\

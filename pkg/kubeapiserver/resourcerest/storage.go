@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -38,6 +39,7 @@ type RESTStorage struct {
 
 var _ rest.Lister = &RESTStorage{}
 var _ rest.Getter = &RESTStorage{}
+var _ rest.Watcher = &RESTStorage{}
 
 func (s *RESTStorage) New() runtime.Object {
 	return s.NewFunc()
@@ -120,4 +122,8 @@ func (s *RESTStorage) ConvertToTable(ctx context.Context, object runtime.Object,
 	}
 
 	return printers.NewDefaultTableConvertor(s.DefaultQualifiedResource).ConvertToTable(ctx, object, tableOptions)
+}
+
+func (s *RESTStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	return s.Storage.Watch(ctx, options)
 }

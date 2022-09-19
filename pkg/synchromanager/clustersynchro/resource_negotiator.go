@@ -116,7 +116,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					Reason:  "SynchroCreating",
 				}
 
-				storageConfig, err := negotiator.resourceStorageConfig.NewConfig(syncGVR)
+				storageConfig, err := negotiator.resourceStorageConfig.NewConfig(syncGVR, apiResource.Namespaced)
 				if err != nil {
 					syncCondition.Reason = "SynchroCreateFailed"
 					syncCondition.Message = fmt.Sprintf("new resource storage config failed: %s", err)

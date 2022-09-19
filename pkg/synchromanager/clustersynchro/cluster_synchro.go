@@ -275,7 +275,6 @@ func (s *ClusterSynchro) setSyncResources() {
 	if syncResources == nil {
 		return
 	}
-
 	groupResourceStatus, storageResourceSyncConfigs := s.resourceNegotiator.NegotiateSyncResources(syncResources)
 
 	lastGroupResourceStatus := s.groupResourceStatus.Load().(*GroupResourceStatus)

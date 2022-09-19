@@ -225,9 +225,9 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 			var err error
 			var storage *resourcerest.RESTStorage
 			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
-				storage, err = m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind)
+				storage, err = m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
 			} else {
-				storage, err = m.genCustomResourceRESTStorage(gvr, info.APIResource.Kind)
+				storage, err = m.genCustomResourceRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
 			}
 			if err != nil {
 				klog.ErrorS(err, "Failed to gen resource rest storage", "gvr", gvr, "kind", info.APIResource.Kind)
@@ -263,8 +263,8 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 	m.restResourceInfos.Store(infos)
 }
 
-func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResource, kind string) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.resourcetSorageConfig.NewLegacyResourceConfig(gvr.GroupResource())
+func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
+	storageConfig, err := m.resourcetSorageConfig.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
 	if err != nil {
 		return nil, err
 	}
@@ -290,8 +290,8 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 	}, nil
 }
 
-func (m *RESTManager) genCustomResourceRESTStorage(gvr schema.GroupVersionResource, kind string) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.resourcetSorageConfig.NewCustomResourceConfig(gvr)
+func (m *RESTManager) genCustomResourceRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
+	storageConfig, err := m.resourcetSorageConfig.NewCustomResourceConfig(gvr, namespaced)
 	if err != nil {
 		return nil, err
 	}

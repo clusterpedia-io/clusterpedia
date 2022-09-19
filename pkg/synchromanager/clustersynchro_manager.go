@@ -356,6 +356,13 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 			}
 			return controller.NoRequeueResult
 		}
+
+		err = manager.storage.PrepareCluster(cluster.Name)
+		if err != nil {
+			klog.ErrorS(err, "Failed to prepare cluster", "cluster", cluster.Name)
+			return controller.NoRequeueResult
+		}
+
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 
 		manager.synchrolock.Lock()
