@@ -188,7 +188,7 @@ Return the proper Docker Image Registry Secret Names
      {{- if empty .Values.externalStorage.database }}
           {{ required "Please set correct storage database!" "" }}
      {{- else -}}
-          {{- .Values.externalStorage.database | quote -}}
+          {{- .Values.externalStorage.database }}
      {{- end -}}
 {{- else -}}
      {{- "clusterpedia" -}}
@@ -304,5 +304,13 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
      {{- .Values.postgresql.primary.persistence.selector.matchLables -}}
 {{- else if eq (include "clusterpedia.storage.type" .) "mysql" -}}
      {{- .Values.mysql.primary.persistence.selector.matchLabels -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "clusterpedia.storage.password.envKey" -}}
+{{- if eq (include "clusterpedia.storage.type" .) "postgres" }}
+     {{- "PGPASSWORD" -}}
+{{- else if eq (include "clusterpedia.storage.type" .) "mysql" -}}
+     {{- "DB_PASSWORD" -}}
 {{- end -}}
 {{- end -}}

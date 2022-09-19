@@ -30,6 +30,32 @@ spec:
     spec:
       {{- include "clusterpedia.apiserver.imagePullSecrets" . | nindent 6 }}
       initContainers:
+    {{- if .Values.externalStorage.createDatabase }}
+      - name: ensure-database
+        image: {{ include "clusterpedia.storage.image" . }}
+        command:
+          - /bin/sh
+          - -ec
+          {{- if eq (include "clusterpedia.storage.type" .) "postgres" }}
+          - |
+            until psql -U {{ include "clusterpedia.storage.user" . }} -h {{ include "clusterpedia.storage.host" . }} -p {{ include "clusterpedia.storage.port" . }} postgres -c "SELECT 1 FROM pg_database WHERE datname = '{{ include "clusterpedia.storage.database" . }}'" | grep -q 1 || psql -U {{ include "clusterpedia.storage.user" . }} -h {{ include "clusterpedia.storage.host" . }} -p {{ include "clusterpedia.storage.port" . }} postgres -c "CREATE DATABASE {{ include "clusterpedia.storage.database" . }} owner {{ include "clusterpedia.storage.user" . }} " -c "GRANT ALL PRIVILEGES ON DATABASE {{ include "clusterpedia.storage.database" . }} to {{ include "clusterpedia.storage.user" . }}"; do 
+            echo waiting for database check && sleep 1;
+            done;
+            echo 'DataBase OK ✓'
+          {{- else if eq (include "clusterpedia.storage.type" .) "mysql" }}
+          - |
+            until mysql -u{{ include "clusterpedia.storage.user" . }} -p"${DB_PASSWORD}" --host={{ include "clusterpedia.storage.host" . }} --port={{ include "clusterpedia.storage.port" . }} -e 'CREATE DATABASE IF NOT EXISTS {{ include "clusterpedia.storage.database" . }}'; do
+            echo waiting for database check && sleep 1; 
+            done;
+            echo 'DataBase OK ✓'
+          {{- end }}
+        env:
+          - name: {{ include "clusterpedia.storage.password.envKey" . }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clusterpedia.internalstorage.fullname" . }}
+                key: password
+    {{- else }}
       - name: check-storage
         image: {{ include "clusterpedia.storage.image" . }}
         command: 
@@ -48,6 +74,7 @@ spec:
                 name: {{ include "clusterpedia.internalstorage.fullname" . }}
                 key: password
       {{- end }}
+    {{- end }}
       containers:
       - name: {{ include "clusterpedia.apiserver.fullname" . }}
         image: {{ template "clusterpedia.apiserver.image" . }}
