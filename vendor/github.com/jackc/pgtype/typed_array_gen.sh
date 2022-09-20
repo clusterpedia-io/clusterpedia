@@ -20,6 +20,7 @@ erb pgtype_array_type=ACLItemArray pgtype_element_type=ACLItem go_array_types=[]
 erb pgtype_array_type=HstoreArray pgtype_element_type=Hstore go_array_types=[]map[string]string element_type_name=hstore typed_array.go.erb > hstore_array.go
 erb pgtype_array_type=NumericArray pgtype_element_type=Numeric go_array_types=[]float32,[]*float32,[]float64,[]*float64,[]int64,[]*int64,[]uint64,[]*uint64 element_type_name=numeric typed_array.go.erb > numeric_array.go
 erb pgtype_array_type=UUIDArray pgtype_element_type=UUID go_array_types=[][16]byte,[][]byte,[]string,[]*string element_type_name=uuid typed_array.go.erb > uuid_array.go
+erb pgtype_array_type=JSONArray pgtype_element_type=JSON go_array_types=[]string,[][]byte,[]json.RawMessage element_type_name=json typed_array.go.erb > json_array.go
 erb pgtype_array_type=JSONBArray pgtype_element_type=JSONB go_array_types=[]string,[][]byte,[]json.RawMessage element_type_name=jsonb typed_array.go.erb > jsonb_array.go
 
 # While the binary format is theoretically possible it is only practical to use the text format.
