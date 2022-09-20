@@ -152,7 +152,7 @@ image-controller-manager:
 		--build-arg BINNAME=controller-manager .
 
 .PHONY: push-images
-push-images: push-apiserver-image push-binding-apiserver-image push-clustersynchro-manager-image push-controller-manager-imag
+push-images: push-apiserver-image push-binding-apiserver-image push-clustersynchro-manager-image push-controller-manager-image
 
 # clean manifest https://github.com/docker/cli/issues/954#issuecomment-586722447
 push-apiserver-image: clean-apiserver-manifest
