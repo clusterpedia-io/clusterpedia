@@ -11,6 +11,7 @@ import (
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
@@ -27,7 +28,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(utilfeature.DefaultFeatureGate); err != nil {
+			if err := logsapi.ValidateAndApply(opts.Logs, utilfeature.DefaultFeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())
@@ -65,7 +66,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 }
 
 func init() {
-	runtime.Must(logs.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	runtime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 
 	// The feature gate `RemainingItemCount` should default to false
 	// https://github.com/clusterpedia-io/clusterpedia/issues/196

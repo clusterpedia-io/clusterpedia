@@ -2,7 +2,7 @@ package informer
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apiserver/pkg/storage/etcd3"
+	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -100,6 +100,8 @@ func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error
 	return nil
 }
 
+var versioner storage.Versioner = storage.APIObjectVersioner{}
+
 func compareResourceVersion(obj interface{}, rv string) int {
 	object, ok := obj.(runtime.Object)
 	if !ok {
@@ -107,12 +109,12 @@ func compareResourceVersion(obj interface{}, rv string) int {
 		return -1
 	}
 
-	objversion, err := etcd3.Versioner.ObjectResourceVersion(object)
+	objversion, err := versioner.ObjectResourceVersion(object)
 	if err != nil {
 		return -1
 	}
 
-	version, err := etcd3.Versioner.ParseResourceVersion(rv)
+	version, err := versioner.ParseResourceVersion(rv)
 	if err != nil {
 		return -1
 	}

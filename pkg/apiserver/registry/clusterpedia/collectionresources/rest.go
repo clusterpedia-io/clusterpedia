@@ -37,6 +37,7 @@ type REST struct {
 var _ rest.Lister = &REST{}
 var _ rest.Scoper = &REST{}
 var _ rest.Getter = &REST{}
+var _ rest.Storage = &REST{}
 
 func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFactory) *REST {
 	crs, err := factory.GetCollectionResources(context.TODO())
@@ -77,6 +78,9 @@ func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFac
 
 func (s *REST) New() runtime.Object {
 	return &internal.CollectionResource{}
+}
+
+func (s *REST) Destroy() {
 }
 
 func (s *REST) NewList() runtime.Object {
