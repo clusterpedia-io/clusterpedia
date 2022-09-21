@@ -18,7 +18,7 @@ require (
 	gorm.io/datatypes v1.0.7
 	gorm.io/driver/mysql v1.3.6
 	gorm.io/driver/postgres v1.3.10
-	gorm.io/gorm v1.23.8
+	gorm.io/gorm v1.23.9
 	k8s.io/api v0.25.1
 	k8s.io/apiextensions-apiserver v0.25.1
 	k8s.io/apimachinery v0.25.1
