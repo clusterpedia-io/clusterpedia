@@ -25,7 +25,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 	opts := options.NewServerOptions()
 
 	cmd := &cobra.Command{
-		Use: "clusterpedia-apiserver",
+		Use: "binding-apiserver",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
 
