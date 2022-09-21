@@ -17,6 +17,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -34,7 +35,7 @@ import (
 )
 
 func init() {
-	utilruntime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+	utilruntime.Must(logsapi.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
 }
 
 func NewControllerManagerCommand() *cobra.Command {
@@ -55,7 +56,7 @@ func NewControllerManagerCommand() *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
+			if err := logsapi.ValidateAndApply(opts.Logs, clusterpediafeature.MutableFeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())

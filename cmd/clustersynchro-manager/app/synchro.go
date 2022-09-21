@@ -14,6 +14,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
 
@@ -25,7 +26,7 @@ import (
 )
 
 func init() {
-	runtime.Must(logs.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+	runtime.Must(logsapi.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
 }
 
 func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
@@ -46,7 +47,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 
 			// Activate logging as soon as possible, after that
 			// show flags with the final logging configuration.
-			if err := opts.Logs.ValidateAndApply(clusterpediafeature.MutableFeatureGate); err != nil {
+			if err := logsapi.ValidateAndApply(opts.Logs, clusterpediafeature.MutableFeatureGate); err != nil {
 				return err
 			}
 			cliflag.PrintFlags(cmd.Flags())

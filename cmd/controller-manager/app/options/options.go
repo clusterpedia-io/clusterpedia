@@ -15,6 +15,7 @@ import (
 	"k8s.io/component-base/config/options"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/controller-manager/app/config"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
@@ -76,7 +77,7 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 
-	o.Logs.AddFlags(fss.FlagSet("logs"))
+	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 	return fss
 }
 

@@ -37,6 +37,10 @@ func (r *REST) New() runtime.Object {
 	return &v1beta1.Resources{}
 }
 
+// Destroy implements rest.Storage
+func (r *REST) Destroy() {
+}
+
 // NamespaceScoped returns false because Resources is not namespaced
 func (r *REST) NamespaceScoped() bool {
 	return false

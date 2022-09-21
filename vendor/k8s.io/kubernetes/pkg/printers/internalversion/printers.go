@@ -37,6 +37,7 @@ import (
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	flowcontrolv1beta2 "k8s.io/api/flowcontrol/v1beta2"
+	networkingv1alpha1 "k8s.io/api/networking/v1alpha1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
@@ -591,6 +592,18 @@ func AddHandlers(h printers.PrintHandler) {
 		{Name: "Age", Type: "string", Description: metav1.ObjectMeta{}.SwaggerDoc()["creationTimestamp"]},
 	}
 	h.TableHandler(scaleColumnDefinitions, printScale)
+
+	clusterCIDRColumnDefinitions := []metav1.TableColumnDefinition{
+		{Name: "Name", Type: "string", Format: "name", Description: metav1.ObjectMeta{}.SwaggerDoc()["name"]},
+		{Name: "PerNodeHostBits", Type: "string", Description: networkingv1alpha1.ClusterCIDRSpec{}.SwaggerDoc()["perNodeHostBits"]},
+		{Name: "IPv4", Type: "string", Description: networkingv1alpha1.ClusterCIDRSpec{}.SwaggerDoc()["ipv4"]},
+		{Name: "IPv6", Type: "string", Description: networkingv1alpha1.ClusterCIDRSpec{}.SwaggerDoc()["ipv6"]},
+		{Name: "Age", Type: "string", Description: metav1.ObjectMeta{}.SwaggerDoc()["creationTimestamp"]},
+		{Name: "NodeSelector", Type: "string", Priority: 1, Description: networkingv1alpha1.ClusterCIDRSpec{}.SwaggerDoc()["nodeSelector"]},
+	}
+
+	h.TableHandler(clusterCIDRColumnDefinitions, printClusterCIDR)
+	h.TableHandler(clusterCIDRColumnDefinitions, printClusterCIDRList)
 }
 
 // Pass ports=nil for all ports.
@@ -1377,7 +1390,7 @@ func printCSINode(obj *storage.CSINode, options printers.GenerateOptions) ([]met
 	row := metav1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
 	}
-	row.Cells = append(row.Cells, obj.Name, len(obj.Spec.Drivers), translateTimestampSince(obj.CreationTimestamp))
+	row.Cells = append(row.Cells, obj.Name, int64(len(obj.Spec.Drivers)), translateTimestampSince(obj.CreationTimestamp))
 	return []metav1.TableRow{row}, nil
 }
 
@@ -1481,7 +1494,7 @@ func printMutatingWebhook(obj *admissionregistration.MutatingWebhookConfiguratio
 	row := metav1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
 	}
-	row.Cells = append(row.Cells, obj.Name, len(obj.Webhooks), translateTimestampSince(obj.CreationTimestamp))
+	row.Cells = append(row.Cells, obj.Name, int64(len(obj.Webhooks)), translateTimestampSince(obj.CreationTimestamp))
 	return []metav1.TableRow{row}, nil
 }
 
@@ -1501,7 +1514,7 @@ func printValidatingWebhook(obj *admissionregistration.ValidatingWebhookConfigur
 	row := metav1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
 	}
-	row.Cells = append(row.Cells, obj.Name, len(obj.Webhooks), translateTimestampSince(obj.CreationTimestamp))
+	row.Cells = append(row.Cells, obj.Name, int64(len(obj.Webhooks)), translateTimestampSince(obj.CreationTimestamp))
 	return []metav1.TableRow{row}, nil
 }
 
@@ -2299,7 +2312,7 @@ func printStatus(obj *metav1.Status, options printers.GenerateOptions) ([]metav1
 	row := metav1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
 	}
-	row.Cells = append(row.Cells, obj.Status, obj.Reason, obj.Message)
+	row.Cells = append(row.Cells, obj.Status, string(obj.Reason), obj.Message)
 
 	return []metav1.TableRow{row}, nil
 }
@@ -2528,7 +2541,7 @@ func printFlowSchema(obj *flowcontrol.FlowSchema, options printers.GenerateOptio
 			break
 		}
 	}
-	row.Cells = append(row.Cells, name, plName, obj.Spec.MatchingPrecedence, distinguisherMethod, translateTimestampSince(obj.CreationTimestamp), badPLRef)
+	row.Cells = append(row.Cells, name, plName, int64(obj.Spec.MatchingPrecedence), distinguisherMethod, translateTimestampSince(obj.CreationTimestamp), badPLRef)
 
 	return []metav1.TableRow{row}, nil
 }
@@ -2624,11 +2637,62 @@ func printPriorityLevelConfigurationList(list *flowcontrol.PriorityLevelConfigur
 	return rows, nil
 }
 
+func printClusterCIDR(obj *networking.ClusterCIDR, options printers.GenerateOptions) ([]metav1.TableRow, error) {
+	row := metav1.TableRow{
+		Object: runtime.RawExtension{Object: obj},
+	}
+	ipv4 := "<none>"
+	ipv6 := "<none>"
+
+	if obj.Spec.IPv4 != "" {
+		ipv4 = obj.Spec.IPv4
+	}
+	if obj.Spec.IPv6 != "" {
+		ipv6 = obj.Spec.IPv6
+	}
+
+	row.Cells = append(row.Cells, obj.Name, fmt.Sprint(obj.Spec.PerNodeHostBits), ipv4, ipv6, translateTimestampSince(obj.CreationTimestamp))
+	if options.Wide {
+		nodeSelector := "<none>"
+		if obj.Spec.NodeSelector != nil {
+			allTerms := make([]string, 0)
+			for _, term := range obj.Spec.NodeSelector.NodeSelectorTerms {
+				if len(term.MatchExpressions) > 0 {
+					matchExpressions := fmt.Sprintf("MatchExpressions: %v", term.MatchExpressions)
+					allTerms = append(allTerms, matchExpressions)
+				}
+
+				if len(term.MatchFields) > 0 {
+					matchFields := fmt.Sprintf("MatchFields: %v", term.MatchFields)
+					allTerms = append(allTerms, matchFields)
+				}
+			}
+			nodeSelector = strings.Join(allTerms, ",")
+		}
+
+		row.Cells = append(row.Cells, nodeSelector)
+	}
+
+	return []metav1.TableRow{row}, nil
+}
+
+func printClusterCIDRList(list *networking.ClusterCIDRList, options printers.GenerateOptions) ([]metav1.TableRow, error) {
+	rows := make([]metav1.TableRow, 0, len(list.Items))
+	for i := range list.Items {
+		r, err := printClusterCIDR(&list.Items[i], options)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, r...)
+	}
+	return rows, nil
+}
+
 func printScale(obj *autoscaling.Scale, options printers.GenerateOptions) ([]metav1.TableRow, error) {
 	row := metav1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
 	}
-	row.Cells = append(row.Cells, obj.Name, obj.Spec.Replicas, obj.Status.Replicas, translateTimestampSince(obj.CreationTimestamp))
+	row.Cells = append(row.Cells, obj.Name, int64(obj.Spec.Replicas), int64(obj.Status.Replicas), translateTimestampSince(obj.CreationTimestamp))
 	return []metav1.TableRow{row}, nil
 }
 

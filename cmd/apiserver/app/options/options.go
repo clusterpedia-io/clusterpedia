@@ -15,6 +15,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
+	logsapi "k8s.io/component-base/logs/api/v1"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -158,12 +159,12 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 	o.Audit.AddFlags(fss.FlagSet("auditing"))
 	o.Features.AddFlags(fss.FlagSet("features"))
+	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 
 	// o.Admission.AddFlags(fss.FlagSet("admission"))
 	// o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
-	o.Logs.AddFlags(fss.FlagSet("logs"))
 	return fss
 }
 
