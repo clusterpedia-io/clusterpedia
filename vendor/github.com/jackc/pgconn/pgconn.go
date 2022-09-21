@@ -109,6 +109,18 @@ func Connect(ctx context.Context, connString string) (*PgConn, error) {
 	return ConnectConfig(ctx, config)
 }
 
+// Connect establishes a connection to a PostgreSQL server using the environment and connString (in URL or DSN format)
+// and ParseConfigOptions to provide additional configuration. See documentation for ParseConfig for details. ctx can be
+// used to cancel a connect attempt.
+func ConnectWithOptions(ctx context.Context, connString string, parseConfigOptions ParseConfigOptions) (*PgConn, error) {
+	config, err := ParseConfigWithOptions(connString, parseConfigOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return ConnectConfig(ctx, config)
+}
+
 // Connect establishes a connection to a PostgreSQL server using config. config must have been constructed with
 // ParseConfig. ctx can be used to cancel a connect attempt.
 //
@@ -148,9 +160,12 @@ func ConnectConfig(ctx context.Context, config *Config) (pgConn *PgConn, err err
 		return nil, &connectError{config: config, msg: "hostname resolving error", err: errors.New("ip addr wasn't found")}
 	}
 
+	foundBestServer := false
+	var fallbackConfig *FallbackConfig
 	for _, fc := range fallbackConfigs {
-		pgConn, err = connect(ctx, config, fc)
+		pgConn, err = connect(ctx, config, fc, false)
 		if err == nil {
+			foundBestServer = true
 			break
 		} else if pgerr, ok := err.(*PgError); ok {
 			err = &connectError{config: config, msg: "server error", err: pgerr}
@@ -164,6 +179,17 @@ func ConnectConfig(ctx context.Context, config *Config) (pgConn *PgConn, err err
 				pgerr.Code == ERRCODE_INSUFFICIENT_PRIVILEGE {
 				break
 			}
+		} else if cerr, ok := err.(*connectError); ok {
+			if _, ok := cerr.err.(*NotPreferredError); ok {
+				fallbackConfig = fc
+			}
+		}
+	}
+
+	if !foundBestServer && fallbackConfig != nil {
+		pgConn, err = connect(ctx, config, fallbackConfig, true)
+		if pgerr, ok := err.(*PgError); ok {
+			err = &connectError{config: config, msg: "server error", err: pgerr}
 		}
 	}
 
@@ -227,7 +253,8 @@ func expandWithIPs(ctx context.Context, lookupFn LookupFunc, fallbacks []*Fallba
 	return configs, nil
 }
 
-func connect(ctx context.Context, config *Config, fallbackConfig *FallbackConfig) (*PgConn, error) {
+func connect(ctx context.Context, config *Config, fallbackConfig *FallbackConfig,
+	ignoreNotPreferredErr bool) (*PgConn, error) {
 	pgConn := new(PgConn)
 	pgConn.config = config
 	pgConn.wbuf = make([]byte, 0, wbufLen)
@@ -340,6 +367,9 @@ func connect(ctx context.Context, config *Config, fallbackConfig *FallbackConfig
 
 				err := config.ValidateConnect(ctx, pgConn)
 				if err != nil {
+					if _, ok := err.(*NotPreferredError); ignoreNotPreferredErr && ok {
+						return pgConn, nil
+					}
 					pgConn.conn.Close()
 					return nil, &connectError{config: config, msg: "ValidateConnect failed", err: err}
 				}
