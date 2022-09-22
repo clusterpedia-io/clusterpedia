@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: binding-apiserver
-          image: ghcr.io/clusterpedia-io/clusterpedia/binding-apiserver:v0.4.1
+          image: ghcr.io/clusterpedia-io/clusterpedia/binding-apiserver:latest
           command:
             - /usr/local/bin/binding-apiserver
             - --secure-port=443
