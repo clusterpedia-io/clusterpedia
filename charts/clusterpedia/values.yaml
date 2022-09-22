@@ -135,6 +135,8 @@ apiserver:
     ## owner: @cleverhu
     ## alpha: v0.3.0
     AllowRawSQLQuery: false
+  ## @param apiserver.enableSHA1Cert specifies whether to allow SHA1 certificates for apiserver.
+  enableSHA1Cert: false
 
 ## clustersynchro manager config
 clustersynchroManager:

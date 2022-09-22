@@ -69,6 +69,10 @@ spec:
             secretKeyRef:
               name: {{ include "clusterpedia.internalstorage.fullname" . }}
               key: password
+        {{- if .Values.apiserver.enableSHA1Cert }}
+        - name: GODEBUG
+          value: x509sha1=1
+        {{- end }}
         volumeMounts:
         - name: internalstorage-config
           mountPath: /etc/clusterpedia/storage
