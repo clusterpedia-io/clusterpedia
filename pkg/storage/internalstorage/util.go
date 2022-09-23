@@ -10,7 +10,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
@@ -21,10 +20,6 @@ const (
 	SearchLabelFuzzyName = "internalstorage.clusterpedia.io/fuzzy-name"
 
 	URLQueryWhereSQL = "whereSQL"
-)
-
-var (
-	supportedOrderByFields = sets.NewString("cluster", "namespace", "name", "created_at", "resource_version")
 )
 
 func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn func(query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error)) (int64, *int64, *gorm.DB, error) {
@@ -169,17 +164,16 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 	// Due to performance reasons, the default order by is not set.
 	// https://github.com/clusterpedia-io/clusterpedia/pull/44
 	for _, orderby := range opts.OrderBy {
-		field := orderby.Field
-		if supportedOrderByFields.Has(field) {
-			if field == "resource_version" {
-				field = "CAST(resource_version as decimal)"
-			}
-			column := clause.OrderByColumn{
-				Column: clause.Column{Name: field, Raw: true},
-				Desc:   orderby.Desc,
-			}
-			query = query.Order(column)
+		orderByField := orderby.Field
+		if orderByField == "resource_version" {
+			orderByField = "CAST(resource_version as decimal)"
 		}
+
+		column := clause.OrderByColumn{
+			Column: clause.Column{Name: orderByField, Raw: true},
+			Desc:   orderby.Desc,
+		}
+		query = query.Order(column)
 
 		// if orderby.Field is unsupported, return invalid error?
 	}
