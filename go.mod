@@ -28,7 +28,7 @@ require (
 	k8s.io/component-base v0.25.1
 	k8s.io/klog/v2 v2.70.1
 	k8s.io/kube-aggregator v0.0.0
-	k8s.io/kubernetes v1.25.1
+	k8s.io/kubernetes v1.25.2
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
 	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/controller-tools v0.10.0

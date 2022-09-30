@@ -1199,7 +1199,7 @@ k8s.io/kube-openapi/pkg/util
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/util/sets
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/kubernetes v1.25.1
+# k8s.io/kubernetes v1.25.2
 ## explicit; go 1.19
 k8s.io/kubernetes/cmd/preferredimports
 k8s.io/kubernetes/pkg/api/legacyscheme
