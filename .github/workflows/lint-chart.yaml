@@ -37,7 +37,7 @@ jobs:
           architecture: x64
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.3.0
+        uses: helm/chart-testing-action@v2.3.1
         with:
           version: v3.6.0
 
