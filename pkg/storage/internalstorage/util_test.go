@@ -187,8 +187,8 @@ func TestApplyListOptionsToQuery_LabelSelector(t *testing.T) {
 			"not equal",
 			"key1!=value1",
 			expected{
-				`SELECT * FROM "resources" WHERE "object" -> 'metadata' -> 'labels' ->> 'key1' != 'value1' `,
-				"SELECT * FROM `resources` WHERE JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"')) != 'value1' ",
+				`SELECT * FROM "resources" WHERE ("object" -> 'metadata' -> 'labels' ->> 'key1' IS NULL OR "object" -> 'metadata' -> 'labels' ->> 'key1' != 'value1') `,
+				"SELECT * FROM `resources` WHERE (JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"')) != 'value1') ",
 				"",
 			},
 		},
@@ -207,8 +207,8 @@ func TestApplyListOptionsToQuery_LabelSelector(t *testing.T) {
 			"key1 notin (value1, value2),key2=value2",
 
 			expected{
-				`SELECT * FROM "resources" WHERE "object" -> 'metadata' -> 'labels' ->> 'key1' NOT IN ('value1','value2') AND "object" -> 'metadata' -> 'labels' ->> 'key2' = 'value2' `,
-				"SELECT * FROM `resources` WHERE JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"')) NOT IN ('value1','value2') AND JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key2\"')) = 'value2' ",
+				`SELECT * FROM "resources" WHERE ("object" -> 'metadata' -> 'labels' ->> 'key1' IS NULL OR "object" -> 'metadata' -> 'labels' ->> 'key1' NOT IN ('value1','value2')) AND "object" -> 'metadata' -> 'labels' ->> 'key2' = 'value2' `,
+				"SELECT * FROM `resources` WHERE (JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key1\"')) NOT IN ('value1','value2')) AND JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"metadata\".\"labels\".\"key2\"')) = 'value2' ",
 				"",
 			},
 		},
@@ -282,8 +282,8 @@ func TestApplyListOptionsToQuery_EnhancedFieldSelector(t *testing.T) {
 			"not equal",
 			"field1.field11!=value1",
 			expected{
-				`SELECT * FROM "resources" WHERE "object" -> 'field1' ->> 'field11' != 'value1' `,
-				"SELECT * FROM `resources` WHERE JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"')) != 'value1' ",
+				`SELECT * FROM "resources" WHERE ("object" -> 'field1' ->> 'field11' IS NULL OR "object" -> 'field1' ->> 'field11' != 'value1') `,
+				"SELECT * FROM `resources` WHERE (JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"')) != 'value1') ",
 				"",
 			},
 		},
@@ -300,8 +300,8 @@ func TestApplyListOptionsToQuery_EnhancedFieldSelector(t *testing.T) {
 			"notin",
 			"field1.field11 notin (value1, value2),field2=value2",
 			expected{
-				`SELECT * FROM "resources" WHERE "object" -> 'field1' ->> 'field11' NOT IN ('value1','value2') AND "object" ->> 'field2' = 'value2' `,
-				"SELECT * FROM `resources` WHERE JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"')) NOT IN ('value1','value2') AND JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field2\"')) = 'value2' ",
+				`SELECT * FROM "resources" WHERE ("object" -> 'field1' ->> 'field11' IS NULL OR "object" -> 'field1' ->> 'field11' NOT IN ('value1','value2')) AND "object" ->> 'field2' = 'value2' `,
+				"SELECT * FROM `resources` WHERE (JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field1\".\"field11\"')) NOT IN ('value1','value2')) AND JSON_UNQUOTE(JSON_EXTRACT(`object`,'$.\"field2\"')) = 'value2' ",
 				"",
 			},
 		},
