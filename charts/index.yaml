@@ -2,8 +2,8 @@ apiVersion: v1
 entries:
   clusterpedia:
   - apiVersion: v2
-    appVersion: v0.5.0
-    created: "2022-09-14T11:39:40.253858+08:00"
+    appVersion: v0.5.1
+    created: "2022-09-30T14:58:21.204605+08:00"
     dependencies:
     - condition: postgresql.enabled
       name: postgresql
@@ -17,7 +17,34 @@ entries:
       repository: https://charts.bitnami.com/bitnami
       version: 1.x.x
     description: A Helm chart for Kubernetes
-    digest: 0136ae452cfc0b7d320b5a722851bea671929504fe4d9f2064fb0253be8be4c7
+    digest: f15aa134fd718f0c4d3b33a2f157c873cb812ab9b1deb1bf76c151ae4082b2a8
+    maintainers:
+    - name: clusterpedia-io
+      url: https://github.com/clusterpedia-io/clusterpedia
+    name: clusterpedia
+    sources:
+    - https://github.com/clusterpedia-io/clusterpedia
+    type: application
+    urls:
+    - https://github.com/clusterpedia-io/clusterpedia/releases/download/v0.5.1/clusterpedia-0.0.4.tgz
+    version: 0.0.4
+  - apiVersion: v2
+    appVersion: v0.5.0
+    created: "2022-09-30T14:58:21.229403+08:00"
+    dependencies:
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 11.x.x
+    - condition: mysql.enabled
+      name: mysql
+      repository: https://charts.bitnami.com/bitnami
+      version: 9.x.x
+    - name: common
+      repository: https://charts.bitnami.com/bitnami
+      version: 1.x.x
+    description: A Helm chart for Kubernetes
+    digest: 0bd7ed0cba5b6f4fa041c7c003e00c9d433a5223a5e456a0f811508aa004d70c
     maintainers:
     - name: clusterpedia-io
       url: https://github.com/clusterpedia-io/clusterpedia
@@ -30,7 +57,7 @@ entries:
     version: 0.0.3
   - apiVersion: v2
     appVersion: v0.5.0-beta.0
-    created: "2022-09-14T11:39:40.263444+08:00"
+    created: "2022-09-30T14:58:21.218609+08:00"
     dependencies:
     - condition: postgresql.enabled
       name: postgresql
@@ -55,4 +82,4 @@ entries:
     urls:
     - https://github.com/clusterpedia-io/clusterpedia/releases/download/v0.5.0-beta.0/clusterpedia-0.5.0-beta.0.tgz
     version: 0.0.2
-generated: "2022-09-14T11:39:40.242489+08:00"
+generated: "2022-09-30T14:58:21.186707+08:00"
