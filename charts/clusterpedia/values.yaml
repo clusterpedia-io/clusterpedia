@@ -71,24 +71,27 @@ storageConfig:
 ## @param external define the auth param of external database
 ## if set the storageInstallMode to "external", the param must be set.
 externalStorage:
-  ## @param database Select which database backend Clusterpedia will use. Can be 'postgres' or 'mysql'
+  ## @param externalStorage.type Select which database backend Clusterpedia will use. Can be 'postgres' or 'mysql'
   ##
   type: ""
-  ## @param auth.host for a custom host
+  ## @param externalStorage.host for a custom host
   ##
   host: ""
-  ## @param auth.port for a custom port
+  ## @param externalStorage.port for a custom port
   ##
   port:
-  ## @param auth.user Name for a custom user
+  ## @param externalStorage.user Name for a custom user
   ##
   user: ""
-  ## @param auth.password Password for a custom password
+  ## @param externalStorage.password Password for a custom password
   ##
   password: ""
-  ## @param auth.database Name for a custom database
+  ## @param externalStorage.database Name for a custom database
   ##
   database: ""
+  ## @param externalStorage.createDatabase whether to create the .Values.externalStorage.database or not
+  ##
+  createDatabase: false
 
 ## clusterpedia apiserver config
 apiserver:
