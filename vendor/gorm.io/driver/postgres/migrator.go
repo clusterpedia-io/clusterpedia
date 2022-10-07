@@ -34,6 +34,17 @@ where
     and t.relname = ?
 `
 
+var typeAliasMap = map[string][]string{
+	"int2":     {"smallint"},
+	"int4":     {"integer"},
+	"int8":     {"bigint"},
+	"smallint": {"int2"},
+	"integer":  {"int4"},
+	"bigint":   {"int8"},
+	"decimal":  {"numeric"},
+	"numeric":  {"decimal"},
+}
+
 type Migrator struct {
 	migrator.Migrator
 }
@@ -516,8 +527,9 @@ func (m Migrator) GetRows(currentSchema interface{}, table interface{}) (*sql.Ro
 	}
 
 	return m.DB.Session(&gorm.Session{}).Table(name).Limit(1).Scopes(func(d *gorm.DB) *gorm.DB {
+		dialector, _ := m.Dialector.(Dialector)
 		// use simple protocol
-		if !m.DB.PrepareStmt {
+		if !m.DB.PrepareStmt && (dialector.Config != nil && (dialector.Config.DriverName == "" || dialector.Config.DriverName == "pgx")) {
 			d.Statement.Vars = append(d.Statement.Vars, pgx.QuerySimpleProtocol(true))
 		}
 		return d
@@ -675,4 +687,8 @@ func groupByIndexName(indexList []*Index) map[string][]*Index {
 		columnIndexMap[idx.IndexName] = append(columnIndexMap[idx.IndexName], idx)
 	}
 	return columnIndexMap
+}
+
+func (m Migrator) GetTypeAliases(databaseTypeName string) []string {
+	return typeAliasMap[databaseTypeName]
 }
