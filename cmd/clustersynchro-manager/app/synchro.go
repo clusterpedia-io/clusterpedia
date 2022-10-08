@@ -3,7 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -80,6 +83,8 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 }
 
 func Run(ctx context.Context, c *config.Config) error {
+	go healthzChecks(net.JoinHostPort(c.BindAddress, strconv.Itoa(c.SecurePort)))
+
 	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory)
 	if !c.LeaderElection.LeaderElect {
 		synchromanager.Run(1, ctx.Done())
@@ -133,4 +138,17 @@ func Run(ctx context.Context, c *config.Config) error {
 		},
 	})
 	return nil
+}
+
+func healthzChecks(address string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	klog.Fatal(http.ListenAndServe(address, mux))
 }

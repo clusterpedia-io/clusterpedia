@@ -52,6 +52,20 @@ spec:
         - name: internalstorage-config
           mountPath: /etc/clusterpedia/storage
           readOnly: true
+        readinessProbe:
+          tcpSocket:
+            port: 443
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 443
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          failureThreshold: 3
+          timeoutSeconds: 5
       serviceAccountName: clusterpedia-apiserver
       volumes:
       - name: internalstorage-config

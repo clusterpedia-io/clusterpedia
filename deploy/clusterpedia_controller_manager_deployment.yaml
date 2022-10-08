@@ -26,4 +26,23 @@ spec:
         image: ghcr.io/clusterpedia-io/clusterpedia/controller-manager:v0.5.1
         command:
         - /usr/local/bin/controller-manager
+        - --secure-port=10925
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 10925
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 10925
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          failureThreshold: 3
+          timeoutSeconds: 5
       serviceAccountName: clusterpedia-controller-manager

@@ -26,6 +26,7 @@ spec:
         image: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager:v0.5.1
         command:
         - /usr/local/bin/clustersynchro-manager
+        - --secure-port=10922
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
         - --feature-gates=PruneManagedFields=true,PruneLastAppliedConfiguration=true
         env:
@@ -38,6 +39,24 @@ spec:
         - name: internalstorage-config
           mountPath: /etc/clusterpedia/storage
           readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 10922
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 10922
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          failureThreshold: 3
+          timeoutSeconds: 5
       serviceAccountName: clusterpedia-clustersynchro-manager
       volumes:
       - name: internalstorage-config

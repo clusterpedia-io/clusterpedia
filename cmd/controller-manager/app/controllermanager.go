@@ -3,7 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -90,7 +93,7 @@ func NewControllerManagerCommand() *cobra.Command {
 
 func Run(c *config.Config) error {
 	if !c.LeaderElection.LeaderElect {
-		return run(c.Kubeconfig, wait.NeverStop)
+		return run(c, wait.NeverStop)
 	}
 
 	id, err := os.Hostname()
@@ -124,7 +127,7 @@ func Run(c *config.Config) error {
 
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				_ = run(c.Kubeconfig, wait.NeverStop)
+				_ = run(c, wait.NeverStop)
 			},
 			OnStoppedLeading: func() {
 				klog.Info("leaderelection lost")
@@ -134,18 +137,20 @@ func Run(c *config.Config) error {
 	return nil
 }
 
-func run(config *restclient.Config, stopCh <-chan struct{}) error {
-	client, err := clientset.NewForConfig(config)
+func run(c *config.Config, stopCh <-chan struct{}) error {
+	go healthzChecks(net.JoinHostPort(c.BindAddress, strconv.Itoa(c.SecurePort)))
+
+	client, err := clientset.NewForConfig(c.Kubeconfig)
 	if err != nil {
 		return err
 	}
 
-	mapper, err := apiutil.NewDynamicRESTMapper(config)
+	mapper, err := apiutil.NewDynamicRESTMapper(c.Kubeconfig)
 	if err != nil {
 		return err
 	}
 
-	lwFactory, err := informer.NewDynamicListerWatcherFactory(config)
+	lwFactory, err := informer.NewDynamicListerWatcherFactory(c.Kubeconfig)
 	if err != nil {
 		return err
 	}
@@ -203,4 +208,17 @@ func run(config *restclient.Config, stopCh <-chan struct{}) error {
 
 	<-stopCh
 	return nil
+}
+
+func healthzChecks(address string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	klog.Fatal(http.ListenAndServe(address, mux))
 }

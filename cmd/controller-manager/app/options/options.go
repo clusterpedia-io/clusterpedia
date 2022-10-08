@@ -31,8 +31,10 @@ type Options struct {
 
 	Logs *logs.Options
 
-	Master     string
-	Kubeconfig string
+	Master      string
+	Kubeconfig  string
+	BindAddress string
+	SecurePort  int
 }
 
 func NewControllerManagerOptions() (*Options, error) {
@@ -76,6 +78,8 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	fs := fss.FlagSet("misc")
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
+	fs.StringVar(&o.BindAddress, "bind-address", o.BindAddress, "The IP address on which to listen for the --secure-port port.")
+	fs.IntVar(&o.SecurePort, "secure-port", o.SecurePort, "The secure port on which to serve HTTP.")
 
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 	return fss
@@ -118,6 +122,8 @@ func (o *Options) Config() (*config.Config, error) {
 		CRDClient:     crdclient,
 		Kubeconfig:    kubeconfig,
 		EventRecorder: eventRecorder,
+		BindAddress:   o.BindAddress,
+		SecurePort:    o.SecurePort,
 
 		LeaderElection: o.LeaderElection,
 	}, nil

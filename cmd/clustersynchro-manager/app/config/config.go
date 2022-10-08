@@ -13,6 +13,8 @@ type Config struct {
 	Kubeconfig    *restclient.Config
 	CRDClient     *crdclientset.Clientset
 	EventRecorder record.EventRecorder
+	BindAddress   string
+	SecurePort    int
 
 	StorageFactory storage.StorageFactory
 
