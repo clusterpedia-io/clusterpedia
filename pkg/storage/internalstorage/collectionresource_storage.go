@@ -71,12 +71,16 @@ func (s *CollectionResourceStorage) query(ctx context.Context, opts *internal.Li
 
 	// The `URLQueryGroups` and `URLQueryResources` only works on *Any Collection Resource*,
 	// does it nned to work on other collection resources?
-	gvrs, err := resolveGVRsFromURLQuery(opts.URLQuery)
+	gvrs, all, err := resolveGVRsFromURLQuery(opts.URLQuery)
 	if err != nil {
 		return nil, nil, apierrors.NewBadRequest(err.Error())
 	}
-	if len(gvrs) == 0 {
+	if len(gvrs) == 0 && !all {
 		return nil, nil, apierrors.NewBadRequest("url query - `groups` or `resources` is required")
+	}
+
+	if all {
+		return result.Select(query), result, nil
 	}
 
 	typesQuery := s.db
@@ -151,12 +155,16 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 	return collection, nil
 }
 
-func resolveGVRsFromURLQuery(query url.Values) (gvrs []schema.GroupVersionResource, err error) {
+func resolveGVRsFromURLQuery(query url.Values) (gvrs []schema.GroupVersionResource, all bool, err error) {
 	if query.Has(URLQueryGroups) {
 		for _, group := range strings.Split(query.Get(URLQueryGroups), ",") {
+			if group == "*" {
+				return nil, true, nil
+			}
+
 			gv, err := parseGroupVersion(group)
 			if err != nil {
-				return nil, fmt.Errorf("%s query: %w", URLQueryGroups, err)
+				return nil, false, fmt.Errorf("%s query: %w", URLQueryGroups, err)
 			}
 
 			gvrs = append(gvrs, gv.WithResource(""))
@@ -166,7 +174,7 @@ func resolveGVRsFromURLQuery(query url.Values) (gvrs []schema.GroupVersionResour
 		for _, resource := range strings.Split(query.Get(URLQueryResources), ",") {
 			gvr, err := parseGroupVersionResource(resource)
 			if err != nil {
-				return nil, fmt.Errorf("%s query: %w", URLQueryResources, err)
+				return nil, false, fmt.Errorf("%s query: %w", URLQueryResources, err)
 			}
 
 			gvrs = append(gvrs, gvr)
