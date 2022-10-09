@@ -1,6 +1,0 @@
-{{- if .Values.installCRDs }}
-{{ range $path, $bytes := .Files.Glob (printf "_crds/**")}}
-{{- (printf "---") }}
-{{- $.Files.Get $path }}
-{{ end }}
-{{- end -}}

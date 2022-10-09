@@ -69,12 +69,12 @@ CRDs by using YAML, or you can manage it with Helm.
 ### Manage manually
 
 ```bash
-kubectl apply -f ./_crds
+kubectl apply -f ./crds
 ```
 
 ### Manage with Helm
 
-Manually add `--set installCRDs=true` in the subsequent installation command.
+Manually add `--set installCRDs=true` or `--set installCRDs=false --skip-crds` in the subsequent installation command.
 
 ### Check if you need to create a local PV
 
@@ -158,7 +158,7 @@ helm -n clusterpedia-system uninstall clusterpedia
 If you use any CRD resource that is manually created, you also need to manually clear the CRDs.
 
 ```bash
-kubectl delete -f ./_crds
+kubectl delete -f ./crds
 ```
 
 **Note that PVC and PV will not be deleted. You need to manually delete them.**

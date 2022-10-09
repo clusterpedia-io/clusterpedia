@@ -2,6 +2,15 @@
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 */}}
+
+{{- define "clusterpedia.name" -}}
+{{- default .Release.Name -}}
+{{- end -}}
+
+{{- define "clusterpedia.namespace" -}}
+{{- default .Release.Namespace -}}
+{{- end -}}
+
 {{- define "clusterpedia.apiserver.fullname" -}}
 {{- printf "%s-%s" (include "common.names.fullname" .) "apiserver" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}

@@ -65,7 +65,7 @@ function delete_cluster() {
 
 # install the Clusterpedia into the kind cluster
 function install_clusterpedia() {
-    kubectl apply -f "${ROOT}/charts/clusterpedia/_crds"
+    kubectl apply -f "${ROOT}/charts/clusterpedia/crds"
     helm repo add bitnami https://charts.bitnami.com/bitnami
     helm dependency build "${ROOT}/charts/clusterpedia"
     helm install clusterpedia "${ROOT}/charts/clusterpedia" \
