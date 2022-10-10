@@ -1,0 +1,19 @@
+name: 'PR Labeling'
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  pull-requests: write
+
+env:
+  GH_TOKEN: ${{ secrets.CLUSTERPEDIA_BOT_TOKEN }}
+
+jobs:
+  cancel-lgtm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel lgtm
+        run: |
+          gh pr -R ${{ github.repository }} edit ${{ github.event.pull_request.number }} --remove-label "lgtm"
