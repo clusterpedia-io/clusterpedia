@@ -58,6 +58,16 @@ storageConfig:
     slowThreshold: 100ms
     ## @param storageConfig.log.ignoreRecordNotFoundError indicates whether ignore error type `NotFound`
     ignoreRecordNotFoundError: false
+    ## @param storageConfig.log.logger indicates the log rotate config
+    logger:
+      ## @param storageConfig.log.logger.filename indicates the file to write logs to
+      filename: /var/log/clusterpedia/internalstorage.log
+      ## @param storageConfig.log.logger.maxsize indicates the maximum size in megabytes of the log file before it gets
+      ## rotated
+      maxsize: 100
+      ## @param storageConfig.log.logger.maxbackups indicates the maximum number of old log files to retain. Default 0
+      ## is to retain all old log files
+      maxbackups: 0
   ## @param storageConfig.connPool the connPoll config of storage
   connPool:
     ## @param storageConfig.connPool.maxIdleConns sets the maximum number of connections in the idle
