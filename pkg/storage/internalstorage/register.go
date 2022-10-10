@@ -21,7 +21,7 @@ import (
 
 const (
 	StorageName        = "internal"
-	defaultLogFileName = "/var/log/clusterpedia/internalstorage.log"
+	defaultLogFilename = "/var/log/clusterpedia/internalstorage.log"
 )
 
 func init() {
@@ -108,12 +108,12 @@ func newLogger(cfg *Config) (logger.Interface, error) {
 		lumberjackLogger := cfg.Log.Logger
 		if lumberjackLogger == nil {
 			lumberjackLogger = &lumberjack.Logger{
-				Filename:   defaultLogFileName,
+				Filename:   defaultLogFilename,
 				MaxSize:    100, // megabytes
-				MaxBackups: 1,
+				MaxBackups: 0,
 			}
 		} else if lumberjackLogger.Filename == "" {
-			lumberjackLogger.Filename = defaultLogFileName
+			lumberjackLogger.Filename = defaultLogFilename
 		}
 		logWriter = lumberjackLogger
 	}

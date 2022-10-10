@@ -17,6 +17,10 @@ data:
       level: {{ .Values.storageConfig.log.level | default "Warn" | quote }}
       slowThreshold: {{ .Values.storageConfig.log.slowThreshold }}
       ignoreRecordNotFoundError: {{ .Values.storageConfig.log.ignoreRecordNotFoundError }}
+      logger:
+        filename: {{ .Values.storageConfig.log.logger.filename }}
+        maxsize: {{ .Values.storageConfig.log.logger.maxsize }}
+        maxbackups: {{ .Values.storageConfig.log.logger.maxbackups }}
     {{ end }}
     connPool:
       maxIdleConns: {{ .Values.storageConfig.connPool.maxIdleConns | int }}
