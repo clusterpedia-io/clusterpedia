@@ -16,7 +16,7 @@ require (
 	go.uber.org/atomic v1.10.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gorm.io/datatypes v1.0.7
-	gorm.io/driver/mysql v1.3.6
+	gorm.io/driver/mysql v1.4.1
 	gorm.io/driver/postgres v1.3.10
 	gorm.io/gorm v1.24.0
 	k8s.io/api v0.25.2
