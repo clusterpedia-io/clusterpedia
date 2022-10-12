@@ -177,8 +177,9 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 
 		// if orderby.Field is unsupported, return invalid error?
 	}
-
-	if opts.Limit != -1 {
+	// kube ListOptions does not specify a limit default value of 0, gorm will execute limit = 0, resulting in the return of empty data.
+	// https://github.com/go-gorm/gorm/commit/e8f48b5c155b6fbf2e1fe6a554e2280f62af21a7
+	if opts.Limit > 0 {
 		query = query.Limit(int(opts.Limit))
 	}
 
