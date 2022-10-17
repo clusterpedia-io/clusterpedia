@@ -8,6 +8,7 @@
 [![License](https://img.shields.io/github/license/clusterpedia-io/clusterpedia)](/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/clusterpedia-io/clusterpedia)](https://goreportcard.com/report/github.com/clusterpedia-io/clusterpedia)
 [![Release](https://img.shields.io/github/v/release/clusterpedia-io/clusterpedia)](https://github.com/clusterpedia-io/clusterpedia/releases)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/clusterpedia)](https://artifacthub.io/packages/search?repo=clusterpedia)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5539/badge)](https://bestpractices.coreinfrastructure.org/projects/5539)
 [![Join Slack channel](https://img.shields.io/badge/slack-@cncf/clusterpedia-30c000.svg?logo=slack)](https://cloud-native.slack.com/messages/clusterpedia)
 
