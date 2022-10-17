@@ -1,4 +1,6 @@
-# Clusterpedia
+# **DEPRECATED** Clusterpedia Charts
+**Deprecated Charts, Please use [Clusterpedia Helm](https://github.com/clusterpedia-io/clusterpedia-helm/tree/main/charts/clusterpedia)**
+> Once clusterpedia kustomize is ready, delete this charts/clusterpedia
 
 This name Clusterpedia is inspired by Wikipedia. It is an encyclopedia of multi-cluster to synchronize, search for, and
 simply control multi-cluster resources.
