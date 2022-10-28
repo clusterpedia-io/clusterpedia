@@ -49,6 +49,29 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	gvr := schema.GroupVersionResource{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion, Resource: requestInfo.Resource}
 
 	clusterName := request.ClusterNameValue(req.Context())
+
+	var (
+		cluster *clusterv1alpha2.PediaCluster
+		err     error
+	)
+	// When clusterName not empty, first check cluster whether exist
+	if clusterName != "" {
+		if cluster, err = r.clusterLister.Get(clusterName); err != nil {
+			if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to handle resource request, not get cluster from cache", "cluster", clusterName, "resource", gvr)
+				responsewriters.ErrorNegotiated(
+					apierrors.NewInternalError(err),
+					Codecs, gvr.GroupVersion(), w, req,
+				)
+				return
+			}
+			responsewriters.ErrorNegotiated(
+				apierrors.NewBadRequest("not found requested cluster"),
+				Codecs, gvr.GroupVersion(), w, req,
+			)
+			return
+		}
+	}
 	if !r.discovery.ResourceEnabled(clusterName, gvr) {
 		r.delegate.ServeHTTP(w, req)
 		return
@@ -72,18 +95,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check the health of the cluster
-	if clusterName != "" {
-		cluster, err := r.clusterLister.Get(clusterName)
-		if err != nil {
-			err := fmt.Errorf("not found request cluster")
-			klog.ErrorS(err, "Failed to handle resource request, not get cluster from cache", "cluster", clusterName, "resource", gvr)
-			responsewriters.ErrorNegotiated(
-				apierrors.NewInternalError(err),
-				Codecs, gvr.GroupVersion(), w, req,
-			)
-			return
-		}
-
+	if cluster != nil {
 		var msg string
 		healthyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterHealthyCondition)
 		switch {
