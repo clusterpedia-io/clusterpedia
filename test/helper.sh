@@ -33,7 +33,7 @@ function check_dependencies() {
 
 # build the image for the test
 function build_image() {
-    make VERSION=test REGISTRY=localtest images
+    make ON_PLUGINS=true VERSION=test REGISTRY=localtest images
 }
 
 # load the image into the kind cluster
