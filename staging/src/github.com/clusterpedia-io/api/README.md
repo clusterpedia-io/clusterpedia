@@ -26,6 +26,6 @@ We recommend using the go types in this repo. You may serialize them directly to
 
 1. git clone https://github.com/clusterpedia-io/clusterpedia.git (always make a fresh copy since it will damage your repo)
 2. cd clusterpedia
-3. git filter-repo --subdirectory-filter staging/api --force
+3. git filter-repo --subdirectory-filter staging/src/github.com/clusterpedia-io/api --force
 4. git remote add origin https://github.com/clusterpedia-io/api.git
 5. git push origin main
