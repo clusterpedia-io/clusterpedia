@@ -20,6 +20,7 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
@@ -27,6 +28,8 @@ import (
 
 func init() {
 	runtime.Must(logsapi.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
+
+	runtime.Must(storage.LoadPlugins(os.Getenv("STORAGE_PLUGINS")))
 }
 
 func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
