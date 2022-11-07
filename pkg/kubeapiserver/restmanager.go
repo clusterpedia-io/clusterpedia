@@ -227,7 +227,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 				storage, err = m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
 			} else {
-				storage, err = m.genCustomResourceRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
+				storage, err = m.genUnstructuredRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
 			}
 			if err != nil {
 				klog.ErrorS(err, "Failed to gen resource rest storage", "gvr", gvr, "kind", info.APIResource.Kind)
@@ -250,7 +250,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 				requestScope = m.genLegacyResourceRequestScope(namer, gvr, info.APIResource.Kind)
 			} else {
-				requestScope = m.genCustomResourceRequestScope(namer, gvr, info.APIResource.Kind)
+				requestScope = m.genUnstructuredRequestScope(namer, gvr, info.APIResource.Kind)
 			}
 
 			requestScope.TableConvertor = info.Storage
@@ -290,8 +290,8 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 	}, nil
 }
 
-func (m *RESTManager) genCustomResourceRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.resourcetSorageConfig.NewCustomResourceConfig(gvr, namespaced)
+func (m *RESTManager) genUnstructuredRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
+	storageConfig, err := m.resourcetSorageConfig.NewUnstructuredConfig(gvr, namespaced)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +336,7 @@ func (m *RESTManager) genLegacyResourceRequestScope(namer handlers.ScopeNamer, g
 	}
 }
 
-func (m *RESTManager) genCustomResourceRequestScope(namer handlers.ScopeNamer, gvr schema.GroupVersionResource, kind string) *handlers.RequestScope {
+func (m *RESTManager) genUnstructuredRequestScope(namer handlers.ScopeNamer, gvr schema.GroupVersionResource, kind string) *handlers.RequestScope {
 	parameterScheme := runtime.NewScheme()
 	parameterScheme.AddUnversionedTypes(schema.GroupVersion{Group: gvr.Group, Version: gvr.Version},
 		&metav1.ListOptions{},
