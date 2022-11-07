@@ -1,4 +1,4 @@
-ON_PLUGINS ?= flase
+ON_PLUGINS ?= true
 BASE_IMAGE ?= "alpine:3.14"
 REGISTRY ?= "ghcr.io/clusterpedia-io/clusterpedia"
 
@@ -98,16 +98,14 @@ build-image-%:
 	GOARCH=$(HOSTARCH) $(MAKE) image-builder
 	$(MAKE) $(subst build-,,$@)
 
-
 image-apiserver:
 	docker buildx build \
 		-t $(REGISTRY)/apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
 		--load \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
-		--build-arg BIN_NAME=apiserver \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
-		--build-arg ON_PLUGINS=$(ON_PLUGINS) .
+		--build-arg BIN_NAME=apiserver .
 
 image-binding-apiserver:
 	docker buildx build \
@@ -115,9 +113,8 @@ image-binding-apiserver:
 		--platform=linux/$(GOARCH) \
 		--load \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
-		--build-arg BIN_NAME=binding-apiserver \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
-		--build-arg ON_PLUGINS=$(ON_PLUGINS) .
+		--build-arg BIN_NAME=binding-apiserver .
 
 image-clustersynchro-manager:
 	docker buildx build \
@@ -125,9 +122,8 @@ image-clustersynchro-manager:
 		--platform=linux/$(GOARCH) \
 		--load \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
-		--build-arg BIN_NAME=clustersynchro-manager \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
-		--build-arg ON_PLUGINS=$(ON_PLUGINS) .
+		--build-arg BIN_NAME=clustersynchro-manager .
 
 image-controller-manager:
 	docker buildx build \
@@ -135,9 +131,8 @@ image-controller-manager:
 		--platform=linux/$(GOARCH) \
 		--load \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
-		--build-arg BIN_NAME=controller-manager \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
-		--build-arg ON_PLUGINS=false .
+		--build-arg BIN_NAME=controller-manager .
 
 .PHONY: push-images
 push-images: push-apiserver-image push-binding-apiserver-image push-clustersynchro-manager-image push-controller-manager-image
