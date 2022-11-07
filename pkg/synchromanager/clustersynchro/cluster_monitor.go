@@ -17,7 +17,7 @@ import (
 func (synchro *ClusterSynchro) monitor() {
 	klog.V(2).InfoS("Cluster Synchro Monitor Running...", "cluster", synchro.name)
 
-	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, false, synchro.closer)
+	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, true, synchro.closer)
 
 	healthyCondition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterHealthyCondition,
