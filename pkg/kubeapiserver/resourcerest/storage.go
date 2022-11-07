@@ -67,16 +67,13 @@ func (s *RESTStorage) Get(ctx context.Context, name string, _ *metav1.GetOptions
 	return obj, nil
 }
 
-func (s *RESTStorage) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
-	var opts internal.ListOptions
+func (s *RESTStorage) resolveListOptions(ctx context.Context) (*internal.ListOptions, error) {
+	options := &internal.ListOptions{}
 	query := request.RequestQueryFrom(ctx)
-	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, &opts); err != nil {
+	if err := scheme.ParameterCodec.DecodeParameters(query, v1beta1.SchemeGroupVersion, options); err != nil {
 		return nil, apierrors.NewBadRequest(err.Error())
 	}
-	return s.list(ctx, &opts)
-}
 
-func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (runtime.Object, error) {
 	requestInfo, ok := genericrequest.RequestInfoFrom(ctx)
 	if !ok {
 		return nil, errors.New("missing RequestInfo")
@@ -107,13 +104,33 @@ func (s *RESTStorage) list(ctx context.Context, options *internal.ListOptions) (
 			}
 		}
 	}
+	return options, nil
+}
+
+func (s *RESTStorage) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
+	options, err := s.resolveListOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	objs := s.NewList()
 	if err := s.Storage.List(ctx, objs, options); err != nil {
 		return nil, storeerr.InterpretListError(err, s.DefaultQualifiedResource)
 	}
-
 	return objs, nil
+}
+
+func (s *RESTStorage) Watch(ctx context.Context, _ *metainternalversion.ListOptions) (watch.Interface, error) {
+	options, err := s.resolveListOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	inter, err := s.Storage.Watch(ctx, options)
+	if apierrors.IsMethodNotSupported(err) {
+		return nil, apierrors.NewMethodNotSupported(s.DefaultQualifiedResource, "watch")
+	}
+	return inter, nil
 }
 
 func (s *RESTStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -122,8 +139,4 @@ func (s *RESTStorage) ConvertToTable(ctx context.Context, object runtime.Object,
 	}
 
 	return printers.NewDefaultTableConvertor(s.DefaultQualifiedResource).ConvertToTable(ctx, object, tableOptions)
-}
-
-func (s *RESTStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
-	return s.Storage.Watch(ctx, options)
 }

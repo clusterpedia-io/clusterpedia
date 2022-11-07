@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -121,7 +120,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	return nil
 }
 
-//nolint
+// nolint
 func (s *ResourceStorage) newClusterWatchEvent(eventType watch.EventType, obj runtime.Object, cluster string) *ClusterWatchEvent {
 	return &ClusterWatchEvent{
 		ClusterName: cluster,
@@ -195,7 +194,7 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	return nil
 }
 
-func (s *ResourceStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+func (s *ResourceStorage) Watch(ctx context.Context, options *internal.ListOptions) (watch.Interface, error) {
 	resourceversion := options.ResourceVersion
 	watchRV, err := cache.NewClusterResourceVersionFromString(resourceversion)
 	if err != nil {

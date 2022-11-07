@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	"gorm.io/gorm"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -274,8 +274,8 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	return nil
 }
 
-func (s *ResourceStorage) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
-	return nil, nil
+func (s *ResourceStorage) Watch(_ context.Context, _ *internal.ListOptions) (watch.Interface, error) {
+	return nil, apierrors.NewMethodNotSupported(s.storageGroupResource, "watch")
 }
 
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
