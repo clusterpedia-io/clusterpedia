@@ -116,8 +116,21 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, 
 		GroupResource:        gr,
 		StorageGroupResource: chosenStorageResource,
 		Codec:                codec,
-		StorageVersion:       codecConfig.StorageVersion,
+		StorageVersion:       storageVersion,
 		MemoryVersion:        memoryVersion,
 		Namespaced:           namespaced,
 	}, nil
+}
+
+func (g *StorageConfigFactory) GetStorageGroupVersionResource(gvr schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	if !scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+		return gvr, nil
+	}
+
+	chosenStorageResource := g.GetStorageGroupResource(gvr.GroupResource())
+	storageVersion, err := g.legacyResourceEncodingConfig.StorageEncodingFor(chosenStorageResource)
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+	return chosenStorageResource.WithVersion(storageVersion.Version), nil
 }

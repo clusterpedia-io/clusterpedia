@@ -108,3 +108,11 @@ func (t CollectionResourceType) GroupResource() schema.GroupResource {
 		Resource: t.Resource,
 	}
 }
+
+func (t CollectionResourceType) GroupVersionResource() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    t.Group,
+		Version:  t.Version,
+		Resource: t.Resource,
+	}
+}

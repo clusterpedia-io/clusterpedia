@@ -52,15 +52,15 @@ func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFac
 		for irt := range cr.ResourceTypes {
 			rt := &cr.ResourceTypes[irt]
 			if rt.Resource != "" {
-				config, err := configFactory.NewConfig(rt.GroupResource().WithVersion(""), false)
+				storageGVR, err := configFactory.GetStorageGroupVersionResource(rt.GroupVersionResource())
 				if err != nil {
 					continue
 				}
 
 				*rt = internal.CollectionResourceType{
-					Group:    config.StorageGroupResource.Group,
-					Version:  config.StorageVersion.Version,
-					Resource: config.StorageGroupResource.Resource,
+					Group:    storageGVR.Group,
+					Version:  storageGVR.Version,
+					Resource: storageGVR.Resource,
 				}
 			}
 		}
