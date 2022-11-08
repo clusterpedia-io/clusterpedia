@@ -12,6 +12,10 @@ import (
 )
 
 type StorageFactory interface {
+	// Currently only supports returning a union of verbs for all resources,
+	// in the future it may be necessary to return verbs depending on different resources.
+	GetSupportedRequestVerbs() []string
+
 	GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error)
 	PrepareCluster(cluster string) error
 	CleanCluster(ctx context.Context, cluster string) error
