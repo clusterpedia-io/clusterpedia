@@ -8,7 +8,7 @@ import (
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	apisstorage "k8s.io/kubernetes/pkg/apis/storage"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
@@ -23,7 +23,7 @@ func NewStorageConfigFactory() *StorageConfigFactory {
 		apisstorage.Resource("csistoragecapacities").WithVersion("v1beta1"),
 	}
 
-	resourceEncodingConfig := serverstorage.NewDefaultResourceEncodingConfig(resourcescheme.LegacyResourceScheme)
+	resourceEncodingConfig := serverstorage.NewDefaultResourceEncodingConfig(scheme.LegacyResourceScheme)
 	resourceEncodingConfig = resourceconfig.MergeResourceEncodingConfigs(resourceEncodingConfig, resources)
 
 	factory := &StorageConfigFactory{
@@ -60,7 +60,7 @@ func (g *StorageConfigFactory) GetStorageGroupResource(groupResource schema.Grou
 }
 
 func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
-	if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+	if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 		return g.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
 	}
 	return g.NewUnstructuredConfig(gvr, namespaced)
@@ -69,11 +69,11 @@ func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namesp
 func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
 	version := gvr.GroupVersion()
 	codec := versioning.NewCodec(
-		resourcescheme.UnstructuredCodecs,
-		resourcescheme.UnstructuredCodecs,
-		resourcescheme.UnstructuredScheme,
-		resourcescheme.UnstructuredScheme,
-		resourcescheme.UnstructuredScheme,
+		scheme.UnstructuredCodecs,
+		scheme.UnstructuredCodecs,
+		scheme.UnstructuredScheme,
+		scheme.UnstructuredScheme,
+		scheme.UnstructuredScheme,
 		nil,
 		version,
 		version,
@@ -103,7 +103,7 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, 
 
 	codecConfig := serverstorage.StorageCodecConfig{
 		StorageMediaType:  runtime.ContentTypeJSON,
-		StorageSerializer: resourcescheme.LegacyResourceCodecs,
+		StorageSerializer: scheme.LegacyResourceCodecs,
 		MemoryVersion:     memoryVersion,
 		StorageVersion:    storageVersion,
 	}
