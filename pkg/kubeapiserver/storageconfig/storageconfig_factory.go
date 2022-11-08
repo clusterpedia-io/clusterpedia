@@ -63,10 +63,10 @@ func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namesp
 	if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 		return g.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
 	}
-	return g.NewCustomResourceConfig(gvr, namespaced)
+	return g.NewUnstructuredConfig(gvr, namespaced)
 }
 
-func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
 	version := gvr.GroupVersion()
 	codec := versioning.NewCodec(
 		resourcescheme.UnstructuredCodecs,
@@ -77,7 +77,7 @@ func (g *StorageConfigFactory) NewCustomResourceConfig(gvr schema.GroupVersionRe
 		nil,
 		version,
 		version,
-		"customResourceStorage",
+		"unstructuredObjectStorage",
 	)
 	return &storage.ResourceStorageConfig{
 		GroupResource:        gvr.GroupResource(),
