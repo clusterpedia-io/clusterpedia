@@ -13,9 +13,9 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
@@ -139,9 +139,9 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 				var convertor runtime.ObjectConvertor
 				if syncGVR != storageGVR {
 					if isLegacyResource {
-						convertor = resourcescheme.LegacyResourceScheme
+						convertor = scheme.LegacyResourceScheme
 					} else {
-						convertor = resourcescheme.UnstructuredScheme
+						convertor = scheme.UnstructuredScheme
 					}
 				}
 				storageResourceSyncConfigs[storageGVR] = syncConfig{
@@ -161,7 +161,7 @@ func negotiateSyncVersions(kind schema.GroupKind, wantVersions []string, support
 		return nil, false, errors.New("The supported versions are empty")
 	}
 
-	knowns := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(kind)
+	knowns := scheme.LegacyResourceScheme.VersionsForGroupKind(kind)
 	if len(knowns) != 0 {
 		for _, version := range supportedVersions {
 			for _, gv := range knowns {

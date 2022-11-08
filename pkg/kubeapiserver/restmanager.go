@@ -26,10 +26,10 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
-	unstructuredresourcescheme "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme/unstructured"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/storageconfig"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/scheme/unstructured"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )
 
 type RESTManager struct {
@@ -67,7 +67,7 @@ func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType st
 				}
 
 				gk := schema.GroupKind{Group: group.Name, Kind: resource.Kind}
-				if gvs := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gk); len(gvs) == 0 {
+				if gvs := scheme.LegacyResourceScheme.VersionsForGroupKind(gk); len(gvs) == 0 {
 					// skip custom resource
 					continue
 				}
@@ -119,7 +119,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 				}
 
 				// for custom resources, the prioritizedVersions is empty
-				for _, gv := range resourcescheme.LegacyResourceScheme.PrioritizedVersionsForGroup(gr.Group) {
+				for _, gv := range scheme.LegacyResourceScheme.PrioritizedVersionsForGroup(gr.Group) {
 					group.Versions = append(group.Versions, metav1.GroupVersionForDiscovery{
 						GroupVersion: gv.String(),
 						Version:      gv.Version,
@@ -130,7 +130,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		}
 
 		gk := schema.GroupKind{Group: gr.Group, Kind: info.Kind}
-		versions := resourcescheme.LegacyResourceScheme.VersionsForGroupKind(gk)
+		versions := scheme.LegacyResourceScheme.VersionsForGroupKind(gk)
 		if len(versions) == 0 {
 			// custom resource
 			for version := range info.Versions {
@@ -224,7 +224,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 		if info.Storage == nil {
 			var err error
 			var storage *resourcerest.RESTStorage
-			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+			if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 				storage, err = m.genLegacyResourceRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
 			} else {
 				storage, err = m.genUnstructuredRESTStorage(gvr, info.APIResource.Kind, info.APIResource.Namespaced)
@@ -247,7 +247,7 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 			}
 
 			var requestScope *handlers.RequestScope
-			if resourcescheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+			if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
 				requestScope = m.genLegacyResourceRequestScope(namer, gvr, info.APIResource.Kind)
 			} else {
 				requestScope = m.genUnstructuredRequestScope(namer, gvr, info.APIResource.Kind)
@@ -278,11 +278,11 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 		DefaultQualifiedResource: gvr.GroupResource(),
 
 		NewFunc: func() runtime.Object {
-			obj, _ := resourcescheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind))
+			obj, _ := scheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind))
 			return obj
 		},
 		NewListFunc: func() runtime.Object {
-			obj, _ := resourcescheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind + "List"))
+			obj, _ := scheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind + "List"))
 			return obj
 		},
 
@@ -321,12 +321,12 @@ func (m *RESTManager) genUnstructuredRESTStorage(gvr schema.GroupVersionResource
 func (m *RESTManager) genLegacyResourceRequestScope(namer handlers.ScopeNamer, gvr schema.GroupVersionResource, kind string) *handlers.RequestScope {
 	return &handlers.RequestScope{
 		Namer:          namer,
-		Serializer:     resourcescheme.LegacyResourceCodecs,
-		ParameterCodec: resourcescheme.LegacyResourceParameterCodec,
-		Creater:        resourcescheme.LegacyResourceScheme,
-		Convertor:      resourcescheme.LegacyResourceScheme,
-		Defaulter:      resourcescheme.LegacyResourceScheme,
-		Typer:          resourcescheme.LegacyResourceScheme,
+		Serializer:     scheme.LegacyResourceCodecs,
+		ParameterCodec: scheme.LegacyResourceParameterCodec,
+		Creater:        scheme.LegacyResourceScheme,
+		Convertor:      scheme.LegacyResourceScheme,
+		Defaulter:      scheme.LegacyResourceScheme,
+		Typer:          scheme.LegacyResourceScheme,
 
 		Resource:         gvr,
 		Kind:             gvr.GroupVersion().WithKind(kind),
@@ -345,11 +345,11 @@ func (m *RESTManager) genUnstructuredRequestScope(namer handlers.ScopeNamer, gvr
 	)
 	parameterCodec := runtime.NewParameterCodec(parameterScheme)
 
-	typer := unstructuredObjectTyper{parameterScheme, resourcescheme.UnstructuredScheme}
+	typer := unstructuredObjectTyper{parameterScheme, scheme.UnstructuredScheme}
 	negotiatedSerializer := unstructuredNegotiatedSerializer{
 		typer,
-		resourcescheme.UnstructuredScheme,
-		resourcescheme.UnstructuredScheme,
+		scheme.UnstructuredScheme,
+		scheme.UnstructuredScheme,
 	}
 
 	var standardSerializers []runtime.SerializerInfo
@@ -365,10 +365,10 @@ func (m *RESTManager) genUnstructuredRequestScope(namer handlers.ScopeNamer, gvr
 		Serializer:          negotiatedSerializer,
 		StandardSerializers: standardSerializers,
 		ParameterCodec:      parameterCodec,
-		Creater:             resourcescheme.UnstructuredScheme,
-		Convertor:           resourcescheme.UnstructuredScheme,
-		UnsafeConvertor:     unstructuredresourcescheme.UnsafeObjectConvertor(resourcescheme.UnstructuredScheme),
-		Defaulter:           resourcescheme.UnstructuredScheme,
+		Creater:             scheme.UnstructuredScheme,
+		Convertor:           scheme.UnstructuredScheme,
+		UnsafeConvertor:     unstructuredscheme.UnsafeObjectConvertor(scheme.UnstructuredScheme),
+		Defaulter:           scheme.UnstructuredScheme,
 		Typer:               typer,
 
 		Resource: gvr,
@@ -466,7 +466,7 @@ var legacyResourcesWithDefaultTableConvertor = map[schema.GroupResource]struct{}
 }
 
 func GetTableConvertor(gr schema.GroupResource) rest.TableConvertor {
-	if !resourcescheme.LegacyResourceScheme.IsGroupRegistered(gr.Group) {
+	if !scheme.LegacyResourceScheme.IsGroupRegistered(gr.Group) {
 		return printers.NewDefaultTableConvertor(gr)
 	}
 

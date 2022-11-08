@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 )
 
 const (
@@ -49,7 +49,7 @@ var collectionResources = []internal.CollectionResource{
 
 func init() {
 	groups := sets.NewString()
-	for _, groupversion := range resourcescheme.LegacyResourceScheme.PreferredVersionAllGroups() {
+	for _, groupversion := range scheme.LegacyResourceScheme.PreferredVersionAllGroups() {
 		groups.Insert(groupversion.Group)
 	}
 

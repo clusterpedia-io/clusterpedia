@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 )
 
@@ -78,7 +78,7 @@ func (c *CRDController) OnDelete(obj interface{}) {
 }
 
 func (c *CRDController) updateResources(obj interface{}) {
-	runtimeobj, err := resourcescheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), apiextensionsv1.SchemeGroupVersion)
+	runtimeobj, err := scheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), apiextensionsv1.SchemeGroupVersion)
 	if err != nil {
 		return
 	}
@@ -126,7 +126,7 @@ func (c *CRDController) removeResource(obj interface{}) {
 	if !ok {
 		return
 	}
-	runtimeobj, err := resourcescheme.LegacyResourceScheme.ConvertToVersion(runtimeobj, apiextensionsv1.SchemeGroupVersion)
+	runtimeobj, err := scheme.LegacyResourceScheme.ConvertToVersion(runtimeobj, apiextensionsv1.SchemeGroupVersion)
 	if err != nil {
 		klog.ErrorS(errors.New("object that is not expected"), "cluster", c.cluster, "object", obj)
 		return

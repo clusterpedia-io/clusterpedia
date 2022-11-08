@@ -19,7 +19,7 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcescheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
@@ -452,11 +452,11 @@ func encodeEvent(obj runtime.Object, codec runtime.Codec, memoryVersion schema.G
 
 	//gvk := obj.GetObjectKind().GroupVersionKind()
 	gk := obj.GetObjectKind().GroupVersionKind().GroupKind()
-	if ok := resourcescheme.LegacyResourceScheme.IsGroupRegistered(gk.Group); !ok {
+	if ok := scheme.LegacyResourceScheme.IsGroupRegistered(gk.Group); !ok {
 		return obj, nil
 	}
 
-	dest, err := resourcescheme.LegacyResourceScheme.New(memoryVersion.WithKind(gk.Kind))
+	dest, err := scheme.LegacyResourceScheme.New(memoryVersion.WithKind(gk.Kind))
 	if err != nil {
 		return nil, err
 	}
