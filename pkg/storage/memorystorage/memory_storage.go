@@ -14,6 +14,10 @@ type StorageFactory struct {
 	clusters map[string]bool
 }
 
+func (s *StorageFactory) GetSupportedRequestVerbs() []string {
+	return []string{"get", "list", "watch"}
+}
+
 func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
 	storages.Lock()
 	defer storages.Unlock()

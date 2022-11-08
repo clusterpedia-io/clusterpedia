@@ -15,6 +15,10 @@ type StorageFactory struct {
 	db *gorm.DB
 }
 
+func (s *StorageFactory) GetSupportedRequestVerbs() []string {
+	return []string{"get", "list"}
+}
+
 func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
 	return &ResourceStorage{
 		db:    s.db,

@@ -43,9 +43,13 @@ type RESTManager struct {
 	resources atomic.Value // map[schema.GroupResource]metav1.APIResource
 
 	restResourceInfos atomic.Value // map[schema.GroupVersionResource]RESTResourceInfo
+
+	requestVerbs metav1.Verbs
 }
 
 func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType string, storageFactory storage.StorageFactory, initialAPIGroupResources []*restmapper.APIGroupResources) *RESTManager {
+	requestVerbs := storageFactory.GetSupportedRequestVerbs()
+
 	apiresources := make(map[schema.GroupResource]metav1.APIResource)
 	for _, groupresources := range initialAPIGroupResources {
 		group := groupresources.Group
@@ -72,8 +76,7 @@ func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType st
 					continue
 				}
 
-				// clusterpedia's kube resource only support get and list
-				resource.Verbs = metav1.Verbs{"get", "list"}
+				resource.Verbs = requestVerbs
 				apiresources[gr] = resource
 			}
 		}
@@ -84,6 +87,7 @@ func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType st
 		storageFactory:             storageFactory,
 		resourcetSorageConfig:      storageconfig.NewStorageConfigFactory(),
 		equivalentResourceRegistry: runtime.NewEquivalentResourceRegistry(),
+		requestVerbs:               requestVerbs,
 	}
 
 	manager.resources.Store(apiresources)
@@ -141,7 +145,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		resource, hasResource := apiresources[gr]
 		if !hasResource {
 			resource = metav1.APIResource{Name: gr.Resource, Namespaced: info.Namespaced, Kind: info.Kind}
-			resource.Verbs = metav1.Verbs{"get", "list"}
+			resource.Verbs = m.requestVerbs
 			addedAPIResources[gr] = resource
 		}
 
