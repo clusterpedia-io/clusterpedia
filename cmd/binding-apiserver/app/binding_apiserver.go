@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
@@ -97,4 +99,6 @@ func init() {
 	clusterpediafeature.MutableFeatureGate = featuregate.NewFeatureGate()
 	runtime.Must(clusterpediafeature.MutableFeatureGate.Add(gates))
 	clusterpediafeature.FeatureGate = clusterpediafeature.MutableFeatureGate
+
+	runtime.Must(storage.LoadPlugins(os.Getenv("STORAGE_PLUGINS")))
 }
