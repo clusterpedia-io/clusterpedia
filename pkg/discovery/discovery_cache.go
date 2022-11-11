@@ -6,46 +6,108 @@ import (
 	"strings"
 	"sync"
 
+	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
+	apiregistrationv1api "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	apiregistrationv1helper "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1/helper"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 )
 
-type GroupVersionCache interface {
-	SetGroupVersions(groupVersions map[string][]string, aggregatorGroups sets.String)
+type ResourcesInterface interface {
+	GetGroupType(group string) GroupType
+	GetAPIResourceAndVersions(resource schema.GroupResource) (*metav1.APIResource, []string)
+
+	GetAllResourcesAsSyncResources() []clusterv1alpha2.ClusterGroupResources
+	GetGroupResourcesAsSyncResources(group string) *clusterv1alpha2.ClusterGroupResources
+
+	AttachAllCustomResourcesToSyncResources(resources []clusterv1alpha2.ClusterGroupResources) []clusterv1alpha2.ClusterGroupResources
 }
 
-type CustomResourceCache interface {
-	UpdateCustomResource(resource schema.GroupResource, apiResource metav1.APIResource, versions []string)
-	RemoveCustomResource(resource schema.GroupResource)
+func (c *DynamicDiscoveryManager) enableMutationHandler() {
+	c.enabledMutationHandler.Store(true)
 }
 
-func (c *DynamicDiscoveryManager) SetResourceMutationHandler(handler func()) {
-	// TODO: race
-	c.resourceMutationHandler = handler
+func (c *DynamicDiscoveryManager) disableMutationHandler() {
+	c.enabledMutationHandler.Store(false)
 }
 
-func (c *DynamicDiscoveryManager) SetGroupVersions(groupVersions map[string][]string, aggregatorGroups sets.String) {
+func (c *DynamicDiscoveryManager) doMutationHandler() {
+	if c.enabledMutationHandler.Load() {
+		c.resourceMutationHandler()
+	} else {
+		c.dirty.Store(true)
+	}
+}
+
+func (c *DynamicDiscoveryManager) reconcileAPIServices(apiservices []*apiregistrationv1api.APIService) {
+	groupVersions := make(map[string][]string)
+	aggregatorGroups := sets.NewString()
+
+	apiServicesByGroup := apiregistrationv1helper.SortedByGroupAndVersion(apiservices)
+	for _, groupServices := range apiServicesByGroup {
+		apiServicesByGroup := apiregistrationv1helper.SortedByGroupAndVersion(groupServices)[0]
+		group := apiServicesByGroup[0].Spec.Group
+
+		var versions []string
+		var isLocal, isAggregator bool
+		for _, apiService := range apiServicesByGroup {
+			if apiService.Spec.Service != nil {
+				isAggregator = true
+				if !apiregistrationv1helper.IsAPIServiceConditionTrue(apiService, apiregistrationv1api.Available) {
+					// ignore unavailable aggregator version
+					continue
+				}
+			} else {
+				isLocal = true
+			}
+			versions = append(versions, apiService.Spec.Version)
+		}
+
+		if isLocal && isAggregator {
+			// the versions of the group contain Local and Aggregator, ignoring such group
+			continue
+		}
+
+		if len(versions) == 0 {
+			continue
+		}
+
+		groupVersions[group] = versions
+		if isAggregator {
+			aggregatorGroups.Insert(group)
+		}
+	}
+
+	// The kube-aggregator does not register `apiregistration.k8s.io` as an APIService resource, we need to add `apiregistration.k8s.io/v1` to the **groupVersions**
+	groupVersions[apiregistrationv1api.SchemeGroupVersion.Group] = []string{apiregistrationv1api.SchemeGroupVersion.Version}
+
+	// full update, ensuring version order
+	c.setGroupVersions(groupVersions, aggregatorGroups)
+}
+
+func (c *DynamicDiscoveryManager) setGroupVersions(groupVersions map[string][]string, aggregatorGroups sets.String) {
 	var updated bool
 	defer func() {
 		if updated {
-			c.resourceMutationHandler()
+			c.doMutationHandler()
 		}
 	}()
 
-	c.lock.Lock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
 	if reflect.DeepEqual(c.groupVersions, groupVersions) {
 		c.aggregatorGroups = aggregatorGroups
-		c.lock.Unlock()
 		return
 	}
-
-	defer c.lock.Unlock()
 
 	deletedGroups := sets.NewString()
 	changedGroups := sets.NewString()
@@ -175,12 +237,12 @@ func (c *DynamicDiscoveryManager) refetchAggregatorGroups() map[schema.GroupVers
 	var updated bool
 	defer func() {
 		if updated {
-			c.resourceMutationHandler()
+			c.doMutationHandler()
 		}
 	}()
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 
 	updated, failedResources := c.refetchGroupsLocked(c.aggregatorGroups)
 	return failedResources
@@ -190,12 +252,12 @@ func (c *DynamicDiscoveryManager) refetchAllGroups() map[schema.GroupVersion]err
 	var updated bool
 	defer func() {
 		if updated {
-			c.resourceMutationHandler()
+			c.doMutationHandler()
 		}
 	}()
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 	updated, failedResources := c.refetchAllGroupsLocked()
 	return failedResources
 }
@@ -212,40 +274,65 @@ func (c *DynamicDiscoveryManager) refetchAllGroupsLocked() (bool, map[schema.Gro
 	return c.refetchGroupsLocked(groups)
 }
 
-func (c *DynamicDiscoveryManager) UpdateCustomResource(resource schema.GroupResource, apiResource metav1.APIResource, versions []string) {
+func (c *DynamicDiscoveryManager) updateCustomResource(crd *apiextensionsv1.CustomResourceDefinition) {
+	if !apiextensionshelpers.IsCRDConditionTrue(crd, apiextensionsv1.Established) {
+		// keep the resource and versions already set
+		return
+	}
+
+	groupResource := schema.GroupResource{Group: crd.Spec.Group, Resource: crd.Status.AcceptedNames.Plural}
+	apiResource := metav1.APIResource{
+		Name:         crd.Status.AcceptedNames.Plural,
+		SingularName: crd.Status.AcceptedNames.Singular,
+		Kind:         crd.Status.AcceptedNames.Kind,
+		ShortNames:   crd.Spec.Names.ShortNames,
+		Categories:   crd.Spec.Names.Categories,
+		Verbs:        metav1.Verbs([]string{"get", "list", "watch"}),
+		Namespaced:   crd.Spec.Scope == apiextensionsv1.NamespaceScoped,
+	}
+
+	versions := make([]string, 0, len(crd.Spec.Versions))
+	for _, version := range crd.Spec.Versions {
+		if version.Served {
+			versions = append(versions, version.Name)
+		}
+	}
+	sortVersionByKubeAwareVersion(versions)
+
 	var updated bool
 	defer func() {
 		if updated {
-			c.resourceMutationHandler()
+			c.doMutationHandler()
 		}
 	}()
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 
-	if !c.customResourceGroups.Has(resource.Group) {
+	if !c.customResourceGroups.Has(groupResource.Group) {
 		updated = true
 	}
-	c.customResourceGroups.Insert(resource.Group)
+	c.customResourceGroups.Insert(groupResource.Group)
 
-	if c.updateResourceLocked(resource, apiResource, versions) {
+	if c.updateResourceLocked(groupResource, apiResource, versions) {
 		updated = true
 	}
 }
 
-func (c *DynamicDiscoveryManager) RemoveCustomResource(resource schema.GroupResource) {
-	defer c.resourceMutationHandler()
+func (c *DynamicDiscoveryManager) removeCustomResource(crd *apiextensionsv1.CustomResourceDefinition) {
+	groupResource := schema.GroupResource{Group: crd.Spec.Group, Resource: crd.Status.AcceptedNames.Plural}
+	defer c.doMutationHandler()
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 
-	c.removeResourceLocked(resource)
+	c.removeResourceLocked(groupResource)
 	for gr := range c.resourceVersions {
-		if gr.Group == resource.Group {
+		if gr.Group == groupResource.Group {
 			return
 		}
 	}
-	delete(c.customResourceGroups, resource.Group)
+	delete(c.customResourceGroups, groupResource.Group)
 }
 
 func (c *DynamicDiscoveryManager) updateResourceLocked(resource schema.GroupResource, apiResource metav1.APIResource, sortedVersions []string) bool {
@@ -300,9 +387,9 @@ const (
 	UnknownResource
 )
 
-func (c *DynamicDiscoveryManager) ResolveGroupType(group string) GroupType {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (c *DynamicDiscoveryManager) GetGroupType(group string) GroupType {
+	c.cacheLock.RLock()
+	defer c.cacheLock.RUnlock()
 
 	if c.customResourceGroups.Has(group) {
 		return CustomResource
@@ -315,8 +402,8 @@ func (c *DynamicDiscoveryManager) ResolveGroupType(group string) GroupType {
 }
 
 func (c *DynamicDiscoveryManager) GetAPIResourceAndVersions(resource schema.GroupResource) (*metav1.APIResource, []string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 
 	var refetchFunc func() (updated bool)
 	if c.customResourceGroups.Has(resource.Group) {
@@ -361,8 +448,8 @@ func (c *DynamicDiscoveryManager) GetAPIResourceAndVersions(resource schema.Grou
 }
 
 func (c *DynamicDiscoveryManager) GetAllResourcesAsSyncResources() []clusterv1alpha2.ClusterGroupResources {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+	c.cacheLock.RLock()
+	defer c.cacheLock.RUnlock()
 
 	sortedResources := make([]schema.GroupResource, 0, len(c.resourceVersions))
 	for gr := range c.resourceVersions {
@@ -382,9 +469,9 @@ func (c *DynamicDiscoveryManager) GetAllResourcesAsSyncResources() []clusterv1al
 	return syncResources
 }
 
-func (c *DynamicDiscoveryManager) GetResourcesAsSyncResourcesByGroup(group string) *clusterv1alpha2.ClusterGroupResources {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (c *DynamicDiscoveryManager) GetGroupResourcesAsSyncResources(group string) *clusterv1alpha2.ClusterGroupResources {
+	c.cacheLock.RLock()
+	defer c.cacheLock.RUnlock()
 	sortedResources := make([]schema.GroupResource, 0)
 	for gr := range c.resourceVersions {
 		if gr.Group == group {
@@ -408,8 +495,8 @@ func (c *DynamicDiscoveryManager) GetResourcesAsSyncResourcesByGroup(group strin
 }
 
 func (c *DynamicDiscoveryManager) AttachAllCustomResourcesToSyncResources(resources []clusterv1alpha2.ClusterGroupResources) []clusterv1alpha2.ClusterGroupResources {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+	c.cacheLock.RLock()
+	defer c.cacheLock.RUnlock()
 
 	sortedCustomResources := make([]schema.GroupResource, 0, len(c.customResourceGroups))
 	for gr := range c.resourceVersions {
@@ -447,9 +534,10 @@ func sortGroupResources(resources []schema.GroupResource) {
 	})
 }
 
-func HasListAndWatchVerbs(apiResource metav1.APIResource) bool {
-	verbs := sets.NewString(apiResource.Verbs...)
-	return verbs.HasAll("list", "watch")
+func sortVersionByKubeAwareVersion(versions []string) {
+	sort.Slice(versions, func(i, j int) bool {
+		return version.CompareKubeAwareVersionStrings(versions[i], versions[j]) > 0
+	})
 }
 
 // fetchServerResourcesForGroupVersions uses the discovery client to fetch the resources for the specified groups in parallel.
@@ -488,4 +576,9 @@ func fetchGroupVersionResources(d discovery.DiscoveryInterface, apiGroups *metav
 	wg.Wait()
 
 	return groupVersionResources, failedGroups
+}
+
+func HasListAndWatchVerbs(apiResource metav1.APIResource) bool {
+	verbs := sets.NewString(apiResource.Verbs...)
+	return verbs.HasAll("list", "watch")
 }
