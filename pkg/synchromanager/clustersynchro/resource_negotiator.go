@@ -13,17 +13,17 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	"github.com/clusterpedia-io/clusterpedia/pkg/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ResourceNegotiator struct {
 	name                   string
-	discoveryManager       *discovery.DynamicDiscoveryManager
+	dynamicDiscovery       discovery.DynamicDiscoveryInterface
 	resourceStorageConfig  *storageconfig.StorageConfigFactory
 	syncAllCustomResources bool
 }
@@ -49,14 +49,14 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 			break
 		}
 
-		groupType := negotiator.discoveryManager.ResolveGroupType(syncResource.Group)
+		groupType := negotiator.dynamicDiscovery.GetGroupType(syncResource.Group)
 		if groupType == discovery.AggregatorResource {
 			watchAggregatorResourceTypes = true
 		}
 
 		for _, resource := range syncResource.Resources {
 			if resource == "*" {
-				syncResourcesByGroup := negotiator.discoveryManager.GetResourcesAsSyncResourcesByGroup(syncResource.Group)
+				syncResourcesByGroup := negotiator.dynamicDiscovery.GetGroupResourcesAsSyncResources(syncResource.Group)
 				if syncResourcesByGroup == nil {
 					syncResources[i].Resources = nil
 					klog.InfoS("Skip resource sync", "cluster", negotiator.name, "group", syncResource.Group, "reason", "not match group")
@@ -73,21 +73,21 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	}
 
 	if syncAllResources {
-		syncResources = negotiator.discoveryManager.GetAllResourcesAsSyncResources()
+		syncResources = negotiator.dynamicDiscovery.GetAllResourcesAsSyncResources()
 	} else if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
-		syncResources = negotiator.discoveryManager.AttachAllCustomResourcesToSyncResources(syncResources)
+		syncResources = negotiator.dynamicDiscovery.AttachAllCustomResourcesToSyncResources(syncResources)
 	}
 
 	// check for changes to the kube native resource types when the cluster version changes
-	negotiator.discoveryManager.SetWatchServerVersion(watchKubeVersion)
-	negotiator.discoveryManager.SetWatchAggregatorResourceTypes(watchAggregatorResourceTypes)
+	negotiator.dynamicDiscovery.WatchServerVersion(watchKubeVersion)
+	negotiator.dynamicDiscovery.WatchAggregatorResourceTypes(watchAggregatorResourceTypes)
 
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
 	for _, groupResources := range syncResources {
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
-			apiResource, supportedVersions := negotiator.discoveryManager.GetAPIResourceAndVersions(syncGR)
+			apiResource, supportedVersions := negotiator.dynamicDiscovery.GetAPIResourceAndVersions(syncGR)
 			if apiResource == nil || len(supportedVersions) == 0 {
 				continue
 			}

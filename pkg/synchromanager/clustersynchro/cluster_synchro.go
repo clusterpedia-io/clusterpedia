@@ -6,19 +6,17 @@ import (
 	"sync"
 	"sync/atomic"
 
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	"github.com/clusterpedia-io/clusterpedia/pkg/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 )
 
@@ -30,28 +28,25 @@ type ClusterSynchro struct {
 
 	storage              storage.StorageFactory
 	clusterclient        kubernetes.Interface
+	dynamicDiscovery     discovery.DynamicDiscoveryInterface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
 
 	closeOnce sync.Once
 	closer    chan struct{}
 	closed    chan struct{}
 
-	updateStatusCh        chan struct{}
-	runResourceSynchroCh  chan struct{}
-	stopResourceSynchroCh chan struct{}
+	updateStatusCh chan struct{}
+	startRunnerCh  chan struct{}
+	stopRunnerCh   chan struct{}
 
 	waitGroup wait.Group
 
-	resourceSynchroLock sync.RWMutex
-	handlerStopCh       chan struct{}
+	runnerLock    sync.RWMutex
+	handlerStopCh chan struct{}
 	// Key is the storage resource.
 	// Sometimes the synchronized resource and the storage resource are different
 	storageResourceVersions map[schema.GroupVersionResource]map[string]interface{}
 	storageResourceSynchros sync.Map
-
-	crdController           *CRDController
-	apiServiceController    *APIServiceController
-	dynamicDiscoveryManager *discovery.DynamicDiscoveryManager
 
 	syncResources       atomic.Value // []clusterv1alpha2.ClusterGroupResources
 	setSyncResourcesCh  chan struct{}
@@ -74,7 +69,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		return nil, fmt.Errorf("failed to create a cluster client: %w", err)
 	}
 
-	dynamicDiscoveryManager, err := discovery.NewDynamicDiscoveryManager(name, clusterclient.Discovery())
+	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
 	}
@@ -82,21 +77,6 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to get resource versions from storage: %w", err))
-	}
-
-	_, crdVersions := dynamicDiscoveryManager.GetAPIResourceAndVersions(schema.GroupResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"})
-	if len(crdVersions) == 0 {
-		return nil, fmt.Errorf("not match crd version")
-	}
-
-	crdController, err := NewCRDController(name, config, crdVersions[0], dynamicDiscoveryManager)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create crd controller: %w", err)
-	}
-
-	apiServiceController, err := NewAPIServiceController(name, config, dynamicDiscoveryManager)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create apiservice controller: %w", err)
 	}
 
 	listWatchFactory, err := informer.NewDynamicListerWatcherFactory(config)
@@ -111,26 +91,33 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		storage:              storage,
 
 		clusterclient:        clusterclient,
+		dynamicDiscovery:     dynamicDiscovery,
 		listerWatcherFactory: listWatchFactory,
-
-		dynamicDiscoveryManager: dynamicDiscoveryManager,
-		crdController:           crdController,
-		apiServiceController:    apiServiceController,
 
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
 
-		updateStatusCh:        make(chan struct{}, 1),
-		runResourceSynchroCh:  make(chan struct{}),
-		stopResourceSynchroCh: make(chan struct{}),
+		updateStatusCh: make(chan struct{}, 1),
+		startRunnerCh:  make(chan struct{}),
+		stopRunnerCh:   make(chan struct{}),
 
 		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
 	}
 
+	var refresherOnce sync.Once
+	synchro.dynamicDiscovery.Prepare(discovery.PrepareConfig{
+		ResourceMutationHandler: synchro.resetSyncResources,
+		AfterStartFunc: func(_ <-chan struct{}) {
+			refresherOnce.Do(func() {
+				go synchro.syncResourcesRefresher()
+			})
+		},
+	})
+
 	synchro.resourceNegotiator = &ResourceNegotiator{
 		name:                  name,
 		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
-		discoveryManager:      dynamicDiscoveryManager,
+		dynamicDiscovery:      synchro.dynamicDiscovery,
 	}
 	synchro.groupResourceStatus.Store((*GroupResourceStatus)(nil))
 
@@ -180,29 +167,8 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 	}
 	s.runningCondition.Store(runningCondition)
 
-	// TODO(iceber): The start and stop of dynamicDiscoveryManager, crdController, apiServiceController
-	// should be controlled by cluster healthy.
-	go s.dynamicDiscoveryManager.Run(s.closer)
-	go func() {
-		// First initialize the information for the custom resources to dynamic discovery manager
-		go s.crdController.Run(s.closer)
-		if !cache.WaitForNamedCacheSync(s.name+"-CRD-Controller", s.closer, s.crdController.HasSynced) {
-			return
-		}
-
-		go s.apiServiceController.Run(s.closer)
-		if !cache.WaitForNamedCacheSync(s.name+"-APIService-Controllers", s.closer, s.apiServiceController.HasSynced) {
-			return
-		}
-
-		s.dynamicDiscoveryManager.SetResourceMutationHandler(s.resetSyncResources)
-		s.resetSyncResources()
-
-		go s.syncResourcesSetter()
-	}()
-
 	s.waitGroup.Start(s.monitor)
-	s.waitGroup.Start(s.resourceSynchroRunner)
+	s.waitGroup.Start(s.runner)
 
 	go func() {
 		defer close(s.closed)
@@ -259,18 +225,25 @@ func (s *ClusterSynchro) resetSyncResources() {
 	}
 }
 
-func (s *ClusterSynchro) syncResourcesSetter() {
+func (s *ClusterSynchro) syncResourcesRefresher() {
+	klog.InfoS("sync resources refresher is running", "cluster", s.name)
 	for {
 		select {
-		case <-s.setSyncResourcesCh:
-			s.setSyncResources()
 		case <-s.closer:
 			return
+		case <-s.setSyncResourcesCh:
 		}
+
+		select {
+		case <-s.closer:
+			return
+		default:
+		}
+		s.refreshSyncResources()
 	}
 }
 
-func (s *ClusterSynchro) setSyncResources() {
+func (s *ClusterSynchro) refreshSyncResources() {
 	syncResources := s.syncResources.Load().([]clusterv1alpha2.ClusterGroupResources)
 	if syncResources == nil {
 		return
@@ -293,8 +266,8 @@ func (s *ClusterSynchro) setSyncResources() {
 	}
 
 	func() {
-		s.resourceSynchroLock.Lock()
-		defer s.resourceSynchroLock.Unlock()
+		s.runnerLock.Lock()
+		defer s.runnerLock.Unlock()
 
 		for storageGVR, config := range storageResourceSyncConfigs {
 			// TODO: if config is changed, don't update resource synchro
@@ -391,16 +364,16 @@ func (s *ClusterSynchro) setSyncResources() {
 	}
 }
 
-func (s *ClusterSynchro) resourceSynchroRunner() {
+func (s *ClusterSynchro) runner() {
 	for {
 		select {
-		case <-s.runResourceSynchroCh:
+		case <-s.startRunnerCh:
 		case <-s.closer:
 			return
 		}
 
 		select {
-		case <-s.stopResourceSynchroCh:
+		case <-s.stopRunnerCh:
 			continue
 		case <-s.closer:
 			return
@@ -408,18 +381,20 @@ func (s *ClusterSynchro) resourceSynchroRunner() {
 		}
 
 		func() {
-			s.resourceSynchroLock.Lock()
-			defer s.resourceSynchroLock.Unlock()
+			s.runnerLock.Lock()
+			defer s.runnerLock.Unlock()
 
 			s.handlerStopCh = make(chan struct{})
 			go func() {
 				select {
 				case <-s.closer:
-				case <-s.stopResourceSynchroCh:
+				case <-s.stopRunnerCh:
 				}
 
 				close(s.handlerStopCh)
 			}()
+
+			go s.dynamicDiscovery.Start(s.handlerStopCh)
 
 			s.storageResourceSynchros.Range(func(_, value interface{}) bool {
 				go value.(*ResourceSynchro).Start(s.handlerStopCh)
@@ -431,31 +406,31 @@ func (s *ClusterSynchro) resourceSynchroRunner() {
 	}
 }
 
-func (synchro *ClusterSynchro) startResourceSynchro() {
+func (synchro *ClusterSynchro) startRunner() {
 	select {
-	case <-synchro.stopResourceSynchroCh:
-		synchro.stopResourceSynchroCh = make(chan struct{})
+	case <-synchro.stopRunnerCh:
+		synchro.stopRunnerCh = make(chan struct{})
 	default:
 	}
 
 	select {
-	case <-synchro.runResourceSynchroCh:
+	case <-synchro.startRunnerCh:
 	default:
-		close(synchro.runResourceSynchroCh)
+		close(synchro.startRunnerCh)
 	}
 }
 
-func (synchro *ClusterSynchro) stopResourceSynchro() {
+func (synchro *ClusterSynchro) stopRunner() {
 	select {
-	case <-synchro.runResourceSynchroCh:
-		synchro.runResourceSynchroCh = make(chan struct{})
+	case <-synchro.startRunnerCh:
+		synchro.startRunnerCh = make(chan struct{})
 	default:
 	}
 
 	select {
-	case <-synchro.stopResourceSynchroCh:
+	case <-synchro.stopRunnerCh:
 	default:
-		close(synchro.stopResourceSynchroCh)
+		close(synchro.stopRunnerCh)
 	}
 }
 
@@ -468,7 +443,7 @@ func (s *ClusterSynchro) updateStatus() {
 
 func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 	status := &clusterv1alpha2.ClusterStatus{
-		Version: s.dynamicDiscoveryManager.StorageVersion().GitVersion,
+		Version: s.dynamicDiscovery.ServerVersion().GitVersion,
 		Conditions: []metav1.Condition{
 			s.runningCondition.Load().(metav1.Condition),
 			s.healthyCondition.Load().(metav1.Condition),

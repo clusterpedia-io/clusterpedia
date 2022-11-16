@@ -39,7 +39,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	if ready, err := checkKubeHealthy(synchro.clusterclient); !ready {
 		// if the last status was not ConditionTrue, stop resource synchros
 		if lastReadyCondition.Status != metav1.ConditionTrue {
-			synchro.stopResourceSynchro()
+			synchro.stopRunner()
 		}
 
 		condition := metav1.Condition{
@@ -60,13 +60,13 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		return
 	}
 
-	synchro.startResourceSynchro()
+	synchro.startRunner()
 	message := "cluster health responded with ok"
 	if lastReadyCondition.Status == metav1.ConditionTrue && lastReadyCondition.Message == message {
 		return
 	}
 
-	if _, err := synchro.dynamicDiscoveryManager.GetAndFetchServerVersion(); err != nil {
+	if _, err := synchro.dynamicDiscovery.GetAndFetchServerVersion(); err != nil {
 		message = fmt.Sprintf("cluster health responded with ok, but get server version: %v", err)
 	}
 

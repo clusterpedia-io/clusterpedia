@@ -5,7 +5,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (c *DynamicDiscoveryManager) StorageVersion() version.Info {
+type ServerVersionInterface interface {
+	ServerVersion() version.Info
+	GetAndFetchServerVersion() (version.Info, error)
+}
+
+func (c *DynamicDiscoveryManager) ServerVersion() version.Info {
 	return c.version.Load().(version.Info)
 }
 
@@ -16,7 +21,7 @@ func (c *DynamicDiscoveryManager) GetAndFetchServerVersion() (version.Info, erro
 	}
 
 	if updated {
-		klog.InfoS("server version is updated", "cluster", c.name, "version", c.StorageVersion().GitCommit)
+		klog.InfoS("server version is updated", "cluster", c.name, "version", c.ServerVersion().GitCommit)
 
 		go func() {
 			_ = c.refetchAllGroups()
