@@ -1,6 +1,7 @@
 package internalstorage
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,14 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
+
+var recoverableErrors = []error{
+	io.ErrClosedPipe,
+	io.ErrUnexpectedEOF,
+	os.ErrDeadlineExceeded,
+	syscall.ECONNREFUSED,
+	driver.ErrBadConn,
+}
 
 func InterpretResourceDBError(cluster, name string, err error) error {
 	if err == nil {
@@ -34,13 +43,18 @@ func InterpretDBError(key string, err error) error {
 		return genericstorage.NewKeyNotFoundError(key, 0)
 	}
 
-	if _, isNetError := err.(net.Error); isNetError ||
-		errors.Is(err, io.ErrClosedPipe) ||
-		errors.Is(err, io.ErrUnexpectedEOF) ||
-		os.IsTimeout(err) ||
-		errors.Is(err, os.ErrDeadlineExceeded) ||
-		errors.Is(err, syscall.ECONNREFUSED) {
+	if _, isNetError := err.(net.Error); isNetError {
 		return storage.NewRecoverableException(err)
+	}
+
+	if os.IsTimeout(err) {
+		return storage.NewRecoverableException(err)
+	}
+
+	for _, re := range recoverableErrors {
+		if errors.Is(err, re) {
+			return storage.NewRecoverableException(err)
+		}
 	}
 
 	// TODO(iceber): add dialector judgment
