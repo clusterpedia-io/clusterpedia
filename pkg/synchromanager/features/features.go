@@ -40,6 +40,11 @@ const (
 	// owner: @iceber
 	// alpha: v0.3.0
 	AllowSyncAllResources featuregate.Feature = "AllowSyncAllResources"
+
+	// HealthCheckerWithStandaloneTCP is a feature gate for the cluster health checker to use standalone tcp
+	// owner: @iceber
+	// alpha: v0.6.0
+	HealthCheckerWithStandaloneTCP featuregate.Feature = "HealthCheckerWithStandaloneTCP"
 )
 
 func init() {
@@ -49,8 +54,9 @@ func init() {
 // defaultClusterSynchroManagerFeatureGates consists of all known clustersynchro-manager-specific feature keys.
 // To add a new feature, define a key for it above and add it here.
 var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	PruneManagedFields:            {Default: true, PreRelease: featuregate.Beta},
-	PruneLastAppliedConfiguration: {Default: true, PreRelease: featuregate.Beta},
-	AllowSyncAllCustomResources:   {Default: false, PreRelease: featuregate.Alpha},
-	AllowSyncAllResources:         {Default: false, PreRelease: featuregate.Alpha},
+	PruneManagedFields:             {Default: true, PreRelease: featuregate.Beta},
+	PruneLastAppliedConfiguration:  {Default: true, PreRelease: featuregate.Beta},
+	AllowSyncAllCustomResources:    {Default: false, PreRelease: featuregate.Alpha},
+	AllowSyncAllResources:          {Default: false, PreRelease: featuregate.Alpha},
+	HealthCheckerWithStandaloneTCP: {Default: false, PreRelease: featuregate.Alpha},
 }

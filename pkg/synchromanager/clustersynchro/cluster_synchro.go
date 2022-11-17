@@ -3,13 +3,14 @@ package clustersynchro
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
 type ClusterSynchro struct {
@@ -27,7 +30,7 @@ type ClusterSynchro struct {
 	ClusterStatusUpdater ClusterStatusUpdater
 
 	storage              storage.StorageFactory
-	clusterclient        kubernetes.Interface
+	healthChecker        *healthChecker
 	dynamicDiscovery     discovery.DynamicDiscoveryInterface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
 
@@ -64,11 +67,6 @@ type ClusterStatusUpdater interface {
 type RetryableError error
 
 func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
-	clusterclient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a cluster client: %w", err)
-	}
-
 	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
@@ -84,13 +82,25 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		return nil, fmt.Errorf("failed to create lister watcher factory: %w", err)
 	}
 
+	checkerConfig := *config
+	if clusterpediafeature.FeatureGate.Enabled(features.HealthCheckerWithStandaloneTCP) {
+		checkerConfig.Dial = (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext
+	}
+	healthChecker, err := newHealthChecker(&checkerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a cluster health checker: %w", err)
+	}
+
 	synchro := &ClusterSynchro{
 		name:                 name,
 		RESTConfig:           config,
 		ClusterStatusUpdater: updater,
 		storage:              storage,
 
-		clusterclient:        clusterclient,
+		healthChecker:        healthChecker,
 		dynamicDiscovery:     dynamicDiscovery,
 		listerWatcherFactory: listWatchFactory,
 
