@@ -8,7 +8,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
@@ -36,7 +37,9 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	defer synchro.updateStatus()
 	lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition)
 
-	if ready, err := checkKubeHealthy(synchro.clusterclient); !ready {
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	if ready, err := synchro.readinessProbe.Ready(ctx); !ready {
 		// if the last status was not ConditionTrue, stop resource synchros
 		if lastReadyCondition.Status != metav1.ConditionTrue {
 			synchro.stopRunner()
@@ -86,17 +89,25 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 	synchro.healthyCondition.Store(condition)
 }
 
-// TODO(iceber): resolve for more detailed error
-func checkKubeHealthy(client kubernetes.Interface) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
-	defer cancel()
+type readinessProbe struct {
+	client rest.Interface
+}
 
-	_, err := client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(ctx)
-	if apierrors.IsNotFound(err) {
-		_, err = client.Discovery().RESTClient().Get().AbsPath("/healthz").DoRaw(ctx)
-	}
+func newReadinessProbe(config *rest.Config) (*readinessProbe, error) {
+	client, err := discovery.NewDiscoveryClientForConfig(config)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return true, nil
+	return &readinessProbe{
+		client: client.RESTClient(),
+	}, nil
+}
+
+// TODO(iceber): resolve for more detailed error
+func (probe *readinessProbe) Ready(ctx context.Context) (bool, error) {
+	_, err := probe.client.Get().AbsPath("/readyz").DoRaw(ctx)
+	if apierrors.IsNotFound(err) {
+		_, err = probe.client.Get().AbsPath("/healthz").DoRaw(ctx)
+	}
+	return err != nil, err
 }
