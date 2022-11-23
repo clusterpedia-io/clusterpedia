@@ -592,7 +592,7 @@ gorm.io/driver/mysql
 # gorm.io/driver/postgres v1.4.5
 ## explicit; go 1.14
 gorm.io/driver/postgres
-# gorm.io/gorm v1.24.1
+# gorm.io/gorm v1.24.2
 ## explicit; go 1.16
 gorm.io/gorm
 gorm.io/gorm/callbacks
