@@ -33,7 +33,7 @@ if [ -z $REFNAME ]; then
     exit 1
 fi
 
-API_REPO="https://$GH_TOKEN@github.com/clusterpedia/api.git"
+API_REPO="https://$GH_TOKEN@github.com/clusterpedia-io/api.git"
 
 install_filter_repo(){
     python3 -m pip install --user git-filter-repo
@@ -46,9 +46,9 @@ clean_tmp_dir(){
 trap clean_tmp_dir EXIT
 
 create_tmp_dir(){
-    mkdir -p $TMP_CLUSTERPEDIA
-    git clone ./ $TMP_CLUSTERPEDIA
-    cd $TMP_CLUSTERPEDIA
+    mkdir -p $TMP_CLUSTERPEDIA/api
+    git clone ./ $TMP_CLUSTERPEDIA/api
+    cd $TMP_CLUSTERPEDIA/api
 }
 
 # check tag, if exist, delete it
