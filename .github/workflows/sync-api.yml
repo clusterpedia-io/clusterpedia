@@ -1,0 +1,28 @@
+name: Sync Api
+on:
+  push:
+    paths:
+      - 'staging/src/github.com/clusterpedia-io/api/*'
+jobs:
+  sync-api:
+    name: Sync Api
+    runs-on: ubuntu-latest
+    env:
+      WORKSPACE: ${{ github.workspace }}/src/github.com/clusterpedia-io/clusterpedia
+      GH_TOKEN: ${{ secrets.CLUSTERPEDIA_BOT_TOKEN }}
+      MESSAGE: ${{ github.event.head_commit.message }}
+      REFTYPE: ${{ github.ref_type }}
+      REFNAME: ${{ github.ref_name }}
+      REF: ${{ github.ref }}
+    defaults:
+      run:
+        working-directory: ${{ env.WORKSPACE }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.CLUSTERPEDIA_BOT_TOKEN }}
+          path: ${{ env.WORKSPACE }}
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - run: hack/sync-api.sh
