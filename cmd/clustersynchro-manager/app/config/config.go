@@ -15,6 +15,7 @@ type Config struct {
 	EventRecorder record.EventRecorder
 
 	StorageFactory storage.StorageFactory
+	WorkerNumber   int
 
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
