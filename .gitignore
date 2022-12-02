@@ -1,6 +1,7 @@
 /bin
 /charts/clusterpedia/charts/*.tgz
 .idea
+.vscode
 
 # OSX trash
 .DS_Store

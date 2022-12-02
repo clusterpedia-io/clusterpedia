@@ -85,7 +85,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 func Run(ctx context.Context, c *config.Config) error {
 	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory)
 	if !c.LeaderElection.LeaderElect {
-		synchromanager.Run(1, ctx.Done())
+		synchromanager.Run(c.WorkerNumber, ctx.Done())
 		return nil
 	}
 
@@ -125,7 +125,7 @@ func Run(ctx context.Context, c *config.Config) error {
 				defer close(done)
 
 				stopCh := ctx.Done()
-				synchromanager.Run(1, stopCh)
+				synchromanager.Run(c.WorkerNumber, stopCh)
 			},
 			OnStoppedLeading: func() {
 				klog.Info("leaderelection lost")
