@@ -1,5 +1,5 @@
 ON_PLUGINS ?= true
-BASE_IMAGE ?= "alpine:3.14"
+BASE_IMAGE ?= "alpine:3.16.3"
 REGISTRY ?= "ghcr.io/clusterpedia-io/clusterpedia"
 
 GOOS ?= $(shell go env GOOS)
