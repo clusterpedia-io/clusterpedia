@@ -1,6 +1,4 @@
 ARG BUILDER_IMAGE
-ARG BASE_IMAGE
-
 FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} as builder
 WORKDIR /clusterpedia
 
@@ -8,7 +6,7 @@ ARG BIN_NAME
 ARG TARGETARCH
 RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
 
-FROM ${BASE_IMAGE}
+FROM alpine:3.16.3
 RUN apk add --no-cache gcompat
 
 ARG BIN_NAME
