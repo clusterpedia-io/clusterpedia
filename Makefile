@@ -1,5 +1,4 @@
 ON_PLUGINS ?= true
-BASE_IMAGE ?= "alpine:3.14"
 REGISTRY ?= "ghcr.io/clusterpedia-io/clusterpedia"
 
 GOOS ?= $(shell go env GOOS)
@@ -103,7 +102,6 @@ image-apiserver:
 		-t $(REGISTRY)/apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
 		--load \
-		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=apiserver .
 
@@ -112,7 +110,6 @@ image-binding-apiserver:
 		-t $(REGISTRY)/binding-apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
 		--load \
-		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=binding-apiserver .
 
@@ -121,7 +118,6 @@ image-clustersynchro-manager:
 		-t $(REGISTRY)/clustersynchro-manager-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
 		--load \
-		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=clustersynchro-manager .
 
@@ -130,7 +126,6 @@ image-controller-manager:
 		-t $(REGISTRY)/controller-manager-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
 		--load \
-		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=controller-manager .
 
