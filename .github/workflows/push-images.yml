@@ -1,8 +1,6 @@
 name: Push Images
 on:
   push:
-    branches:
-      - main
     tags:
       - v*
 jobs:
@@ -25,4 +23,4 @@ jobs:
         env:
           ON_PLUGINS: true
         run: |
-          REGISTRY="ghcr.io/$(echo ${{ github.repository }} | tr "A-Z" "a-z")" make push-images
+          REGISTRY="ghcr.io/$(echo ${{ github.repository }} | tr "A-Z" "a-z")" VERSION=${{ github.ref_name }} make push-images

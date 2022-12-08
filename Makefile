@@ -5,10 +5,9 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 RELEASE_ARCHS ?= amd64 arm64
 
-VERSION ?= "latest"
-LATEST_TAG=$(shell git describe --tags)
-ifeq ($(LATEST_TAG),$(shell git describe --abbrev=0 --tags))
-	VERSION=$(LATEST_TAG)
+VERSION ?= $(shell git tag --points-at HEAD --sort -version:refname "v*" | head -1)
+ifeq ($(VERSION),)
+	VERSION="latest"
 endif
 
 BUILDER_IMAGE_TAG = $(shell git rev-parse HEAD)
