@@ -48,13 +48,12 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	gvr := schema.GroupVersionResource{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion, Resource: requestInfo.Resource}
 
-	clusterName := request.ClusterNameValue(req.Context())
-
 	var (
 		cluster *clusterv1alpha2.PediaCluster
 		err     error
 	)
 	// When clusterName not empty, first check cluster whether exist
+	clusterName := request.ClusterNameValue(req.Context())
 	if clusterName != "" {
 		if cluster, err = r.clusterLister.Get(clusterName); err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -66,7 +65,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			responsewriters.ErrorNegotiated(
-				apierrors.NewBadRequest("not found requested cluster"),
+				apierrors.NewBadRequest("the server could not find the requested cluster"),
 				Codecs, gvr.GroupVersion(), w, req,
 			)
 			return
