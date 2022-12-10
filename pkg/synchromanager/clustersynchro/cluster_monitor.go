@@ -18,7 +18,7 @@ import (
 func (synchro *ClusterSynchro) monitor() {
 	klog.V(2).InfoS("Cluster Synchro Monitor Running...", "cluster", synchro.name)
 
-	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, true, synchro.closer)
+	wait.JitterUntil(synchro.checkClusterHealthy, time.Duration(synchro.readinessOption.PeriodSeconds)*time.Second, 0.5, true, synchro.closer)
 
 	healthyCondition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterHealthyCondition,
@@ -36,13 +36,16 @@ func (synchro *ClusterSynchro) monitor() {
 func (synchro *ClusterSynchro) checkClusterHealthy() {
 	defer synchro.updateStatus()
 	lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition)
+	failedCount := synchro.readinessFailedCount.Load().(int32)
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Duration(synchro.readinessOption.TimeoutSeconds)*time.Second)
 	defer cancel()
 	if ready, err := synchro.healthChecker.Ready(ctx); !ready {
-		// if the last status was not ConditionTrue, stop resource synchros
-		if lastReadyCondition.Status != metav1.ConditionTrue {
+		// if the health check failed count is bigger than or equal to
+		// the failure threshold, stop resource synchros
+		if failedCount >= synchro.readinessOption.FailureThreshold {
 			synchro.stopRunner()
+			synchro.readinessFailedCount.Store(0)
 		}
 
 		condition := metav1.Condition{
@@ -61,6 +64,10 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 			synchro.healthyCondition.Store(condition)
 		}
 		return
+	}
+
+	if failedCount > 0 {
+		synchro.readinessFailedCount.Store(0)
 	}
 
 	synchro.startRunner()

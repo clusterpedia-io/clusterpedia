@@ -7,6 +7,7 @@ import (
 
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	synchromanageroptions "github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/options"
 )
 
 type Config struct {
@@ -19,4 +20,6 @@ type Config struct {
 
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
+
+	ClusterReadiness *synchromanageroptions.ReadinessProbeOption
 }

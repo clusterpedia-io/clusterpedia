@@ -31,6 +31,7 @@ import (
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
+	synchromanageroptions "github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
@@ -55,9 +56,11 @@ type Manager struct {
 	synchrolock      sync.RWMutex
 	synchros         map[string]*clustersynchro.ClusterSynchro
 	synchroWaitGroup wait.Group
+
+	clusterReadiness *synchromanageroptions.ReadinessProbeOption
 }
 
-func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *Manager {
+func NewManager(client crdclientset.Interface, storage storage.StorageFactory, clusterReadiness *synchromanageroptions.ReadinessProbeOption) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
@@ -75,6 +78,8 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *
 		),
 
 		synchros: make(map[string]*clustersynchro.ClusterSynchro),
+
+		clusterReadiness: clusterReadiness,
 	}
 
 	clusterinformer.Informer().AddEventHandler(
@@ -324,7 +329,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	// create resource synchro
 	if synchro == nil {
-		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager)
+		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager, manager.clusterReadiness)
 		if err != nil {
 			_, forever := err.(clustersynchro.RetryableError)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)

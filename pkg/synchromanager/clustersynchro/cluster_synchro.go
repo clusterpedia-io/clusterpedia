@@ -19,6 +19,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
@@ -58,6 +59,9 @@ type ClusterSynchro struct {
 
 	runningCondition atomic.Value // metav1.Condition
 	healthyCondition atomic.Value // metav1.Condition
+
+	readinessFailedCount atomic.Value // int32
+	readinessOption      options.ReadinessProbeOption
 }
 
 type ClusterStatusUpdater interface {
@@ -66,7 +70,7 @@ type ClusterStatusUpdater interface {
 
 type RetryableError error
 
-func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
+func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater, readinessOption *options.ReadinessProbeOption) (*ClusterSynchro, error) {
 	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
@@ -112,6 +116,8 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		stopRunnerCh:   make(chan struct{}),
 
 		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
+
+		readinessOption: *readinessOption,
 	}
 
 	var refresherOnce sync.Once

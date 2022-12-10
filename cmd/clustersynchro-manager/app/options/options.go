@@ -24,6 +24,7 @@ import (
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
+	synchromanageroptions "github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/options"
 )
 
 const (
@@ -34,9 +35,10 @@ type Options struct {
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
 
-	Logs         *logs.Options
-	Storage      *storageoptions.StorageOptions
-	WorkerNumber int // WorkerNumber is the number of worker goroutines
+	Logs           *logs.Options
+	Storage        *storageoptions.StorageOptions
+	SynchroManager *synchromanageroptions.ReadinessProbeOption
+	WorkerNumber   int // WorkerNumber is the number of worker goroutines
 
 	Master     string
 	Kubeconfig string
@@ -68,6 +70,7 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 
 	options.Logs = logs.NewOptions()
 	options.Storage = storageoptions.NewStorageOptions()
+	options.SynchroManager = synchromanageroptions.NewReadinessProbeOption()
 	options.WorkerNumber = 5
 	return &options, nil
 }
@@ -90,6 +93,9 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
+
+	o.SynchroManager.AddFlags(fss.FlagSet("synchromanager"))
+
 	return fss
 }
 
@@ -97,6 +103,7 @@ func (o *Options) Validate() error {
 	var errs []error
 
 	errs = append(errs, o.Storage.Validate()...)
+	errs = append(errs, o.SynchroManager.Validate()...)
 
 	if o.WorkerNumber <= 0 {
 		errs = append(errs, fmt.Errorf("worker-number must be greater than 0"))
