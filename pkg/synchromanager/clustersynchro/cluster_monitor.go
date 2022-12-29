@@ -16,7 +16,7 @@ import (
 )
 
 func (synchro *ClusterSynchro) monitor() {
-	klog.V(2).InfoS("Cluster Synchro Monitor Running...", "cluster", synchro.name)
+	klog.InfoS("Cluster Synchro Monitor is running...", "cluster", synchro.name)
 
 	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, true, synchro.closer)
 
