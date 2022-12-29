@@ -189,35 +189,37 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 				klog.ErrorS(err, "Failed to update cluster conditions and sync resources status", "cluster", s.name, "conditions", status.Conditions)
 			}
 		}
+		klog.InfoS("Cluster Synchro is shutdown", "cluster", s.name)
 	}()
 
 	select {
 	case <-s.closer:
+		<-s.closed
 	case <-shutdown:
 		s.Shutdown(true)
 	}
-	<-s.closed
 }
 
 func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 	s.closeOnce.Do(func() {
+		klog.InfoS("Cluster Synchro is shutdowning...", "cluster", s.name)
 		close(s.closer)
+
+		s.waitGroup.Wait()
+
+		runningCondition := metav1.Condition{
+			Type:               clusterv1alpha2.SynchroRunningCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             clusterv1alpha2.SynchroShutdownReason,
+			Message:            "cluster synchro is shutdown",
+			LastTransitionTime: metav1.Now().Rfc3339Copy(),
+		}
+		s.runningCondition.Store(runningCondition)
+		if updateStatus {
+			s.updateStatus()
+		}
+		close(s.updateStatusCh)
 	})
-	s.waitGroup.Wait()
-
-	runningCondition := metav1.Condition{
-		Type:               clusterv1alpha2.SynchroRunningCondition,
-		Status:             metav1.ConditionFalse,
-		Reason:             clusterv1alpha2.SynchroShutdownReason,
-		Message:            "cluster synchro is shutdown",
-		LastTransitionTime: metav1.Now().Rfc3339Copy(),
-	}
-	s.runningCondition.Store(runningCondition)
-
-	if updateStatus {
-		s.updateStatus()
-	}
-	close(s.updateStatusCh)
 	<-s.closed
 }
 
@@ -375,6 +377,9 @@ func (s *ClusterSynchro) refreshSyncResources() {
 }
 
 func (s *ClusterSynchro) runner() {
+	klog.InfoS("Cluster Synchro Runner is running...", "cluster", s.name)
+	defer klog.InfoS("Cluster Synchro Runner is stopped", "cluster", s.name)
+
 	for {
 		select {
 		case <-s.startRunnerCh:
@@ -393,6 +398,7 @@ func (s *ClusterSynchro) runner() {
 		func() {
 			s.runnerLock.Lock()
 			defer s.runnerLock.Unlock()
+			klog.InfoS("dynamic discovery manager and resource synchros are starting", "cluster", s.name)
 
 			s.handlerStopCh = make(chan struct{})
 			go func() {
@@ -413,6 +419,7 @@ func (s *ClusterSynchro) runner() {
 		}()
 
 		<-s.handlerStopCh
+		klog.InfoS("dynamic discovery manager and resource synchros are stopping", "cluster", s.name)
 	}
 }
 
