@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/go-sql-driver/mysql"
@@ -18,12 +19,25 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
+var (
+	recoverableMysqlErrNumbers  sync.Map
+	recoverablePostgresErrCodes sync.Map
+)
+
 var recoverableErrors = []error{
 	io.ErrClosedPipe,
 	io.ErrUnexpectedEOF,
 	os.ErrDeadlineExceeded,
 	syscall.ECONNREFUSED,
 	driver.ErrBadConn,
+}
+
+func init() {
+	recoverableMysqlErrNumbers.Store(1053, struct{}{}) // ER_SERVER_SHUTDOWN: Server shutdown in progress
+	recoverableMysqlErrNumbers.Store(1205, struct{}{}) // Error 1205: Lock wait timeout exceeded; try restarting transaction.
+	recoverableMysqlErrNumbers.Store(1290, struct{}{}) // Error 1290: The MySQL server is running with the --read-only option so it cannot execute this statement.
+
+	recoverablePostgresErrCodes.Store(pgerrcode.AdminShutdown, struct{}{})
 }
 
 func InterpretResourceDBError(cluster, name string, err error) error {
@@ -77,10 +91,12 @@ func InterpretMysqlError(key string, err error) error {
 		return err
 	}
 
-	switch mysqlErr.Number {
-	// ER_SERVER_SHUTDOWN: Server shutdown in progress
-	case 1053:
+	_, ok := recoverableMysqlErrNumbers.Load(mysqlErr.Number)
+	if ok {
 		return storage.NewRecoverableException(err)
+	}
+
+	switch mysqlErr.Number {
 	case 1062:
 		return genericstorage.NewKeyExistsError(key, 0)
 	case 1040:
@@ -99,11 +115,14 @@ func InterpretPostgresError(key string, err error) error {
 		return err
 	}
 
+	_, ok := recoverablePostgresErrCodes.Load(pgError.Code)
+	if ok {
+		return storage.NewRecoverableException(err)
+	}
+
 	switch pgError.Code {
 	case pgerrcode.UniqueViolation:
 		return genericstorage.NewKeyExistsError(key, 0)
-	case pgerrcode.AdminShutdown:
-		return storage.NewRecoverableException(err)
 	}
 	return err
 }
