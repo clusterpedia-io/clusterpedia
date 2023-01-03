@@ -51,6 +51,7 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 			return nil, err
 		}
 
+		cfg.addMysqlErrorNumbers()
 		dialector = gmysql.New(gmysql.Config{Conn: sql.OpenDB(connector)})
 	case "postgres":
 		pgconfig, err := cfg.genPostgresConfig()
@@ -58,6 +59,7 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 			return nil, err
 		}
 
+		cfg.addPostgresErrorCodes()
 		dialector = gpostgres.New(gpostgres.Config{Conn: stdlib.OpenDB(*pgconfig)})
 	default:
 		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)

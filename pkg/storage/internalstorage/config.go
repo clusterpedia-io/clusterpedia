@@ -76,9 +76,13 @@ type MySQLConfig struct {
 	MultiStatements         *bool `yaml:"multiStatements"`         // Allow multiple statements in one query
 	ParseTime               *bool `yaml:"parseTime"`               // Parse time values to time.Time
 	RejectReadOnly          *bool `yaml:"rejectReadOnly"`          // Reject read-only connections
+
+	RecoverableErrNumbers []int `yaml:"recoverableErrNumbers"`
 }
 
-type PostgresConfig struct{}
+type PostgresConfig struct {
+	RecoverableErrCodes []string `yaml:"recoverableErrCodes"`
+}
 
 type ConnPoolConfig struct {
 	MaxIdleConns    int           `yaml:"maxIdleConns"`
@@ -245,6 +249,22 @@ func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 	}
 	dns := strings.Join(names, " ")
 	return pgx.ParseConfig(dns)
+}
+
+func (cfg *Config) addMysqlErrorNumbers() {
+	if cfg.MySQL != nil {
+		for _, errCode := range cfg.MySQL.RecoverableErrNumbers {
+			recoverableMysqlErrNumbers.Store(errCode, struct{}{})
+		}
+	}
+}
+
+func (cfg *Config) addPostgresErrorCodes() {
+	if cfg.Postgres != nil {
+		for _, errCode := range cfg.Postgres.RecoverableErrCodes {
+			recoverablePostgresErrCodes.Store(errCode, struct{}{})
+		}
+	}
 }
 
 func configTLS(host, sslmode, sslrootcert, sslcert, sslkey string) (*tls.Config, error) {
