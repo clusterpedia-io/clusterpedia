@@ -225,11 +225,11 @@ func NewGroupResourceStatus() *GroupResourceStatus {
 }
 
 func (s *GroupResourceStatus) EnableConcurrent() {
-	atomic.StoreInt32(&s.concurrent, 0)
+	atomic.StoreInt32(&s.concurrent, 1)
 }
 
 func (s *GroupResourceStatus) DisableConcurrent() {
-	atomic.StoreInt32(&s.concurrent, 1)
+	atomic.StoreInt32(&s.concurrent, 0)
 }
 
 func (s *GroupResourceStatus) concurrentEnabled() bool {
