@@ -127,7 +127,7 @@ function install_kwokctl() {
     if cmd_exist kwokctl; then
         return 0
     fi
-    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.0.1/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
+    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.1.0/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
         chmod +x "/usr/local/bin/kwokctl"
 }
 
