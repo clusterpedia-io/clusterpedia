@@ -83,7 +83,7 @@ kuberesources   .*,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextens
 * [Support for synchronizing all custom resources](https://clusterpedia.io/docs/usage/sync-resources/#sync-all-custom-resources)
 * The type and version of resources that Clusterpedia is synchroizing with can be adapted to you CRD and AA changes
 ### Unify the search entry for master clusters and multi-cluster resources
-* Based on [Aggregated API](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/), the entry portal for multi-cluster retrieval is the same as that of the the master cluster(IP:PORT)
+* Based on [Aggregated API](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/), the entry portal for multi-cluster retrieval is the same as that of the master cluster(IP:PORT)
 ### Very low memory usage and weak network optimization
 * Optimized caches used by informer, so the memory usage is very low for resource synchronization.
 * Automatic start/stop synchronization based on cluster health status
