@@ -15,4 +15,11 @@ go mod vendor
 
 echo "create symbolic links under vendor to the staging repo"
 rm -rf ./vendor/github.com/clusterpedia-io/api
-ln -s ../../../staging/src/github.com/clusterpedia-io/api/ ./vendor/github.com/clusterpedia-io/api
+
+windows() { [[ -n "$WINDIR" ]]; }
+
+if windows; then
+  cmd <<< "mklink /j \"./vendor/github.com/clusterpedia-io/api\" \"./staging/src/github.com/clusterpedia-io/api\"" > /dev/null
+else
+  ln -s ./vendor/github.com/clusterpedia-io/api ../../../staging/src/github.com/clusterpedia-io/api/ 
+fi

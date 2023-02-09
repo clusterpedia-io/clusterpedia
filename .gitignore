@@ -8,3 +8,4 @@
 
 # apiserver local up cert trash
 apiserver.local.config
+vendor/github.com/clusterpedia-io
