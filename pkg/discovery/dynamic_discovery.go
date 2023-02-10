@@ -202,7 +202,7 @@ retry:
 	klog.InfoS("start dynamic discovery manager", "cluster", c.name)
 	done := make(chan struct{})
 	defer func() {
-		klog.InfoS("dynamic discovery manager is stoped", "cluster", c.name)
+		klog.InfoS("dynamic discovery manager is stopped", "cluster", c.name)
 		close(done)
 	}()
 

@@ -47,7 +47,7 @@ type ResourceSynchro struct {
 	status atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
 
 	startlock sync.Mutex
-	stoped    chan struct{}
+	stopped   chan struct{}
 
 	// TODO(Iceber): Optimize variable names
 	isRunnableForStorage *atomic.Bool
@@ -81,7 +81,7 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 		convertor:     convertor,
 		memoryVersion: storageConfig.MemoryVersion,
 
-		stoped:               make(chan struct{}),
+		stopped:              make(chan struct{}),
 		isRunnableForStorage: atomic.NewBool(true),
 		runnableForStorage:   make(chan struct{}),
 		stopForStorage:       make(chan struct{}),
@@ -111,13 +111,13 @@ func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
 	}()
 
 	// make `synchro.Start` runable
-	close(synchro.stoped)
+	close(synchro.stopped)
 	wait.Until(func() {
 		synchro.processResources()
 	}, time.Second, synchro.closer)
 
 	synchro.startlock.Lock()
-	<-synchro.stoped
+	<-synchro.stopped
 	synchro.startlock.Unlock()
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "", "")
@@ -134,7 +134,7 @@ func (synchro *ResourceSynchro) Close() <-chan struct{} {
 
 func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 	synchro.startlock.Lock()
-	stoped := synchro.stoped // avoid race
+	stopped := synchro.stopped // avoid race
 	synchro.startlock.Unlock()
 	for {
 		select {
@@ -142,7 +142,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 			return
 		case <-synchro.closer:
 			return
-		case <-stoped:
+		case <-stopped:
 		}
 
 		var dorun bool
@@ -152,22 +152,22 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 
 			select {
 			case <-stopCh:
-				stoped = nil
+				stopped = nil
 				return
 			case <-synchro.closer:
-				stoped = nil
+				stopped = nil
 				return
 			default:
 			}
 
 			select {
-			case <-synchro.stoped:
+			case <-synchro.stopped:
 				dorun = true
-				synchro.stoped = make(chan struct{})
+				synchro.stopped = make(chan struct{})
 			default:
 			}
 
-			stoped = synchro.stoped
+			stopped = synchro.stopped
 		}()
 
 		if dorun {
@@ -175,7 +175,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 		}
 	}
 
-	defer close(synchro.stoped)
+	defer close(synchro.stopped)
 	for {
 		synchro.forStorageLock.Lock()
 		runnableForStorage, stopForStorage := synchro.runnableForStorage, synchro.stopForStorage
