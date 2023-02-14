@@ -23,14 +23,16 @@ const (
 )
 
 type Config struct {
-	Type    string `env:"DB_TYPE" required:"true"`
+	Type string `env:"DB_TYPE" required:"true"`
+	DSN  string `env:"DB_DSN"`
+
 	Network string `env:"DB_NETWORK"` // Network type, either tcp or unix, Default is tcp
 	Host    string `env:"DB_HOST"`    // TCP host:port or Unix socket depending on Network
 	Port    string `env:"DB_PORT"`
 
 	User     string `env:"DB_USER"`
 	Password string `env:"DB_PASSWORD"`
-	Database string `env:"DB_DATABASE" required:"true"`
+	Database string `env:"DB_DATABASE"`
 
 	SSLMode      string `yaml:"sslMode"`
 	CertFile     string `yaml:"sslCertFile"`
@@ -141,6 +143,14 @@ func (cfg *Config) getConnPoolConfig() (ConnPoolConfig, error) {
 }
 
 func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
+	if cfg.DSN != "" {
+		return mysql.ParseDSN(cfg.DSN)
+	}
+
+	if cfg.Database == "" {
+		return nil, errors.New("mysql: database name is required")
+	}
+
 	tlsConfig, err := configTLS(cfg.Host, cfg.SSLMode, cfg.RootCertFile, cfg.CertFile, cfg.KeyFile)
 	if err != nil {
 		return nil, err
@@ -216,6 +226,14 @@ func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
 }
 
 func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
+	if cfg.DSN != "" {
+		return pgx.ParseConfig(cfg.DSN)
+	}
+
+	if cfg.Database == "" {
+		return nil, errors.New("postgres: database name is required")
+	}
+
 	var names []string
 	if cfg.Host != "" {
 		names = append(names, fmt.Sprintf("host=%s", cfg.Host))
@@ -249,6 +267,13 @@ func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 	}
 	dns := strings.Join(names, " ")
 	return pgx.ParseConfig(dns)
+}
+
+func (cfg *Config) genSQLiteDSN() (string, error) {
+	if cfg.DSN == "" {
+		return "", errors.New("sqlite: dsn is required")
+	}
+	return cfg.DSN, nil
 }
 
 func (cfg *Config) addMysqlErrorNumbers() {

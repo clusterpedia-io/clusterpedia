@@ -51,7 +51,7 @@ func (jsonQuery *JSONQueryExpression) NotIn(values ...string) *JSONQueryExpressi
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) writeMysqlJSONKey(builder clause.Builder) {
+func (jsonQuery *JSONQueryExpression) writeJSONKey(builder clause.Builder) {
 	writeString(builder, "JSON_EXTRACT(")
 
 	builder.WriteQuoted(jsonQuery.column)
@@ -71,28 +71,46 @@ func (jsonQuery *JSONQueryExpression) writePostgresJSONKey(builder clause.Builde
 	builder.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
 }
 
+func (jsonQuery *JSONQueryExpression) writeJSONKeyWithJSON_UNQUOTE(builder clause.Builder) {
+	writeString(builder, "JSON_UNQUOTE(")
+	jsonQuery.writeJSONKey(builder)
+	writeString(builder, ")")
+}
+
+func (jsonQuery *JSONQueryExpression) writeJSONKeyWithCAST_TO_TEXT(builder clause.Builder) {
+	writeString(builder, "CAST(")
+	jsonQuery.writeJSONKey(builder)
+	writeString(builder, " as TEXT)")
+}
+
 func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 	if len(jsonQuery.keys) == 0 {
 		return
 	}
 
 	if stmt, ok := builder.(*gorm.Statement); ok {
-		switch stmt.Dialector.Name() {
-		case "mysql", "sqlite":
+		dialector := stmt.Dialector.Name()
+		switch dialector {
+		case "mysql", "sqlite3", "sqlite":
 			if jsonQuery.not && len(jsonQuery.values) != 0 {
 				writeString(builder, "(")
 				defer func() {
 					writeString(builder, ")")
 				}()
 
-				jsonQuery.writeMysqlJSONKey(builder)
+				jsonQuery.writeJSONKey(builder)
 				writeString(builder, " IS NULL")
 				writeString(builder, " OR ")
 			}
 
-			writeString(builder, "JSON_UNQUOTE(")
-			jsonQuery.writeMysqlJSONKey(builder)
-			writeString(builder, ")")
+			if dialector == "mysql" {
+				// Wrap`JSON_UNQUOTE` function to convert all json results to strings.
+				// https://github.com/clusterpedia-io/clusterpedia/pull/62
+				jsonQuery.writeJSONKeyWithJSON_UNQUOTE(builder)
+			} else {
+				// Wrap`CAST as TEXT` function to convert all json results to strings.
+				jsonQuery.writeJSONKeyWithCAST_TO_TEXT(builder)
+			}
 
 			switch len(jsonQuery.values) {
 			case 0:

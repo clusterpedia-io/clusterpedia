@@ -2,6 +2,7 @@ package internalstorage
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"reflect"
 	"time"
@@ -155,7 +156,15 @@ func (data ResourceMetadata) GetResourceType() ResourceType {
 	return data.ResourceType
 }
 
-type Bytes []byte
+type Bytes datatypes.JSON
+
+func (bytes *Bytes) Scan(data any) error {
+	return (*datatypes.JSON)(bytes).Scan(data)
+}
+
+func (bytes Bytes) Value() (driver.Value, error) {
+	return (datatypes.JSON)(bytes).Value()
+}
 
 func (bytes Bytes) ConvertToUnstructured() (*unstructured.Unstructured, error) {
 	obj := &unstructured.Unstructured{}
@@ -197,12 +206,12 @@ type ResourceMetadataList []ResourceMetadata
 
 func (list *ResourceMetadataList) From(db *gorm.DB) error {
 	switch db.Dialector.Name() {
-	case "mysql":
+	case "sqlite", "sqlite3", "mysql":
 		db = db.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
 	case "postgres":
 		db = db.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
 	default:
-		panic("storage: only support mysql or postgres")
+		panic("storage: only support sqlite3, mysql or postgres")
 	}
 	metadatas := []ResourceMetadata{}
 	if result := db.Find(&metadatas); result.Error != nil {
