@@ -181,7 +181,7 @@ func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *interna
 	}
 
 	query := s.db.WithContext(ctx).Model(&Resource{})
-	query = result.Select(query).Where(map[string]interface{}{
+	query = query.Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
