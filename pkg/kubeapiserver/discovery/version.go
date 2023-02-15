@@ -18,7 +18,7 @@ type versionDiscoveryHandler struct {
 	serializer                       runtime.NegotiatedSerializer
 	stripVersionNegotiatedSerializer stripVersionNegotiatedSerializer
 
-	gvrs      sets.String
+	gvrs      sets.Set[string]
 	resources map[schema.GroupVersion][]metav1.APIResource
 	delegate  http.Handler
 }
@@ -60,7 +60,7 @@ func (h *versionDiscoveryHandler) ServeHTTP(w http.ResponseWriter, req *http.Req
 
 	responsewriters.WriteObjectNegotiated(
 		serializer, negotiation.DefaultEndpointRestrictions, schema.GroupVersion{}, w, req, http.StatusOK,
-		&metav1.APIResourceList{GroupVersion: groupVersion.String(), APIResources: resources},
+		&metav1.APIResourceList{GroupVersion: groupVersion.String(), APIResources: resources}, false,
 	)
 }
 
@@ -106,7 +106,7 @@ func (h *clusterVersionDiscoveryHandler) setClusterDiscoveryAPI(cluster string, 
 		handlers[cluster] = handler
 	}
 
-	gvrs := sets.NewString()
+	gvrs := sets.Set[string]{}
 	for gv, rs := range resources {
 		for _, r := range rs {
 			gvrs.Insert(gv.WithResource(r.Name).String())
@@ -150,7 +150,7 @@ func (h *clusterVersionDiscoveryHandler) rebuildGlobalDiscoveryAPI() {
 		}
 	}
 
-	gvrs := sets.NewString()
+	gvrs := sets.Set[string]{}
 	versionResources := make(map[schema.GroupVersion][]metav1.APIResource)
 	for gvr, apiResource := range apiresources {
 		gvrs.Insert(gvr.String())

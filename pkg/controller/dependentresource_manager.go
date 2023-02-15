@@ -34,9 +34,9 @@ type DependentResourceManager struct {
 	policyToSource     map[string]schema.GroupVersionResource
 	policyCouldEnqueue map[string]*atomic.Bool
 	policyToGVRs       map[string]map[schema.GroupVersionResource]struct{}
-	gvrToPolicies      map[schema.GroupVersionResource]sets.String
+	gvrToPolicies      map[schema.GroupVersionResource]sets.Set[string]
 
-	referencesToLifecycle map[policyv1alpha1.DependentResource]sets.String
+	referencesToLifecycle map[policyv1alpha1.DependentResource]sets.Set[string]
 	lifecycleToReferences map[string]map[policyv1alpha1.DependentResource]struct{}
 }
 
@@ -58,9 +58,9 @@ func NewDependentResourceManager(
 		policyToSource:     make(map[string]schema.GroupVersionResource),
 		policyCouldEnqueue: make(map[string]*atomic.Bool),
 		policyToGVRs:       make(map[string]map[schema.GroupVersionResource]struct{}),
-		gvrToPolicies:      make(map[schema.GroupVersionResource]sets.String),
+		gvrToPolicies:      make(map[schema.GroupVersionResource]sets.Set[string]),
 
-		referencesToLifecycle: make(map[policyv1alpha1.DependentResource]sets.String),
+		referencesToLifecycle: make(map[policyv1alpha1.DependentResource]sets.Set[string]),
 		lifecycleToReferences: make(map[string]map[policyv1alpha1.DependentResource]struct{}),
 	}
 }
@@ -198,7 +198,7 @@ func (manager *DependentResourceManager) setPolicyDependentGVRs(name string, gvr
 			if policies, ok := manager.gvrToPolicies[gvr]; ok {
 				policies.Insert(name)
 			} else {
-				manager.gvrToPolicies[gvr] = sets.NewString(name)
+				manager.gvrToPolicies[gvr] = sets.New(name)
 			}
 		}
 	}
@@ -293,7 +293,7 @@ func (manager *DependentResourceManager) setLifecycleDependentResources(name str
 	for ref := range references {
 		if _, ok := currentReferences[ref]; !ok {
 			if lifecycles := manager.referencesToLifecycle[ref]; lifecycles == nil {
-				manager.referencesToLifecycle[ref] = sets.NewString(name)
+				manager.referencesToLifecycle[ref] = sets.New(name)
 			} else {
 				lifecycles.Insert(name)
 			}

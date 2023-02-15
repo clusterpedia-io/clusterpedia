@@ -14,7 +14,7 @@ func NewPressureQueue(keyFunc KeyFunc) *pressurequeue {
 	}
 
 	q := &pressurequeue{
-		processing: sets.NewString(),
+		processing: sets.Set[string]{},
 		items:      map[string]*Event{},
 		queue:      []string{},
 		keyFunc:    keyFunc,
@@ -27,7 +27,7 @@ type pressurequeue struct {
 	lock sync.RWMutex
 	cond sync.Cond
 
-	processing sets.String
+	processing sets.Set[string]
 	items      map[string]*Event
 	queue      []string
 	keyFunc    KeyFunc

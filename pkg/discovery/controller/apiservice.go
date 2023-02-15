@@ -112,7 +112,7 @@ func (c *APIServiceController) Start(stopCh <-chan struct{}) <-chan struct{} {
 
 func (c *APIServiceController) genInformer(stopCh <-chan struct{}) cache.SharedIndexInformer {
 	informer := informers.NewAPIServiceInformer(c.client, 0, nil)
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(_ interface{}) { c.trigger(stopCh) },
 		UpdateFunc: func(old, new interface{}) {
 			oldObj, oldOk := old.(*v1.APIService)
@@ -128,7 +128,10 @@ func (c *APIServiceController) genInformer(stopCh <-chan struct{}) cache.SharedI
 			c.trigger(stopCh)
 		},
 		DeleteFunc: func(_ interface{}) { c.trigger(stopCh) },
-	})
+	}); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
+
 	return informer
 }
 

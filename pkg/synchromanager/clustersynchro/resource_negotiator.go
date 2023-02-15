@@ -186,7 +186,7 @@ func negotiateSyncVersions(kind schema.GroupKind, wantVersions []string, support
 		return syncVersions, false, nil
 	}
 
-	wants := sets.NewString(wantVersions...)
+	wants := sets.New(wantVersions...)
 	if wants.Has("*") {
 		return supportedVersions, false, nil
 	}
@@ -212,13 +212,13 @@ type GroupResourceStatus struct {
 	sortedGRs []schema.GroupResource
 	resources map[schema.GroupResource]clusterv1alpha2.ClusterResourceStatus
 
-	versions       map[schema.GroupResource]sets.String
+	versions       map[schema.GroupResource]sets.Set[string]
 	syncConditions map[schema.GroupVersionResource]clusterv1alpha2.ClusterResourceSyncCondition
 }
 
 func NewGroupResourceStatus() *GroupResourceStatus {
 	return &GroupResourceStatus{
-		versions:       make(map[schema.GroupResource]sets.String),
+		versions:       make(map[schema.GroupResource]sets.Set[string]),
 		resources:      make(map[schema.GroupResource]clusterv1alpha2.ClusterResourceStatus),
 		syncConditions: make(map[schema.GroupVersionResource]clusterv1alpha2.ClusterResourceSyncCondition),
 	}
@@ -239,7 +239,7 @@ func (s *GroupResourceStatus) concurrentEnabled() bool {
 func (s *GroupResourceStatus) addResource(gr schema.GroupResource, kind string, namespaced bool) {
 	if _, ok := s.resources[gr]; !ok {
 		s.sortedGRs = append(s.sortedGRs, gr)
-		s.versions[gr] = sets.NewString()
+		s.versions[gr] = sets.Set[string]{}
 	}
 
 	s.resources[gr] = clusterv1alpha2.ClusterResourceStatus{
@@ -307,7 +307,7 @@ func (s *GroupResourceStatus) LoadGroupResourcesStatuses() []clusterv1alpha2.Clu
 			continue
 		}
 
-		for _, version := range s.versions[gr].List() {
+		for _, version := range sets.List(s.versions[gr]) {
 			resource.SyncConditions = append(resource.SyncConditions, s.syncConditions[gr.WithVersion(version)])
 		}
 
@@ -375,7 +375,7 @@ func (s *GroupResourceStatus) Merge(other *GroupResourceStatus) GVRSet {
 			s.sortedGRs = append(s.sortedGRs, gr)
 			s.resources[gr] = resource
 
-			s.versions[gr] = sets.NewString(other.versions[gr].UnsortedList()...)
+			s.versions[gr] = sets.New(other.versions[gr].UnsortedList()...)
 			for version := range other.versions[gr] {
 				gvr := gr.WithVersion(version)
 				s.syncConditions[gvr] = other.syncConditions[gvr]
