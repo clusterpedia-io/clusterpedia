@@ -23,7 +23,6 @@ type Object interface {
 }
 
 type ObjectList interface {
-	Select(db *gorm.DB) *gorm.DB
 	From(db *gorm.DB) error
 	Items() []Object
 }
@@ -177,10 +176,6 @@ func (bytes Bytes) GetResourceType() ResourceType {
 
 type ResourceList []Resource
 
-func (list ResourceList) Select(query *gorm.DB) *gorm.DB {
-	return query
-}
-
 func (list *ResourceList) From(db *gorm.DB) error {
 	resources := []Resource{}
 	if result := db.Find(&resources); result.Error != nil {
@@ -200,17 +195,15 @@ func (list ResourceList) Items() []Object {
 
 type ResourceMetadataList []ResourceMetadata
 
-func (list ResourceMetadataList) Select(query *gorm.DB) *gorm.DB {
-	switch query.Dialector.Name() {
-	case "mysql":
-		return query.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
-	case "postgres":
-		return query.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
-	}
-	panic("storage: only support mysql or postgres")
-}
-
 func (list *ResourceMetadataList) From(db *gorm.DB) error {
+	switch db.Dialector.Name() {
+	case "mysql":
+		db = db.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
+	case "postgres":
+		db = db.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
+	default:
+		panic("storage: only support mysql or postgres")
+	}
 	metadatas := []ResourceMetadata{}
 	if result := db.Find(&metadatas); result.Error != nil {
 		return result.Error
@@ -229,12 +222,8 @@ func (list ResourceMetadataList) Items() []Object {
 
 type BytesList []Bytes
 
-func (list BytesList) Select(query *gorm.DB) *gorm.DB {
-	return query.Select("object")
-}
-
 func (list *BytesList) From(db *gorm.DB) error {
-	if result := db.Find(list); result.Error != nil {
+	if result := db.Select("object").Find(list); result.Error != nil {
 		return result.Error
 	}
 	return nil
