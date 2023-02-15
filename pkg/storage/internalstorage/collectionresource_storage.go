@@ -66,7 +66,7 @@ func (s *CollectionResourceStorage) query(ctx context.Context, opts *internal.Li
 
 	query := s.db.WithContext(ctx).Model(&Resource{})
 	if s.typesQuery != nil {
-		return result.Select(query).Where(s.typesQuery), result, nil
+		return query.Where(s.typesQuery), result, nil
 	}
 
 	// The `URLQueryGroups` and `URLQueryResources` only works on *Any Collection Resource*,
@@ -80,7 +80,7 @@ func (s *CollectionResourceStorage) query(ctx context.Context, opts *internal.Li
 	}
 
 	if all {
-		return result.Select(query), result, nil
+		return query, result, nil
 	}
 
 	typesQuery := s.db
@@ -94,7 +94,7 @@ func (s *CollectionResourceStorage) query(ctx context.Context, opts *internal.Li
 		}
 		typesQuery = typesQuery.Or(where)
 	}
-	return result.Select(query).Where(typesQuery), result, nil
+	return query.Where(typesQuery), result, nil
 }
 
 func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error) {

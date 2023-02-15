@@ -250,8 +250,8 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 			appsv1.SchemeGroupVersion.WithResource("deployments"),
 			&internal.ListOptions{},
 			expected{
-				`SELECT "object" FROM "resources" WHERE "group" = 'apps' AND "resource" = 'deployments' AND "version" = 'v1'`,
-				"SELECT `object` FROM `resources` WHERE `group` = 'apps' AND `resource` = 'deployments' AND `version` = 'v1'",
+				`SELECT * FROM "resources" WHERE "group" = 'apps' AND "resource" = 'deployments' AND "version" = 'v1'`,
+				"SELECT * FROM `resources` WHERE `group` = 'apps' AND `resource` = 'deployments' AND `version` = 'v1'",
 				"",
 			},
 		},
