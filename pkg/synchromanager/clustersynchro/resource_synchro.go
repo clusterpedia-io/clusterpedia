@@ -387,31 +387,10 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		if err == nil {
 			callback(obj)
 
-			if synchro.isRunnableForStorage.Load() {
-				return
+			if !synchro.isRunnableForStorage.Load() && synchro.queue.Len() == 0 {
+				// Start the informer after processing the data in the queue to ensure that storage is up and running for a period of time.
+				synchro.setRunnableForStorage()
 			}
-
-			// Start the informer after processing the data in the queue to ensure that storage is up and running for a period of time.
-			if synchro.queue.Len() != 0 {
-				return
-			}
-
-			synchro.isRunnableForStorage.Store(true)
-			func() {
-				synchro.forStorageLock.Lock()
-				defer synchro.forStorageLock.Unlock()
-
-				select {
-				case <-synchro.runnableForStorage:
-				default:
-					close(synchro.runnableForStorage)
-				}
-				select {
-				case <-synchro.stopForStorage:
-					synchro.stopForStorage = make(chan struct{})
-				default:
-				}
-			}()
 			return
 		}
 
@@ -421,6 +400,12 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		if !storage.IsRecoverableException(err) {
 			klog.ErrorS(err, "Failed to storage resource", "cluster", synchro.cluster,
 				"action", event.Action, "resource", synchro.storageResource, "key", key)
+
+			if !synchro.isRunnableForStorage.Load() && synchro.queue.Len() == 0 {
+				// if the storage returns an error on stopForStorage that cannot be recovered
+				// and the len(queue) is empty, start the informer
+				synchro.setRunnableForStorage()
+			}
 			return
 		}
 
@@ -431,24 +416,8 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		var retainInQueue = 5
 		if i >= 5 && synchro.queue.Len() > retainInQueue {
 			if synchro.isRunnableForStorage.Load() {
-				synchro.isRunnableForStorage.Store(false)
-				func() {
-					synchro.forStorageLock.Lock()
-					defer synchro.forStorageLock.Unlock()
-
-					select {
-					case <-synchro.runnableForStorage:
-						synchro.runnableForStorage = make(chan struct{})
-					default:
-					}
-					select {
-					case <-synchro.stopForStorage:
-					default:
-						close(synchro.stopForStorage)
-					}
-				}()
+				synchro.setStopForStorage()
 			}
-
 			synchro.queue.DiscardAndRetain(retainInQueue)
 
 			// If the data in the queue is discarded,
@@ -462,6 +431,42 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		//	klog.ErrorS(err, "will retry sync storage resource", "num", i, "cluster", synchro.cluster,
 		//		"action", event.Action, "resource", synchro.storageResource, "key", key)
 		time.Sleep(2 * time.Second)
+	}
+}
+
+func (synchro *ResourceSynchro) setRunnableForStorage() {
+	synchro.isRunnableForStorage.Store(true)
+
+	synchro.forStorageLock.Lock()
+	defer synchro.forStorageLock.Unlock()
+
+	select {
+	case <-synchro.runnableForStorage:
+	default:
+		close(synchro.runnableForStorage)
+	}
+	select {
+	case <-synchro.stopForStorage:
+		synchro.stopForStorage = make(chan struct{})
+	default:
+	}
+}
+
+func (synchro *ResourceSynchro) setStopForStorage() {
+	synchro.isRunnableForStorage.Store(false)
+
+	synchro.forStorageLock.Lock()
+	defer synchro.forStorageLock.Unlock()
+
+	select {
+	case <-synchro.runnableForStorage:
+		synchro.runnableForStorage = make(chan struct{})
+	default:
+	}
+	select {
+	case <-synchro.stopForStorage:
+	default:
+		close(synchro.stopForStorage)
 	}
 }
 
