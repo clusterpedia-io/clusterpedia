@@ -3,6 +3,7 @@ package kubeapiserver
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -123,7 +124,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	genericserver.Handler.NonGoRestfulMux.Handle("/apis", discoveryManager)
 
 	resourceHandler := &ResourceHandler{
-		minRequestTimeout: c.GenericConfig.RequestTimeout,
+		minRequestTimeout: time.Duration(c.GenericConfig.MinRequestTimeout) * time.Second,
 
 		delegate:      delegate,
 		rest:          restManager,
