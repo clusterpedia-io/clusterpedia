@@ -93,9 +93,14 @@ function build_component() {
         cd ${CLUSTERPEDIA_REPO} && source ./ldflags.sh
     fi
 
+    if [[ "${GOOS}" == "linux" ]]; then
+        # https://github.com/mattn/go-sqlite3#linux
+        LDFLAGS+=" -extldflags -static"
+    fi
+
     cd $TMP_CLUSTERPEDIA
     GOPATH=$TMP_GOPATH GO111MODULE=off CGO_ENABLED=1 CC_FOR_TARGET=$CC_FOR_TARGET CC=$CC \
-        go build -ldflags "${LDFLAGS}" -o $OUTPUT_DIR/bin/$1 ./cmd/$1
+        go build -tags "json1 $GOOS" -ldflags "${LDFLAGS}" -o $OUTPUT_DIR/bin/$1 ./cmd/$1
 }
 
 cleanup

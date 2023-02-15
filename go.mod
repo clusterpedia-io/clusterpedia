@@ -18,6 +18,7 @@ require (
 	gorm.io/datatypes v1.0.7
 	gorm.io/driver/mysql v1.4.4
 	gorm.io/driver/postgres v1.4.5
+	gorm.io/driver/sqlite v1.4.4
 	gorm.io/gorm v1.24.1
 	k8s.io/api v0.25.2
 	k8s.io/apiextensions-apiserver v0.25.2
@@ -87,6 +88,7 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.0 // indirect

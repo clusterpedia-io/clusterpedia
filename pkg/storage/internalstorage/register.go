@@ -13,6 +13,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
+	gsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -61,6 +62,12 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 
 		cfg.addPostgresErrorCodes()
 		dialector = gpostgres.New(gpostgres.Config{Conn: stdlib.OpenDB(*pgconfig)})
+	case "sqlite", "sqlite3":
+		dsn, err := cfg.genSQLiteDSN()
+		if err != nil {
+			return nil, err
+		}
+		dialector = gsqlite.Open(dsn)
 	default:
 		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)
 	}
