@@ -292,7 +292,7 @@ func (c *Controller) reconcileLifecycle(lifecycle *policyv1alpha1.PediaClusterLi
 		meta.SetStatusCondition(&lifecycle.Status.Conditions, *condition)
 	}()
 
-	ref, err := c.checkOwenrController(lifecycle)
+	ref, err := c.checkOwnerController(lifecycle)
 	if err != nil || ref == nil {
 		condition.Reason = "OrphanLifecycle"
 		condition.Message = err.Error()
@@ -475,7 +475,7 @@ func (c *Controller) reconcileLifecycle(lifecycle *policyv1alpha1.PediaClusterLi
 	return NoRequeueResult
 }
 
-func (c *Controller) checkOwenrController(lifecycle *policyv1alpha1.PediaClusterLifecycle) (*metav1.OwnerReference, error) {
+func (c *Controller) checkOwnerController(lifecycle *policyv1alpha1.PediaClusterLifecycle) (*metav1.OwnerReference, error) {
 	ref := metav1.GetControllerOfNoCopy(lifecycle.GetObjectMeta())
 	if ref == nil {
 		return nil, errors.New("not found owner controller")
