@@ -60,6 +60,9 @@ type ResourceSynchro struct {
 	cancel    context.CancelFunc
 	closer    chan struct{}
 	closed    chan struct{}
+
+	// for debug
+	runningStage string
 }
 
 func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
@@ -112,15 +115,20 @@ func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
 
 	// make `synchro.Start` runable
 	close(synchro.stopped)
+
+	synchro.runningStage = "running"
 	wait.Until(func() {
 		synchro.processResources()
 	}, time.Second, synchro.closer)
+	synchro.runningStage = "processorStop"
 
 	synchro.startlock.Lock()
+	synchro.runningStage = "waitStop"
 	<-synchro.stopped
 	synchro.startlock.Unlock()
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "", "")
+	synchro.runningStage = "shutdown"
 }
 
 func (synchro *ResourceSynchro) Close() <-chan struct{} {
