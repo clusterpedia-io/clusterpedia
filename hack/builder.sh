@@ -78,7 +78,7 @@ if [[ "${GOOS}" == "linux" && "${GOARCH}" != "${HOSTARCH}" ]]; then
     case ${GOARCH} in
         amd64)
             CC_FOR_TARGET=${CC_FOR_TARGET:-"gcc-x86-64-linux-gnu"}
-            CC=${CC:-"x86-64-linux-gnu-gcc"}
+            CC=${CC:-"x86_64-linux-gnu-gcc"}
         ;;
         arm64)
             CC_FOR_TARGET=${CC_FOR_TARGET:-"gcc-aarch64-linux-gnu"}
