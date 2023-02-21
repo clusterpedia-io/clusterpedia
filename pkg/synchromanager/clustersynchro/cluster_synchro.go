@@ -189,7 +189,7 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 				klog.ErrorS(err, "Failed to update cluster conditions and sync resources status", "cluster", s.name, "conditions", status.Conditions)
 			}
 		}
-		klog.InfoS("Cluster Synchro is shutdown", "cluster", s.name)
+		klog.InfoS("cluster synchro is shutdown", "cluster", s.name)
 	}()
 
 	select {
@@ -202,8 +202,43 @@ func (s *ClusterSynchro) Run(shutdown <-chan struct{}) {
 
 func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 	s.closeOnce.Do(func() {
-		klog.InfoS("Cluster Synchro is shutdowning...", "cluster", s.name)
+		klog.InfoS("cluster synchro is shutdowning...", "cluster", s.name)
 		close(s.closer)
+
+		go func() {
+			timer := time.NewTicker(15 * time.Second)
+			for {
+				select {
+				case <-timer.C:
+				case <-s.closed:
+					return
+				}
+
+				shutdownCount := 0
+				statuses := make(map[string][]string)
+				s.storageResourceSynchros.Range(func(key, value interface{}) bool {
+					synchro := value.(*ResourceSynchro)
+					status := synchro.Status()
+					if status.Status == clusterv1alpha2.ResourceSyncStatusStop && status.Reason == "" {
+						shutdownCount++
+						return true
+					}
+
+					gvr := key.(schema.GroupVersionResource)
+					sr := fmt.Sprintf("%s,%s,%s", status.Status, status.Reason, synchro.runningStage)
+					msg := fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
+					statuses[sr] = append(statuses[sr], msg)
+					return true
+				})
+
+				select {
+				case <-s.closed:
+					return
+				default:
+					klog.Warningf("Cluster Shutdown Block, cluster=%s, shutdown synchro: %d, block synchro: %+v\n", s.name, shutdownCount, statuses)
+				}
+			}
+		}()
 
 		s.waitGroup.Wait()
 
@@ -377,8 +412,8 @@ func (s *ClusterSynchro) refreshSyncResources() {
 }
 
 func (s *ClusterSynchro) runner() {
-	klog.InfoS("Cluster Synchro Runner is running...", "cluster", s.name)
-	defer klog.InfoS("Cluster Synchro Runner is stopped", "cluster", s.name)
+	klog.InfoS("cluster synchro runner is running...", "cluster", s.name)
+	defer klog.InfoS("cluster synchro runner is stopped", "cluster", s.name)
 
 	for {
 		select {
