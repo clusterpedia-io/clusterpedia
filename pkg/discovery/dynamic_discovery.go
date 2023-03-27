@@ -118,15 +118,15 @@ func NewDynamicDiscoveryManager(name string, config *rest.Config) (*DynamicDisco
 		return nil, fmt.Errorf("not match crd version")
 	}
 
-	manager.crdController, err = controller.NewCRDController(name, config, crdVersions[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to create crd controller: %w", err)
-	}
-	manager.crdController.AddEventHandler(controller.CRDEventHandlerFuncs{
+	manager.crdController, err = controller.NewCRDController(name, config, crdVersions[0], controller.CRDEventHandlerFuncs{
+		Name:                manager.name,
 		AddFunc:             manager.updateCustomResource,
 		UpdateFuncOnlyNewer: manager.updateCustomResource,
 		DeleteFunc:          manager.removeCustomResource,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create crd controller: %w", err)
+	}
 
 	manager.apiServiceController, err = controller.NewAPIServiceController(name, config, manager.reconcileAPIServices)
 	if err != nil {
