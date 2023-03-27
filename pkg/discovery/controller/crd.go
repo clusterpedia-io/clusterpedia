@@ -1,19 +1,24 @@
 package controller
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 
+	internal "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	v1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	v1informer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions/apiextensions/v1"
-	v1beta1informer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions/apiextensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 )
 
 type CRDController struct {
@@ -25,12 +30,13 @@ type CRDController struct {
 	rebuildCh chan struct{}
 
 	lastdone chan struct{}
-	informer cache.SharedIndexInformer
-	handlers []cache.ResourceEventHandler
-	builder  func() cache.SharedIndexInformer
+	store    cache.Store
+	informer cache.Controller
+	handler  cache.ResourceEventHandler
+	builder  func() cache.Controller
 }
 
-func NewCRDController(cluster string, config *rest.Config, version string) (*CRDController, error) {
+func NewCRDController(cluster string, config *rest.Config, version string, handler CRDEventHandlerFuncs) (*CRDController, error) {
 	client, err := clientset.NewForConfig(config)
 	if err != nil {
 		return nil, err
@@ -40,6 +46,8 @@ func NewCRDController(cluster string, config *rest.Config, version string) (*CRD
 		cluster: cluster,
 		client:  client,
 
+		handler:   handler,
+		store:     cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc),
 		rebuildCh: make(chan struct{}, 1),
 		lastdone:  make(chan struct{}),
 	}
@@ -48,16 +56,6 @@ func NewCRDController(cluster string, config *rest.Config, version string) (*CRD
 		return nil, err
 	}
 	return controller, nil
-}
-
-func (c *CRDController) AddEventHandler(handler cache.ResourceEventHandler) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.handlers = append(c.handlers, handler)
-	if c.informer != nil {
-		c.informer.AddEventHandler(handler)
-	}
 }
 
 func (c *CRDController) Start(stopCh <-chan struct{}) <-chan struct{} {
@@ -120,9 +118,6 @@ func (c *CRDController) Start(stopCh <-chan struct{}) <-chan struct{} {
 			}()
 
 			informer := c.builder()
-			for _, handler := range c.handlers {
-				informer.AddEventHandler(handler)
-			}
 			c.informer = informer
 
 			c.lock.Unlock()
@@ -147,15 +142,41 @@ func (c *CRDController) SetVersion(version string) error {
 		return nil
 	}
 
-	var builder func() cache.SharedIndexInformer
+	var builder func() cache.Controller
 	switch version {
 	case v1.SchemeGroupVersion.Version:
-		builder = func() cache.SharedIndexInformer {
-			return v1informer.NewCustomResourceDefinitionInformer(c.client, 0, nil)
+		builder = func() cache.Controller {
+			return informer.NewInformer(
+				&cache.ListWatch{
+					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+						return c.client.ApiextensionsV1().CustomResourceDefinitions().List(context.TODO(), options)
+					},
+					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+						return c.client.ApiextensionsV1().CustomResourceDefinitions().Watch(context.TODO(), options)
+					},
+				},
+				&v1.CustomResourceDefinition{},
+				c.store,
+				0,
+				c.handler,
+				nil)
 		}
 	case v1beta1.SchemeGroupVersion.Version:
-		builder = func() cache.SharedIndexInformer {
-			return v1beta1informer.NewCustomResourceDefinitionInformer(c.client, 0, nil)
+		builder = func() cache.Controller {
+			return informer.NewInformer(
+				&cache.ListWatch{
+					ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+						return c.client.ApiextensionsV1beta1().CustomResourceDefinitions().List(context.TODO(), options)
+					},
+					WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+						return c.client.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(context.TODO(), options)
+					},
+				},
+				&v1beta1.CustomResourceDefinition{},
+				c.store,
+				0,
+				c.handler,
+				convertV1beta1ToV1)
 		}
 	default:
 		return fmt.Errorf("CRD Version %s is not supported", version)
@@ -188,7 +209,21 @@ func (c *CRDController) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+func convertV1beta1ToV1(obj interface{}) (interface{}, error) {
+	if _, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		return obj, nil
+	}
+
+	internal, err := scheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), internal.SchemeGroupVersion)
+	if err != nil {
+		return nil, err
+	}
+	return scheme.LegacyResourceScheme.ConvertToVersion(internal, v1.SchemeGroupVersion)
+}
+
 type CRDEventHandlerFuncs struct {
+	Name string
+
 	AddFunc func(obj *v1.CustomResourceDefinition)
 
 	UpdateFunc          func(older *v1.CustomResourceDefinition, newer *v1.CustomResourceDefinition)
@@ -202,12 +237,9 @@ func (handler CRDEventHandlerFuncs) OnAdd(obj interface{}) {
 	if handler.AddFunc == nil {
 		return
 	}
-	runtimeobj, err := scheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), v1.SchemeGroupVersion)
-	if err != nil {
-		return
-	}
-	crd, ok := runtimeobj.(*v1.CustomResourceDefinition)
+	crd, ok := obj.(*v1.CustomResourceDefinition)
 	if !ok {
+		klog.ErrorS(errors.New("CRDEventHandler OnAdd: newer obj is not *v1.CustomResourceDefinition"), "cluster", handler.Name)
 		return
 	}
 	handler.AddFunc(crd)
@@ -218,22 +250,16 @@ func (handler CRDEventHandlerFuncs) OnUpdate(older, newer interface{}) {
 		return
 	}
 
-	newerObj, err := scheme.LegacyResourceScheme.ConvertToVersion(newer.(runtime.Object), v1.SchemeGroupVersion)
-	if err != nil {
-		return
-	}
-	newerCRD, ok := newerObj.(*v1.CustomResourceDefinition)
+	newerCRD, ok := newer.(*v1.CustomResourceDefinition)
 	if !ok {
+		klog.ErrorS(errors.New("CRDEventHandler OnUpdate: newer obj is not *v1.CustomResourceDefinition"), "cluster", handler.Name)
 		return
 	}
 
 	if handler.UpdateFunc != nil {
-		olderObj, err := scheme.LegacyResourceScheme.ConvertToVersion(older.(runtime.Object), v1.SchemeGroupVersion)
-		if err != nil {
-			return
-		}
-		olderCRD, ok := olderObj.(*v1.CustomResourceDefinition)
+		olderCRD, ok := older.(*v1.CustomResourceDefinition)
 		if !ok {
+			klog.ErrorS(errors.New("CRDEventHandler OnUpdate: older obj is not *v1.CustomResourceDefinition"), "cluster", handler.Name)
 			return
 		}
 
@@ -254,17 +280,9 @@ func (handler CRDEventHandlerFuncs) OnDelete(obj interface{}) {
 		obj = tombstone.Obj
 	}
 
-	runtimeobj, ok := obj.(runtime.Object)
+	crd, ok := obj.(*v1.CustomResourceDefinition)
 	if !ok {
-		return
-	}
-	runtimeobj, err := scheme.LegacyResourceScheme.ConvertToVersion(runtimeobj, v1.SchemeGroupVersion)
-	if err != nil {
-		// klog.ErrorS(errors.New("object that is not expected"), "cluster", c.cluster, "object", obj)
-		return
-	}
-	crd, ok := runtimeobj.(*v1.CustomResourceDefinition)
-	if !ok {
+		klog.ErrorS(errors.New("CRDEventHandler OnDelete: obj is not *v1.CustomResourceDefinition"), "cluster", handler.Name)
 		return
 	}
 	handler.DeleteFunc(crd)
