@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -463,10 +464,11 @@ func (info RESTResourceInfo) Empty() bool {
 }
 
 var legacyResourcesWithDefaultTableConvertor = map[schema.GroupResource]struct{}{
-	apicore.Resource("limitranges"):              {},
-	rbac.Resource("roles"):                       {},
-	rbac.Resource("clusterroles"):                {},
-	apisstorage.Resource("csistoragecapacities"): {},
+	apicore.Resource("limitranges"):                     {},
+	rbac.Resource("roles"):                              {},
+	rbac.Resource("clusterroles"):                       {},
+	apisstorage.Resource("csistoragecapacities"):        {},
+	apiextensions.Resource("customresourcedefinitions"): {},
 }
 
 func GetTableConvertor(gr schema.GroupResource) rest.TableConvertor {
