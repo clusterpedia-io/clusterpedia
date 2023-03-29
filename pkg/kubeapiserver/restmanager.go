@@ -480,5 +480,5 @@ func GetTableConvertor(gr schema.GroupResource) rest.TableConvertor {
 		return printers.NewDefaultTableConvertor(gr)
 	}
 
-	return printerstorage.TableConvertor{TableGenerator: printers.NewClusterTableGenerator().With(printersinternal.AddHandlers)}
+	return printerstorage.TableConvertor{TableGenerator: printers.NewClusterTableGenerator().With(printersinternal.AddHandlers, printers.AddAPIServiceHandler)}
 }

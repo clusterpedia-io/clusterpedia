@@ -674,6 +674,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextension
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
+k8s.io/apimachinery/pkg/api/meta/table
 k8s.io/apimachinery/pkg/api/resource
 k8s.io/apimachinery/pkg/api/validation
 k8s.io/apimachinery/pkg/api/validation/path
@@ -1174,6 +1175,7 @@ k8s.io/klog/v2/internal/severity
 # k8s.io/kube-aggregator v0.0.0 => k8s.io/kube-aggregator v0.25.2
 ## explicit; go 1.19
 k8s.io/kube-aggregator/pkg/apis/apiregistration
+k8s.io/kube-aggregator/pkg/apis/apiregistration/install
 k8s.io/kube-aggregator/pkg/apis/apiregistration/v1
 k8s.io/kube-aggregator/pkg/apis/apiregistration/v1/helper
 k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1
