@@ -6,7 +6,7 @@ ARG BIN_NAME
 ARG TARGETARCH
 RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
 
-FROM alpine:3.17.2
+FROM alpine:3.17.3
 RUN apk add --no-cache gcompat
 
 ARG BIN_NAME
