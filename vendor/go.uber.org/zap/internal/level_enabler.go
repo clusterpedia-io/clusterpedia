@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Uber Technologies, Inc.
+// Copyright (c) 2022 Uber Technologies, Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,49 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package exit provides stubs so that unit tests can exercise code that calls
-// os.Exit(1).
-package exit
+package internal
 
-import "os"
+import "go.uber.org/zap/zapcore"
 
-var _exit = os.Exit
+// LeveledEnabler is an interface satisfied by LevelEnablers that are able to
+// report their own level.
+//
+// This interface is defined to use more conveniently in tests and non-zapcore
+// packages.
+// This cannot be imported from zapcore because of the cyclic dependency.
+type LeveledEnabler interface {
+	zapcore.LevelEnabler
 
-// With terminates the process by calling os.Exit(code). If the package is
-// stubbed, it instead records a call in the testing spy.
-func With(code int) {
-	_exit(code)
-}
-
-// A StubbedExit is a testing fake for os.Exit.
-type StubbedExit struct {
-	Exited bool
-	Code   int
-	prev   func(code int)
-}
-
-// Stub substitutes a fake for the call to os.Exit(1).
-func Stub() *StubbedExit {
-	s := &StubbedExit{prev: _exit}
-	_exit = s.exit
-	return s
-}
-
-// WithStub runs the supplied function with Exit stubbed. It returns the stub
-// used, so that users can test whether the process would have crashed.
-func WithStub(f func()) *StubbedExit {
-	s := Stub()
-	defer s.Unstub()
-	f()
-	return s
-}
-
-// Unstub restores the previous exit function.
-func (se *StubbedExit) Unstub() {
-	_exit = se.prev
-}
-
-func (se *StubbedExit) exit(code int) {
-	se.Exited = true
-	se.Code = code
+	Level() zapcore.Level
 }
