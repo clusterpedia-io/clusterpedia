@@ -77,21 +77,25 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *
 		synchros: make(map[string]*clustersynchro.ClusterSynchro),
 	}
 
-	clusterinformer.Informer().AddEventHandler(
+	if _, err := clusterinformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    manager.addCluster,
 			UpdateFunc: manager.updateCluster,
 			DeleteFunc: manager.deleteCluster,
 		},
-	)
+	); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
 
-	clusterSyncResourcesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := clusterSyncResourcesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: manager.handleClusterSyncResources,
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			manager.handleClusterSyncResources(newObj)
 		},
 		DeleteFunc: manager.handleClusterSyncResources,
-	})
+	}); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
 
 	return manager
 }

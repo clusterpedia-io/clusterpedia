@@ -67,7 +67,7 @@ func NewController(
 		dependentManager: dependentManager,
 	}
 
-	policyInformer.Informer().AddEventHandler(
+	if _, err := policyInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: controller.enqueue,
 			UpdateFunc: func(older, newer interface{}) {
@@ -80,14 +80,20 @@ func NewController(
 			},
 			DeleteFunc: controller.enqueue,
 		},
-	)
-	lifecycleInformer.Informer().AddEventHandler(
+	); err != nil {
+		return nil, err
+	}
+
+	if _, err := lifecycleInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    controller.addLifecycle,
 			UpdateFunc: controller.updateLifecycle,
 			DeleteFunc: controller.deleteLifecycle,
 		},
-	)
+	); err != nil {
+		return nil, err
+	}
+
 	if err := lifecycleInformer.Informer().AddIndexers(
 		cache.Indexers{ownerPolicyIndex: ownerPolicyIndexFunc},
 	); err != nil {

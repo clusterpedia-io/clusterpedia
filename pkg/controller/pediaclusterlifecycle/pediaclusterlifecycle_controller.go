@@ -67,7 +67,7 @@ func NewController(
 		pediaClusterDecoder: scheme.Codecs.UniversalDecoder(clusterv1alpha2.SchemeGroupVersion),
 	}
 
-	lifecycleInformer.Informer().AddEventHandler(
+	if _, err := lifecycleInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: controller.enqueue,
 			UpdateFunc: func(older, newer interface{}) {
@@ -82,8 +82,11 @@ func NewController(
 
 			DeleteFunc: controller.enqueue,
 		},
-	)
-	pediaclusterInformer.Informer().AddEventHandler(
+	); err != nil {
+		return nil, err
+	}
+
+	if _, err := pediaclusterInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: controller.enqueueByPediaCluster,
 			UpdateFunc: func(older, newer interface{}) {
@@ -104,7 +107,10 @@ func NewController(
 
 			DeleteFunc: controller.enqueueByPediaCluster,
 		},
-	)
+	); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
+
 	return controller, nil
 }
 

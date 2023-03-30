@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	clusterinformer "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/cluster/v1alpha2"
@@ -31,7 +32,7 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 		clusterresources: make(map[string]ResourceInfoMap),
 	}
 
-	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			controller.updateClusterResources(obj.(*clusterv1alpha2.PediaCluster))
 		},
@@ -52,7 +53,10 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 
 			controller.removeCluster(clusterName)
 		},
-	})
+	}); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
+
 	return controller
 }
 
@@ -64,7 +68,7 @@ func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alp
 				continue
 			}
 
-			versions := sets.NewString()
+			versions := sets.Set[string]{}
 			for _, cond := range resource.SyncConditions {
 				versions.Insert(cond.Version)
 			}
@@ -101,7 +105,7 @@ func (c *ClusterResourceController) removeCluster(name string) {
 type resourceInfo struct {
 	Namespaced bool
 	Kind       string
-	Versions   sets.String
+	Versions   sets.Set[string]
 }
 
 type ResourceInfoMap map[schema.GroupResource]resourceInfo

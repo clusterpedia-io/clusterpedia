@@ -49,7 +49,7 @@ func (c *DynamicDiscoveryManager) doMutationHandler() {
 
 func (c *DynamicDiscoveryManager) reconcileAPIServices(apiservices []*apiregistrationv1api.APIService) {
 	groupVersions := make(map[string][]string)
-	aggregatorGroups := sets.NewString()
+	aggregatorGroups := sets.Set[string]{}
 
 	apiServicesByGroup := apiregistrationv1helper.SortedByGroupAndVersion(apiservices)
 	for _, groupServices := range apiServicesByGroup {
@@ -93,7 +93,7 @@ func (c *DynamicDiscoveryManager) reconcileAPIServices(apiservices []*apiregistr
 	c.setGroupVersions(groupVersions, aggregatorGroups)
 }
 
-func (c *DynamicDiscoveryManager) setGroupVersions(groupVersions map[string][]string, aggregatorGroups sets.String) {
+func (c *DynamicDiscoveryManager) setGroupVersions(groupVersions map[string][]string, aggregatorGroups sets.Set[string]) {
 	var updated bool
 	defer func() {
 		if updated {
@@ -109,8 +109,8 @@ func (c *DynamicDiscoveryManager) setGroupVersions(groupVersions map[string][]st
 		return
 	}
 
-	deletedGroups := sets.NewString()
-	changedGroups := sets.NewString()
+	deletedGroups := sets.Set[string]{}
+	changedGroups := sets.Set[string]{}
 	for group := range groupVersions {
 		changedGroups.Insert(group)
 	}
@@ -156,7 +156,7 @@ func (c *DynamicDiscoveryManager) setGroupVersions(groupVersions map[string][]st
 	}
 }
 
-func (c *DynamicDiscoveryManager) refetchGroupsLocked(groups sets.String) (updated bool, failedResources map[schema.GroupVersion]error) {
+func (c *DynamicDiscoveryManager) refetchGroupsLocked(groups sets.Set[string]) (updated bool, failedResources map[schema.GroupVersion]error) {
 	if len(groups) == 0 {
 		return false, nil
 	}
@@ -182,7 +182,7 @@ func (c *DynamicDiscoveryManager) refetchGroupsLocked(groups sets.String) (updat
 	resources, failedResources := fetchGroupVersionResources(c.discovery, apiGroupList)
 
 	apiResources := make(map[schema.GroupVersionResource]metav1.APIResource)
-	resourceVersions := make(map[schema.GroupResource]sets.String)
+	resourceVersions := make(map[schema.GroupResource]sets.Set[string])
 	for groupVersion, apiResourceList := range resources {
 		for _, apiResource := range apiResourceList.APIResources {
 			if strings.Contains(apiResource.Name, "/") {
@@ -192,7 +192,7 @@ func (c *DynamicDiscoveryManager) refetchGroupsLocked(groups sets.String) (updat
 			gvr := groupVersion.WithResource(apiResource.Name)
 			apiResources[gvr] = apiResource
 			if versions := resourceVersions[gvr.GroupResource()]; versions == nil {
-				resourceVersions[gvr.GroupResource()] = sets.NewString(gvr.Version)
+				resourceVersions[gvr.GroupResource()] = sets.New(gvr.Version)
 			} else {
 				versions.Insert(gvr.Version)
 			}
@@ -263,7 +263,7 @@ func (c *DynamicDiscoveryManager) refetchAllGroups() map[schema.GroupVersion]err
 }
 
 func (c *DynamicDiscoveryManager) refetchAllGroupsLocked() (bool, map[schema.GroupVersion]error) {
-	groups := sets.String(make(map[string]sets.Empty, len(c.groupVersions)))
+	groups := sets.Set[string](make(map[string]sets.Empty, len(c.groupVersions)))
 	for group := range c.groupVersions {
 		// custom resources are controllerd by CustomResourceCache
 		if c.customResourceGroups.Has(group) {
@@ -412,7 +412,7 @@ func (c *DynamicDiscoveryManager) GetAPIResourceAndVersions(resource schema.Grou
 		refetchFunc = func() bool {
 			// TODO(iceber): Add limit on fetching aggreegator groups
 			// For example, the same group can only be fetched once in 3 minutes and will be fetched again after 3 minutes
-			updated, _ := c.refetchGroupsLocked(sets.NewString(resource.Group))
+			updated, _ := c.refetchGroupsLocked(sets.New(resource.Group))
 			return updated
 		}
 	} else if _, ok := c.groupVersions[resource.Group]; ok {
@@ -579,6 +579,6 @@ func fetchGroupVersionResources(d discovery.DiscoveryInterface, apiGroups *metav
 }
 
 func HasListAndWatchVerbs(apiResource metav1.APIResource) bool {
-	verbs := sets.NewString(apiResource.Verbs...)
+	verbs := sets.New(apiResource.Verbs...)
 	return verbs.HasAll("list", "watch")
 }

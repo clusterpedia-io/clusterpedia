@@ -39,7 +39,7 @@ func (h *groupDiscoveryHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 	if keepUnversioned(pathParts[1]) {
 		serializer = h.stripVersionNegotiatedSerializer
 	}
-	responsewriters.WriteObjectNegotiated(serializer, negotiation.DefaultEndpointRestrictions, schema.GroupVersion{}, w, req, http.StatusOK, &group)
+	responsewriters.WriteObjectNegotiated(serializer, negotiation.DefaultEndpointRestrictions, schema.GroupVersion{}, w, req, http.StatusOK, &group, false)
 }
 
 type clusterGroupDiscoveryHandler struct {
@@ -114,7 +114,7 @@ func (h *clusterGroupDiscoveryHandler) removeClusterDiscoveryAPI(cluster string)
 }
 
 func (h *clusterGroupDiscoveryHandler) rebuildGlobalDiscoveryAPI(source map[string]metav1.APIGroup) {
-	groups := sets.NewString()
+	groups := sets.Set[string]{}
 	groupversions := make(map[schema.GroupVersion]struct{})
 	for _, handler := range h.handlers.Load().(map[string]*groupDiscoveryHandler) {
 		for group, apiGroup := range handler.groups {
@@ -134,7 +134,7 @@ func (h *clusterGroupDiscoveryHandler) rebuildGlobalDiscoveryAPI(source map[stri
 	})
 }
 
-func buildAPIGroups(groups sets.String, groupversions map[schema.GroupVersion]struct{}, source map[string]metav1.APIGroup) map[string]metav1.APIGroup {
+func buildAPIGroups(groups sets.Set[string], groupversions map[schema.GroupVersion]struct{}, source map[string]metav1.APIGroup) map[string]metav1.APIGroup {
 	unsortedVersions := make(map[string][]metav1.GroupVersionForDiscovery)
 	for gv := range groupversions {
 		if apiGroup := source[gv.Group]; len(apiGroup.Versions) == 0 {

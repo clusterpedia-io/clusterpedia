@@ -40,8 +40,8 @@ type DynamicDiscoveryManager struct {
 	cacheLock     sync.RWMutex
 	groupVersions map[string][]string
 
-	customResourceGroups sets.String
-	aggregatorGroups     sets.String
+	customResourceGroups sets.Set[string]
+	aggregatorGroups     sets.Set[string]
 
 	// only include kube resources and aggregator resources,
 	// not have custom resources
@@ -91,8 +91,8 @@ func NewDynamicDiscoveryManager(name string, config *rest.Config) (*DynamicDisco
 		discovery: discoveryClient,
 
 		groupVersions:        make(map[string][]string),
-		customResourceGroups: sets.NewString(),
-		aggregatorGroups:     sets.NewString(),
+		customResourceGroups: sets.Set[string]{},
+		aggregatorGroups:     sets.Set[string]{},
 
 		resourceVersions: make(map[schema.GroupResource][]string),
 		apiResources:     make(map[schema.GroupResource]metav1.APIResource),
