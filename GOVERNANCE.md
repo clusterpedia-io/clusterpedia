@@ -9,7 +9,7 @@ This doc outlines the various responsibilities of contributor roles in Clutserpe
 |Reviewer|Review contributions from other members|[OWNERS](#submodel-and-owners-files) file reviewer entry|
 |Approver|Contributions acceptance approval|[OWNERS](#submodel-and-owners-files) file approver entry|
 
-## Member
+## Members
 Members are continuously active contributors in the community. They can have issues and PRs assigned to them.
 Members are expected to remain active contributors to the community.
 
@@ -28,9 +28,9 @@ Members are expected to remain active contributors to the community.
 * Members can do `/lgtm` on open PRs.
 * They can be assigned to issues and PRs, and people can ask members for reviews with a `/cc @username.`
 
-**Note**: members who frequently contribute code are expected to proactively perform code reviews and work towards becoming a primary reviewer for the [submodel](#submodel-and-owners-files) that they are active in.
+**Note**: Members who frequently contribute code are expected to proactively perform code reviews and work towards becoming a primary reviewer for the [submodel](#submodel-and-owners-files) that they are active in.
 
-## Reviewer
+## Reviewers
 Reviewers are able to review code for quality and correctness on the [submodel](#submodel-and-owners-files).
 They are knowledgeable about both the codebase and software engineering principles.
 
@@ -40,7 +40,7 @@ Reviewer status is scoped to a part of the codebase.
 
 ### Requirements
 The following apply to the part of codebase for which one would be a reviewer in an [OWNERS](#submodel-and-owners-files) file (for repos using the bot).
-* **member for at least 1 months**
+* **member for at least 1 month**
 * **Primary reviewer for at least 3 PRs to the codebase**
 * **Reviewed or merged at least 10 substantial PRs to the codebase**
 * Knowledgeable about the codebase
@@ -60,7 +60,7 @@ The following apply to the part of codebase for which one would be a reviewer in
 * Assigned PRs to review related to [submodel](#submodel-and-owners-files) of expertise
 * Assigned test bugs related to [submodel](#submodel-and-owners-files) of expertise
 
-## Approver
+## Approvers
 Code approvers are able to both review and approve code contributions. While code review is focused on code quality and correctness, approval is focused on holistic acceptance of a contribution including: backwards / forwards compatibility, adhering to API and flag conventions, subtle performance and correctness issues, interactions with other parts of the system, etc.
 
 **Defined by**: approvers entry in an [OWNERS](#submodel-and-owners-files) file

@@ -113,7 +113,7 @@ Clusterpedia also provides a `Default Storage Layer` that can connect with **MyS
 ---
 
 ## Search Label and URL Query
-|Role| search label key|url query|
+|Role| Search label key|URL query|
 | -- | --------------- | ------- |
 |Filter cluster names|`search.clusterpedia.io/clusters`|`clusters`|
 |Filter namespaces|`search.clusterpedia.io/namespaces`|`namespaces`|
@@ -351,6 +351,6 @@ If you have any question, feel free to reach out to us in the following ways:
 Made with [contrib.rocks](https://contrib.rocks).
 
 ## License
-Copyright 2022 the Clusterpedia Authors. All rights reserved.
+Copyright 2023 the Clusterpedia Authors. All rights reserved.
 
 Licensed under the Apache License, Version 2.0.
