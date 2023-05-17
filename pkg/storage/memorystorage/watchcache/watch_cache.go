@@ -112,6 +112,19 @@ func GetKeyFunc(gvr schema.GroupVersionResource, isNamespaced bool) keyFunc {
 	return kc
 }
 
+func GetAttrsFunc(obj runtime.Object) (labels.Set, fields.Set, error) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return nil, nil, err
+	}
+	objLabels := accessor.GetLabels()
+	if objLabels == nil {
+		objLabels = make(map[string]string)
+	}
+	labelSet := labels.Set(objLabels)
+	return labelSet, nil, nil
+}
+
 func storeElementKey(obj interface{}) (string, error) {
 	elem, ok := obj.(*StoreElement)
 	if !ok {
@@ -153,7 +166,7 @@ func NewWatchCache(capacity int, gvr schema.GroupVersionResource, isNamespaced b
 	wc := &WatchCache{
 		capacity:     capacity,
 		KeyFunc:      GetKeyFunc(gvr, isNamespaced),
-		getAttrsFunc: nil,
+		getAttrsFunc: GetAttrsFunc,
 		cache:        make([]*watch.Event, capacity),
 		startIndex:   0,
 		endIndex:     0,
@@ -305,10 +318,24 @@ func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) ([]*Store
 					continue
 				}
 			}
+			if filterLabelSelector(opts.LabelSelector, se.Labels) {
+				continue
+			}
 			result = append(result, se)
 		}
 	}
 	return result, w.resourceVersion, nil
+}
+
+// filterLabelSelector returns true if the given label selector matches the given label set. else false.
+func filterLabelSelector(labelSelector labels.Selector, label labels.Set) bool {
+	if labelSelector != nil && label == nil {
+		return true
+	}
+	if labelSelector != nil && label != nil && !labelSelector.Matches(label) {
+		return true
+	}
+	return false
 }
 
 // WaitUntilFreshAndGet returns list of pointers to <storeElement> objects.
