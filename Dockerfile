@@ -7,7 +7,7 @@ ARG TARGETARCH
 RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
 
 FROM alpine:3.17.3
-RUN apk add --no-cache gcompat
+RUN apk add --no-cache gcompat bind-tools
 
 # https://pkg.go.dev/net#hdr-Name_Resolution
 ENV GODEBUG=netdns=go
