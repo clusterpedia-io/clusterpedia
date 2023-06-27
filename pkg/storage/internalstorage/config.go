@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	defaultMaxIdleConns    = 5
-	defaultMaxOpenConns    = 40
-	defaultConnMaxLifetime = time.Hour
+	defaultMaxIdleConns     = 5
+	defaultMaxOpenConns     = 40
+	defaultConnMaxLifetime  = time.Hour
+	databasePasswordEnvName = "DB_PASSWORD"
 )
 
 type Config struct {
@@ -145,7 +146,15 @@ func (cfg *Config) getConnPoolConfig() (ConnPoolConfig, error) {
 
 func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
 	if cfg.DSN != "" {
-		return mysql.ParseDSN(cfg.DSN)
+		mysqlConfig, err := mysql.ParseDSN(cfg.DSN)
+		if err != nil {
+			return nil, err
+		}
+		if mysqlConfig.Passwd == "" {
+			mysqlConfig.Passwd = os.Getenv(databasePasswordEnvName)
+		}
+		mysqlConfig.ParseTime = true
+		return mysqlConfig, nil
 	}
 
 	if cfg.Database == "" {
@@ -229,6 +238,9 @@ func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
 
 func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 	if cfg.DSN != "" {
+		if !strings.Contains(cfg.DSN, "password") && os.Getenv(databasePasswordEnvName) != "" {
+			cfg.DSN = cfg.DSN + fmt.Sprintf(" password=%s", os.Getenv(databasePasswordEnvName))
+		}
 		return pgx.ParseConfig(cfg.DSN)
 	}
 
