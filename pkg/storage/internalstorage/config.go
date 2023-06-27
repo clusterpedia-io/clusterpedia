@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -216,9 +217,10 @@ func (cfg *Config) genMySQLConfig() (*mysql.Config, error) {
 	if cfg.MySQL.InterpolateParams != nil {
 		mysqlconfig.InterpolateParams = *cfg.MySQL.InterpolateParams
 	}
-	if cfg.MySQL.ParseTime != nil {
-		mysqlconfig.ParseTime = *cfg.MySQL.ParseTime
+	if cfg.MySQL.ParseTime != nil && !*cfg.MySQL.ParseTime {
+		klog.Warningln("Mysql query param parseTime=false has been ignored, and set to true")
 	}
+	mysqlconfig.ParseTime = true
 	if cfg.MySQL.RejectReadOnly != nil {
 		mysqlconfig.RejectReadOnly = *cfg.MySQL.RejectReadOnly
 	}
