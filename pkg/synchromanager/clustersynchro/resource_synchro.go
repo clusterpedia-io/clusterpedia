@@ -16,6 +16,7 @@ import (
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -33,9 +34,10 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
-	queue         queue.EventQueue
 	listerWatcher cache.ListerWatcher
+	extraStore    informer.ExtraStore
 
+	queue   queue.EventQueue
 	cache   *informer.ResourceVersionStorage
 	rvs     map[string]interface{}
 	rvsLock sync.Mutex
@@ -66,7 +68,7 @@ type ResourceSynchro struct {
 }
 
 func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
-	convertor runtime.ObjectConvertor, storage storage.ResourceStorage,
+	convertor runtime.ObjectConvertor, storage storage.ResourceStorage, metricsStore *metricsstore.MetricsStore,
 ) *ResourceSynchro {
 	storageConfig := storage.GetStorageConfig()
 	synchro := &ResourceSynchro{
@@ -99,8 +101,24 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
 	synchro.example = example
 
+	if metricsStore != nil {
+		synchro.extraStore = &metricsExtraStore{
+			MetricsStore: metricsStore,
+			convertor: func(obj interface{}) (interface{}, error) {
+				return synchro.convertor.ConvertToVersion(obj.(runtime.Object), synchro.syncResource.GroupVersion())
+			},
+		}
+	}
+
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
 	return synchro
+}
+
+func (synchro *ResourceSynchro) metricsStore() *metricsstore.MetricsStore {
+	if synchro.extraStore == nil {
+		return nil
+	}
+	return synchro.extraStore.(*metricsExtraStore).MetricsStore
 }
 
 func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
@@ -237,7 +255,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 
 		informer.NewResourceVersionInformer(
 			synchro.cluster, synchro.listerWatcher, synchro.cache,
-			synchro.example, synchro, synchro.ErrorHandler,
+			synchro.example, synchro, synchro.ErrorHandler, synchro.extraStore,
 		).Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
@@ -479,8 +497,7 @@ func (synchro *ResourceSynchro) setStopForStorage() {
 }
 
 func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
-	// if synchro.convertor == nil, it means no conversion is needed.
-	if synchro.convertor == nil {
+	if synchro.syncResource == synchro.storageResource || synchro.convertor == nil {
 		return obj, nil
 	}
 
@@ -549,4 +566,52 @@ func (synchro *ResourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 	if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
 		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusSyncing, "", "")
 	}
+}
+
+type metricsExtraStore struct {
+	*metricsstore.MetricsStore
+
+	convertor func(obj interface{}) (interface{}, error)
+}
+
+var _ informer.ExtraStore = &metricsExtraStore{}
+
+func (store *metricsExtraStore) Add(obj interface{}) error {
+	obj, err := store.convertor(obj)
+	if err != nil {
+		return err
+	}
+
+	return store.MetricsStore.Add(obj)
+}
+
+func (store *metricsExtraStore) Update(obj interface{}) error {
+	obj, err := store.convertor(obj)
+	if err != nil {
+		return err
+	}
+
+	return store.MetricsStore.Update(obj)
+}
+
+func (store *metricsExtraStore) Delete(obj interface{}) error {
+	obj, err := store.convertor(obj)
+	if err != nil {
+		return err
+	}
+
+	return store.MetricsStore.Delete(obj)
+}
+
+func (store *metricsExtraStore) Replace(list []interface{}, rv string) error {
+	objs := make([]interface{}, 0, len(list))
+	for _, obj := range list {
+		o, err := store.convertor(obj)
+		if err != nil {
+			return err
+		}
+		objs = append(objs, o)
+	}
+
+	return store.MetricsStore.Replace(objs, rv)
 }

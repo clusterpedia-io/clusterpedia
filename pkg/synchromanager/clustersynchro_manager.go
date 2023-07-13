@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
@@ -29,6 +30,7 @@ import (
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
@@ -48,6 +50,7 @@ type Manager struct {
 
 	queue                      workqueue.RateLimitingInterface
 	storage                    storage.StorageFactory
+	metricsStoreBuilder        *kubestatemetrics.MetricsStoreBuilder
 	clusterlister              clusterlister.PediaClusterLister
 	clusterSyncResourcesLister clusterlister.ClusterSyncResourcesLister
 	clusterInformer            cache.SharedIndexInformer
@@ -57,7 +60,9 @@ type Manager struct {
 	synchroWaitGroup wait.Group
 }
 
-func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *Manager {
+var _ kubestatemetrics.ClusterMetricsWriterListGetter = &Manager{}
+
+func NewManager(client crdclientset.Interface, storage storage.StorageFactory, metricsStoreBuilder *kubestatemetrics.MetricsStoreBuilder) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
@@ -67,6 +72,7 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *
 		clusterpediaclient: client,
 
 		storage:                    storage,
+		metricsStoreBuilder:        metricsStoreBuilder,
 		clusterlister:              clusterinformer.Lister(),
 		clusterInformer:            clusterinformer.Informer(),
 		clusterSyncResourcesLister: clusterSyncResourcesInformer.Lister(),
@@ -98,6 +104,20 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory) *
 	}
 
 	return manager
+}
+
+func (manager *Manager) GetMetricsWriterList() map[string]metricsstore.MetricsWriterList {
+	manager.synchrolock.RLock()
+	defer manager.synchrolock.RUnlock()
+
+	lists := make(map[string]metricsstore.MetricsWriterList, len(manager.synchros))
+	for name, synchro := range manager.synchros {
+		writers := synchro.GetMetricsWriterList()
+		if len(writers) != 0 {
+			lists[name] = writers
+		}
+	}
+	return lists
 }
 
 func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
@@ -328,7 +348,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	// create resource synchro
 	if synchro == nil {
-		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager)
+		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager.metricsStoreBuilder, manager)
 		if err != nil {
 			_, forever := err.(clustersynchro.RetryableError)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)

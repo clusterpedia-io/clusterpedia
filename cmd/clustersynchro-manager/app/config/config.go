@@ -6,6 +6,8 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
+	metrics "github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
@@ -14,8 +16,11 @@ type Config struct {
 	CRDClient     *crdclientset.Clientset
 	EventRecorder record.EventRecorder
 
-	StorageFactory storage.StorageFactory
-	WorkerNumber   int
+	WorkerNumber            int
+	MetricsServerConfig     metrics.Config
+	KubeMetricsServerConfig *kubestatemetrics.ServerConfig
+	MetricsStoreBuilder     *kubestatemetrics.MetricsStoreBuilder
+	StorageFactory          storage.StorageFactory
 
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration

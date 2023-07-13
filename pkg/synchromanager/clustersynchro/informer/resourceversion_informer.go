@@ -19,7 +19,7 @@ type resourceVersionInformer struct {
 	listerWatcher cache.ListerWatcher
 }
 
-func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *ResourceVersionStorage, exampleObject runtime.Object, handler ResourceEventHandler, errorHandler WatchErrorHandler) ResourceVersionInformer {
+func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *ResourceVersionStorage, exampleObject runtime.Object, handler ResourceEventHandler, errorHandler WatchErrorHandler, extraStore ExtraStore) ResourceVersionInformer {
 	if name == "" {
 		panic("name is required")
 	}
@@ -32,6 +32,15 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		handler:       handler,
 	}
 
+	var queue cache.Queue = cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
+		KeyFunction:           cache.DeletionHandlingMetaNamespaceKeyFunc,
+		KnownObjects:          informer.storage,
+		EmitDeltaTypeReplaced: true,
+	})
+	if extraStore != nil {
+		queue = &queueWithExtraStore{Queue: queue, extra: extraStore}
+	}
+
 	config := &Config{
 		ListerWatcher: lw,
 		ObjectType:    exampleObject,
@@ -40,11 +49,7 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 			deltas := obj.(cache.Deltas)
 			return informer.HandleDeltas(deltas)
 		},
-		Queue: cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
-			KeyFunction:           cache.DeletionHandlingMetaNamespaceKeyFunc,
-			KnownObjects:          informer.storage,
-			EmitDeltaTypeReplaced: true,
-		}),
+		Queue:             queue,
 		WatchErrorHandler: errorHandler,
 	}
 	informer.controller = NewNamedController(informer.name, config)

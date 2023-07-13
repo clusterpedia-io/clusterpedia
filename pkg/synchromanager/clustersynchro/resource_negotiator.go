@@ -137,12 +137,10 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 				}
 
 				var convertor runtime.ObjectConvertor
-				if syncGVR != storageGVR {
-					if isLegacyResource {
-						convertor = scheme.LegacyResourceScheme
-					} else {
-						convertor = scheme.UnstructuredScheme
-					}
+				if isLegacyResource {
+					convertor = scheme.LegacyResourceScheme
+				} else {
+					convertor = scheme.UnstructuredScheme
 				}
 				storageResourceSyncConfigs[storageGVR] = syncConfig{
 					kind:          apiResource.Kind,
