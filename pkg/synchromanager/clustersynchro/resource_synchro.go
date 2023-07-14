@@ -19,6 +19,7 @@ import (
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
@@ -34,8 +35,9 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
-	listerWatcher cache.ListerWatcher
-	extraStore    informer.ExtraStore
+	listerWatcher     cache.ListerWatcher
+	metricsExtraStore informer.ExtraStore
+	metricsWriter     *metricsstore.MetricsWriter
 
 	queue   queue.EventQueue
 	cache   *informer.ResourceVersionStorage
@@ -68,7 +70,7 @@ type ResourceSynchro struct {
 }
 
 func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
-	convertor runtime.ObjectConvertor, storage storage.ResourceStorage, metricsStore *metricsstore.MetricsStore,
+	convertor runtime.ObjectConvertor, storage storage.ResourceStorage, metricsStore *kubestatemetrics.MetricsStore,
 ) *ResourceSynchro {
 	storageConfig := storage.GetStorageConfig()
 	synchro := &ResourceSynchro{
@@ -102,23 +104,12 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	synchro.example = example
 
 	if metricsStore != nil {
-		synchro.extraStore = &metricsExtraStore{
-			MetricsStore: metricsStore,
-			convertor: func(obj interface{}) (interface{}, error) {
-				return synchro.convertor.ConvertToVersion(obj.(runtime.Object), synchro.syncResource.GroupVersion())
-			},
-		}
+		synchro.metricsExtraStore = metricsStore
+		synchro.metricsWriter = metricsstore.NewMetricsWriter(metricsStore.MetricsStore)
 	}
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
 	return synchro
-}
-
-func (synchro *ResourceSynchro) metricsStore() *metricsstore.MetricsStore {
-	if synchro.extraStore == nil {
-		return nil
-	}
-	return synchro.extraStore.(*metricsExtraStore).MetricsStore
 }
 
 func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
@@ -255,7 +246,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 
 		informer.NewResourceVersionInformer(
 			synchro.cluster, synchro.listerWatcher, synchro.cache,
-			synchro.example, synchro, synchro.ErrorHandler, synchro.extraStore,
+			synchro.example, synchro, synchro.ErrorHandler, synchro.metricsExtraStore,
 		).Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
@@ -566,52 +557,4 @@ func (synchro *ResourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 	if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
 		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusSyncing, "", "")
 	}
-}
-
-type metricsExtraStore struct {
-	*metricsstore.MetricsStore
-
-	convertor func(obj interface{}) (interface{}, error)
-}
-
-var _ informer.ExtraStore = &metricsExtraStore{}
-
-func (store *metricsExtraStore) Add(obj interface{}) error {
-	obj, err := store.convertor(obj)
-	if err != nil {
-		return err
-	}
-
-	return store.MetricsStore.Add(obj)
-}
-
-func (store *metricsExtraStore) Update(obj interface{}) error {
-	obj, err := store.convertor(obj)
-	if err != nil {
-		return err
-	}
-
-	return store.MetricsStore.Update(obj)
-}
-
-func (store *metricsExtraStore) Delete(obj interface{}) error {
-	obj, err := store.convertor(obj)
-	if err != nil {
-		return err
-	}
-
-	return store.MetricsStore.Delete(obj)
-}
-
-func (store *metricsExtraStore) Replace(list []interface{}, rv string) error {
-	objs := make([]interface{}, 0, len(list))
-	for _, obj := range list {
-		o, err := store.convertor(obj)
-		if err != nil {
-			return err
-		}
-		objs = append(objs, o)
-	}
-
-	return store.MetricsStore.Replace(objs, rv)
 }

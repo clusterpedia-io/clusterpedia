@@ -3,13 +3,21 @@ package kubestatemetrics
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 )
+
+var defaultResources = options.ResourceSet{
+	"pods":        struct{}{},
+	"deployments": struct{}{},
+	"services":    struct{}{},
+}
 
 type Options struct {
 	EnableKubeStateMetrics bool
@@ -37,7 +45,7 @@ func NewOptions() *Options {
 		MetricDenylist:  options.MetricSet{},
 		MetricOptInList: options.MetricSet{},
 
-		Resources:  options.DefaultResources,
+		Resources:  defaultResources,
 		Namespaces: options.DefaultNamespaces,
 	}
 }
@@ -47,6 +55,12 @@ func (o *Options) Validate() []error {
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
+	var resources []string
+	for r := range rToGVR {
+		resources = append(resources, r)
+	}
+	sort.Strings(resources)
+
 	fs.BoolVar(&o.EnableKubeStateMetrics, "enable-kube-state-metrics", o.EnableKubeStateMetrics, "Enabled kube state metrics")
 	fs.IntVar(&o.Port, "kube-state-metrics-port", o.Port, "Port to expose kube state metrics on.")
 	fs.StringVar(&o.Host, "kube-state-metrics-host", o.Host, "Host to expose kube state metrics on.")
@@ -55,7 +69,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.Var(&o.MetricDenylist, "kube-state-metrics-metric-denylist", "Comma-separated list of metrics not to be enabled. This list comprises of exact metric names and/or regex patterns. The allowlist and denylist are mutually exclusive.")
 	fs.Var(&o.MetricOptInList, "kube-state-metrics-metric-opt-in-list", "Comma-separated list of metrics which are opt-in and not enabled by default. This is in addition to the metric allow- and denylists")
 
-	fs.Var(&o.Resources, "kube-state-metrics-resources", fmt.Sprintf("Comma-separated list of Resources to be enabled. Defaults to %q", &o.Resources))
+	fs.Var(&o.Resources, "kube-state-metrics-resources", fmt.Sprintf("Comma-separated list of Resources to be enabled. Supported resources: %q", strings.Join(resources, ",")))
 	fs.Var(&o.Namespaces, "kube-state-metrics-namespaces", fmt.Sprintf("Comma-separated list of namespaces to be enabled. Defaults to %q", &o.Namespaces))
 	fs.Var(&o.NamespacesDenylist, "kube-state-metrics-namespaces-denylist", "Comma-separated list of namespaces not to be enabled. If namespaces and namespaces-denylist are both set, only namespaces that are excluded in namespaces-denylist will be used.")
 }

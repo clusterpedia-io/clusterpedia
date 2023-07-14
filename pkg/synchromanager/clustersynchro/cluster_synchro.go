@@ -163,8 +163,8 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, metri
 
 func (s *ClusterSynchro) GetMetricsWriterList() (writers metricsstore.MetricsWriterList) {
 	s.storageResourceSynchros.Range(func(_, value interface{}) bool {
-		if store := value.(*ResourceSynchro).metricsStore(); store != nil {
-			writers = append(writers, metricsstore.NewMetricsWriter(store))
+		if synchro := value.(*ResourceSynchro); synchro.metricsWriter != nil {
+			writers = append(writers, synchro.metricsWriter)
 		}
 		return true
 	})
@@ -350,7 +350,7 @@ func (s *ClusterSynchro) refreshSyncResources() {
 				s.storageResourceVersions[storageGVR] = rvs
 			}
 
-			var metricsStore *metricsstore.MetricsStore
+			var metricsStore *kubestatemetrics.MetricsStore
 			if s.metricsStoreBuilder != nil {
 				metricsStore = s.metricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
 			}
