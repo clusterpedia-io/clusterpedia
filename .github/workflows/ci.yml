@@ -12,7 +12,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: 1.20
       - uses: golangci/golangci-lint-action@v3
         with:
           version: v1.49.0
@@ -33,7 +33,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: 1.20
       - run: hack/verify-import-aliases.sh
       - run: hack/verify-vendor.sh
       - run: hack/verify-codegen.sh
@@ -51,7 +51,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: 1.20
       - name: Compile
         run: make all
   test:
@@ -64,7 +64,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: 1.20
       - run: make test
   e2e-test:
     name: E2e test
