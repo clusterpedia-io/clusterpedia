@@ -28,29 +28,21 @@ type queueWithExtraStore struct {
 var _ cache.Queue = &queueWithExtraStore{}
 
 func (queue *queueWithExtraStore) Add(obj interface{}) error {
-	if err := queue.extra.Add(obj); err != nil {
-		return err
-	}
+	_ = queue.extra.Add(obj)
 	return queue.Queue.Add(obj)
 }
 
 func (queue *queueWithExtraStore) Update(obj interface{}) error {
-	if err := queue.extra.Update(obj); err != nil {
-		return err
-	}
+	_ = queue.extra.Update(obj)
 	return queue.Queue.Update(obj)
 }
 
 func (queue *queueWithExtraStore) Delete(obj interface{}) error {
-	if err := queue.extra.Delete(obj); err != nil {
-		return err
-	}
+	_ = queue.extra.Delete(obj)
 	return queue.Queue.Delete(obj)
 }
 
 func (queue *queueWithExtraStore) Replace(list []interface{}, rv string) error {
-	if err := queue.extra.Replace(list, rv); err != nil {
-		return err
-	}
+	_ = queue.extra.Replace(list, rv)
 	return queue.Queue.Replace(list, rv)
 }
