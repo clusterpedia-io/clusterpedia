@@ -38,7 +38,7 @@ func RunServer(config Config) {
 	)
 
 	klog.Info("Metrics Server is running...")
-	web.ListenAndServe(server, flags, Logger)
+	_ = web.ListenAndServe(server, flags, Logger)
 }
 
 type Handler struct {

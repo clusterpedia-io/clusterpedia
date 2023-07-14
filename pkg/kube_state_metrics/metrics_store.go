@@ -128,16 +128,16 @@ func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource sche
 
 func composeMetricGenFuncs(cluster string, familyGens []generator.FamilyGenerator) func(obj interface{}) []metric.FamilyInterface {
 	return func(obj interface{}) []metric.FamilyInterface {
-		familes := make([]metric.FamilyInterface, len(familyGens))
+		families := make([]metric.FamilyInterface, len(familyGens))
 		for i, gen := range familyGens {
 			family := gen.Generate(obj)
 			for _, m := range family.Metrics {
 				m.LabelKeys = append([]string{"cluster"}, m.LabelKeys...)
 				m.LabelValues = append([]string{cluster}, m.LabelValues...)
 			}
-			familes[i] = family
+			families[i] = family
 		}
-		return familes
+		return families
 	}
 }
 

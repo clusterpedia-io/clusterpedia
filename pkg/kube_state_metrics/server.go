@@ -1,12 +1,13 @@
 package kubestatemetrics
 
 import (
-	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
 	"k8s.io/klog/v2"
+
+	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 )
 
 type ServerConfig struct {
@@ -44,5 +45,5 @@ func RunServer(config ServerConfig, getter ClusterMetricsWriterListGetter) {
 
 	klog.Info("Kube State Metrics Server is running...")
 	// TODO(iceber): handle error
-	web.ListenAndServe(server, flags, metrics.Logger)
+	_ = web.ListenAndServe(server, flags, metrics.Logger)
 }
