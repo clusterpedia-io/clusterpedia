@@ -31,7 +31,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.Host, "metrics-host", o.Host, "Host to expose clustersynchro manager metrics on.")
 	fs.IntVar(&o.Port, "metrics-port", o.Port, "Port to expose clustersynchro manager metrics on.")
 
-	fs.BoolVar(&o.DisableGZIPEncoding, "metrics-enable-gzip-encoding", o.DisableGZIPEncoding, "Gzip responses when requested by clients via 'Accept-Encoding: gzip' header.")
+	fs.BoolVar(&o.DisableGZIPEncoding, "metrics-disable-gzip-encoding", o.DisableGZIPEncoding, "Gzip responses when requested by clients via 'Accept-Encoding: gzip' header.")
 	fs.StringVar(&o.TLSConfig, "metrics-tls-config", o.TLSConfig, "Path to the TLS configuration file of metrics")
 }
 
