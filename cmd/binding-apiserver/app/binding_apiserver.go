@@ -56,7 +56,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory)
+			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory, nil)
 			go synchromanager.Run(1, ctx.Done())
 
 			server, err := completedConfig.New()

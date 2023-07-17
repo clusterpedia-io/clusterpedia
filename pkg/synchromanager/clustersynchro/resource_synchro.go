@@ -16,8 +16,10 @@ import (
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
@@ -33,9 +35,11 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
-	queue         queue.EventQueue
-	listerWatcher cache.ListerWatcher
+	listerWatcher     cache.ListerWatcher
+	metricsExtraStore informer.ExtraStore
+	metricsWriter     *metricsstore.MetricsWriter
 
+	queue   queue.EventQueue
 	cache   *informer.ResourceVersionStorage
 	rvs     map[string]interface{}
 	rvsLock sync.Mutex
@@ -66,7 +70,7 @@ type ResourceSynchro struct {
 }
 
 func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
-	convertor runtime.ObjectConvertor, storage storage.ResourceStorage,
+	convertor runtime.ObjectConvertor, storage storage.ResourceStorage, metricsStore *kubestatemetrics.MetricsStore,
 ) *ResourceSynchro {
 	storageConfig := storage.GetStorageConfig()
 	synchro := &ResourceSynchro{
@@ -98,6 +102,11 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	example := &unstructured.Unstructured{}
 	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
 	synchro.example = example
+
+	if metricsStore != nil {
+		synchro.metricsExtraStore = metricsStore
+		synchro.metricsWriter = metricsstore.NewMetricsWriter(metricsStore.MetricsStore)
+	}
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
 	return synchro
@@ -237,7 +246,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 
 		informer.NewResourceVersionInformer(
 			synchro.cluster, synchro.listerWatcher, synchro.cache,
-			synchro.example, synchro, synchro.ErrorHandler,
+			synchro.example, synchro, synchro.ErrorHandler, synchro.metricsExtraStore,
 		).Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
@@ -479,8 +488,7 @@ func (synchro *ResourceSynchro) setStopForStorage() {
 }
 
 func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
-	// if synchro.convertor == nil, it means no conversion is needed.
-	if synchro.convertor == nil {
+	if synchro.syncResource == synchro.storageResource || synchro.convertor == nil {
 		return obj, nil
 	}
 

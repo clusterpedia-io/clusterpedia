@@ -22,6 +22,8 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
+	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
@@ -31,15 +33,18 @@ const (
 )
 
 type Options struct {
+	Master     string
+	Kubeconfig string
+
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
 
-	Logs         *logs.Options
-	Storage      *storageoptions.StorageOptions
-	WorkerNumber int // WorkerNumber is the number of worker goroutines
+	Logs             *logs.Options
+	Storage          *storageoptions.StorageOptions
+	Metrics          *metrics.Options
+	KubeStateMetrics *kubestatemetrics.Options
 
-	Master     string
-	Kubeconfig string
+	WorkerNumber int // WorkerNumber is the number of worker goroutines
 }
 
 func NewClusterSynchroManagerOptions() (*Options, error) {
@@ -68,6 +73,9 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 
 	options.Logs = logs.NewOptions()
 	options.Storage = storageoptions.NewStorageOptions()
+	options.Metrics = metrics.NewMetricsServerOptions()
+	options.KubeStateMetrics = kubestatemetrics.NewOptions()
+
 	options.WorkerNumber = 5
 	return &options, nil
 }
@@ -90,13 +98,16 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
+	o.Metrics.AddFlags(fss.FlagSet("metrics server"))
+	o.KubeStateMetrics.AddFlags(fss.FlagSet("kube state metrics"))
 	return fss
 }
 
 func (o *Options) Validate() error {
 	var errs []error
-
 	errs = append(errs, o.Storage.Validate()...)
+	errs = append(errs, o.Metrics.Validate()...)
+	errs = append(errs, o.KubeStateMetrics.Validate()...)
 
 	if o.WorkerNumber <= 0 {
 		errs = append(errs, fmt.Errorf("worker-number must be greater than 0"))
@@ -137,12 +148,24 @@ func (o *Options) Config() (*config.Config, error) {
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: ClusterSynchroManagerUserAgent})
 
+	metricsConfig := o.Metrics.Config()
+	metricsStoreBuilder, err := o.KubeStateMetrics.MetricsStoreBuilderConfig().New()
+	if err != nil {
+		return nil, err
+	}
+	kubeStateMetricsServerConfig := o.KubeStateMetrics.ServerConfig(metricsConfig)
+
 	return &config.Config{
-		CRDClient:      crdclient,
-		Kubeconfig:     kubeconfig,
-		EventRecorder:  eventRecorder,
+		CRDClient:     crdclient,
+		Kubeconfig:    kubeconfig,
+		EventRecorder: eventRecorder,
+
 		StorageFactory: storagefactory,
 		WorkerNumber:   o.WorkerNumber,
+
+		MetricsServerConfig:     metricsConfig,
+		KubeMetricsServerConfig: kubeStateMetricsServerConfig,
+		MetricsStoreBuilder:     metricsStoreBuilder,
 
 		LeaderElection: o.LeaderElection,
 	}, nil

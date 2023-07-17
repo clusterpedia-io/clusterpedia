@@ -20,6 +20,8 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
+	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
@@ -83,7 +85,18 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 }
 
 func Run(ctx context.Context, c *config.Config) error {
-	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory)
+	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory, c.MetricsStoreBuilder)
+
+	go func() {
+		metrics.RunServer(c.MetricsServerConfig)
+	}()
+
+	if c.KubeMetricsServerConfig != nil {
+		go func() {
+			kubestatemetrics.RunServer(*c.KubeMetricsServerConfig, synchromanager)
+		}()
+	}
+
 	if !c.LeaderElection.LeaderElect {
 		synchromanager.Run(c.WorkerNumber, ctx.Done())
 		return nil

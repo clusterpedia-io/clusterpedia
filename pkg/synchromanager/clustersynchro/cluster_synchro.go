@@ -13,9 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/discovery"
+	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
@@ -30,6 +32,7 @@ type ClusterSynchro struct {
 	ClusterStatusUpdater ClusterStatusUpdater
 
 	storage              storage.StorageFactory
+	metricsStoreBuilder  *kubestatemetrics.MetricsStoreBuilder
 	healthChecker        *healthChecker
 	dynamicDiscovery     discovery.DynamicDiscoveryInterface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
@@ -66,7 +69,7 @@ type ClusterStatusUpdater interface {
 
 type RetryableError error
 
-func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
+func New(name string, config *rest.Config, storage storage.StorageFactory, metricsStoreBuilder *kubestatemetrics.MetricsStoreBuilder, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
 	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
@@ -112,6 +115,8 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		stopRunnerCh:   make(chan struct{}),
 
 		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
+
+		metricsStoreBuilder: metricsStoreBuilder,
 	}
 
 	var refresherOnce sync.Once
@@ -154,6 +159,16 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 	synchro.initWithResourceVersions(resourceversions)
 	return synchro, nil
+}
+
+func (s *ClusterSynchro) GetMetricsWriterList() (writers metricsstore.MetricsWriterList) {
+	s.storageResourceSynchros.Range(func(_, value interface{}) bool {
+		if synchro := value.(*ResourceSynchro); synchro.metricsWriter != nil {
+			writers = append(writers, synchro.metricsWriter)
+		}
+		return true
+	})
+	return
 }
 
 func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.GroupVersionResource]map[string]interface{}) {
@@ -335,6 +350,10 @@ func (s *ClusterSynchro) refreshSyncResources() {
 				s.storageResourceVersions[storageGVR] = rvs
 			}
 
+			var metricsStore *kubestatemetrics.MetricsStore
+			if s.metricsStoreBuilder != nil {
+				metricsStore = s.metricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
+			}
 			synchro := newResourceSynchro(
 				s.name,
 				config.syncResource,
@@ -343,6 +362,7 @@ func (s *ClusterSynchro) refreshSyncResources() {
 				rvs,
 				config.convertor,
 				resourceStorage,
+				metricsStore,
 			)
 			s.waitGroup.StartWithChannel(s.closer, synchro.Run)
 			s.storageResourceSynchros.Store(storageGVR, synchro)
