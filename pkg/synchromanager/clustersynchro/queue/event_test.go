@@ -8,6 +8,7 @@ type pressureEventsTest struct {
 	name       string
 	older      *Event
 	newer      *Event
+	expected   *Event
 	reputCount int
 }
 
@@ -25,18 +26,24 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Updated,
 				Object:     "Object2",
 			},
-			reputCount: 2,
+			expected: &Event{
+				reputCount: 2,
+				Action:     Added,
+				Object:     "Object2",
+			},
 		},
 		{
 			name:       "Newer event is nil",
 			older:      &Event{reputCount: 3, Action: Added, Object: "Object3"},
 			newer:      nil,
+			expected:   &Event{reputCount: 3, Action: Added, Object: "Object3"},
 			reputCount: 3,
 		},
 		{
 			name:       "Older event is nil",
 			older:      nil,
 			newer:      &Event{reputCount: 4, Action: Updated, Object: "Object4"},
+			expected:   &Event{reputCount: 4, Action: Updated, Object: "Object4"},
 			reputCount: 4,
 		},
 		{
@@ -51,7 +58,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Deleted,
 				Object:     "Object6",
 			},
-			reputCount: 6,
+			expected: &Event{
+				reputCount: 6,
+				Action:     Deleted,
+				Object:     "Object6",
+			},
 		},
 		{
 			name: "Older action is Updated and newer action is Added",
@@ -65,7 +76,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Added,
 				Object:     "Object8",
 			},
-			reputCount: 8,
+			expected: &Event{
+				reputCount: 8,
+				Action:     Added,
+				Object:     "Object8",
+			},
 		},
 		{
 			name: "Newer action is Updated and older action is Deleted",
@@ -79,7 +94,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Updated,
 				Object:     "Object10",
 			},
-			reputCount: 9,
+			expected: &Event{
+				reputCount: 9,
+				Action:     Deleted,
+				Object:     "Object9",
+			},
 		},
 		{
 			name: "Newer action is Updated and older action is Updated",
@@ -93,7 +112,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Updated,
 				Object:     "Object12",
 			},
-			reputCount: 12,
+			expected: &Event{
+				reputCount: 12,
+				Action:     Updated,
+				Object:     "Object12",
+			},
 		},
 		{
 			name: "Newer action is Added and older action is Deleted",
@@ -107,7 +130,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Added,
 				Object:     "Object14",
 			},
-			reputCount: 14,
+			expected: &Event{
+				reputCount: 14,
+				Action:     Updated,
+				Object:     "Object14",
+			},
 		},
 		{
 			name: "Newer action is Added and older action is Added",
@@ -121,7 +148,11 @@ func TestPressureEvents(t *testing.T) {
 				Action:     Added,
 				Object:     "Object16",
 			},
-			reputCount: 16,
+			expected: &Event{
+				reputCount: 16,
+				Action:     Added,
+				Object:     "Object16",
+			},
 		},
 	}
 
@@ -129,8 +160,11 @@ func TestPressureEvents(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := pressureEvents(test.older, test.newer)
 			// Check if the reputation count is correct
-			if result.GetReputCount() != test.reputCount {
-				t.Errorf("Expected reputCount to be %d, but got %d", test.reputCount, result.GetReputCount())
+			if result.GetReputCount() != test.expected.reputCount {
+				t.Errorf("Expected reputCount to be %d, but got %d", test.expected.reputCount, result.GetReputCount())
+			}
+			if result.Action != test.expected.Action {
+				t.Errorf("Mismatch in action %v, got %v", test.expected.Action, result.Action)
 			}
 		})
 	}
