@@ -5,11 +5,10 @@ import (
 )
 
 type pressureEventsTest struct {
-	name       string
-	older      *Event
-	newer      *Event
-	expected   *Event
-	reputCount int
+	name     string
+	older    *Event
+	newer    *Event
+	expected *Event
 }
 
 func TestPressureEvents(t *testing.T) {
@@ -33,18 +32,16 @@ func TestPressureEvents(t *testing.T) {
 			},
 		},
 		{
-			name:       "Newer event is nil",
-			older:      &Event{reputCount: 3, Action: Added, Object: "Object3"},
-			newer:      nil,
-			expected:   &Event{reputCount: 3, Action: Added, Object: "Object3"},
-			reputCount: 3,
+			name:     "Newer event is nil",
+			older:    &Event{reputCount: 3, Action: Added, Object: "Object3"},
+			newer:    nil,
+			expected: &Event{reputCount: 3, Action: Added, Object: "Object3"},
 		},
 		{
-			name:       "Older event is nil",
-			older:      nil,
-			newer:      &Event{reputCount: 4, Action: Updated, Object: "Object4"},
-			expected:   &Event{reputCount: 4, Action: Updated, Object: "Object4"},
-			reputCount: 4,
+			name:     "Older event is nil",
+			older:    nil,
+			newer:    &Event{reputCount: 4, Action: Updated, Object: "Object4"},
+			expected: &Event{reputCount: 4, Action: Updated, Object: "Object4"},
 		},
 		{
 			name: "Newer action is Deleted",
