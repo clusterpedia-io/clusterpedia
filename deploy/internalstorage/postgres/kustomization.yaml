@@ -1,0 +1,4 @@
+resources:
+  - clusterpedia_internalstorage_configmap.yaml
+  - clusterpedia_internalstorage_deployment.yaml
+  - clusterpedia_internalstorage_secret.yaml

@@ -1,0 +1,5 @@
+resources:
+  - cluster.clusterpedia.io_clustersyncresources.yaml
+  - cluster.clusterpedia.io_pediaclusters.yaml
+  - policy.clusterpedia.io_clusterimportpolicies.yaml
+  - policy.clusterpedia.io_pediaclusterlifecycles.yaml
