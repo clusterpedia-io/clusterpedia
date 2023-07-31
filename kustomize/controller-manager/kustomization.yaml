@@ -1,0 +1,2 @@
+resources:
+  - clusterpedia_controller_manager_deployment.yaml

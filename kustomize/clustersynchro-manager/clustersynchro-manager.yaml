@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clusterpedia-clustersynchro-manager
+  namespace: clusterpedia-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: clusterpedia-clustersynchro-manager
+  name: clusterpedia-clustersynchro-manager
+  namespace: clusterpedia-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-clustersynchro-manager
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-clustersynchro-manager
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/clustersynchro-manager
+        - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
+        - --feature-gates=PruneManagedFields=true,PruneLastAppliedConfiguration=true
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: internalstorage-password
+        image: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager:v0.7.0
+        name: manager
+        volumeMounts:
+        - mountPath: /etc/clusterpedia/storage
+          name: internalstorage-config
+          readOnly: true
+      serviceAccountName: clusterpedia-clustersynchro-manager
+      volumes:
+      - configMap:
+          name: clusterpedia-internalstor
