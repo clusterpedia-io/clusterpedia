@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clusterpedia-binding-apiserver
+  namespace: clusterpedia-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterpedia-binding-apiserver
+  namespace: clusterpedia-system
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 443
+  selector:
+    app: clusterpedia-binding-apiserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-binding-apiserver
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-binding-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-binding-apiserver
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-binding-apiserver
+    spec:
+      containers:
+        - name: binding-apiserver
+          image: ghcr.io/clusterpedia-io/clusterpedia/binding-apiserver:latest
+          command:
+            - /usr/local/bin/binding-apiserver
+            - --secure-port=443
+            - --storage-name=memory
+            - -v=3
+      serviceAccountName: clusterpedia-binding-apiserver

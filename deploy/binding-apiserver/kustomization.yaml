@@ -1,4 +1,0 @@
-resources:
-  - clusterpedia_binding_apiserver_apiservice.yaml
-  - clusterpedia_binding_apiserver_deployment.yaml
-  - clusterpedia_binding_apiserver_rbac.yaml

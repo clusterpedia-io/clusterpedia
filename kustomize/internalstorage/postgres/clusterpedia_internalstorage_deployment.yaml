@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterpedia-internalstorage-postgres
+  namespace: clusterpedia-system
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: postgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: internalstorage-postgres
+  namespace: clusterpedia-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-internalstorage-postgres
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: postgres
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-internalstorage
+        internalstorage.clusterpedia.io/type: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:12
+        env:
+        - name: POSTGRES_DB
+          value: "clusterpedia"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: internalstorage-password
+              key: password
+        ports:
+        - name: postgres
+          containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: internalstorage-postgres
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
