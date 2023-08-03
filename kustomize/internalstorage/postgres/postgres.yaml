@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: clusterpedia-system
+  name: clusterpedia-system-0110
 ---
 apiVersion: v1
 data:
@@ -14,7 +14,7 @@ data:
 kind: ConfigMap
 metadata:
   name: clusterpedia-internalstorage
-  namespace: clusterpedia-system
+  namespace: clusterpedia-system-0110
 ---
 apiVersion: v1
 data:
@@ -25,7 +25,7 @@ metadata:
     app: clusterpedia-internalstorage
     internalstorage.clusterpedia.io/type: postgres
   name: internalstorage-password
-  namespace: clusterpedia-system
+  namespace: clusterpedia-system-0110
 ---
 apiVersion: v1
 kind: Service
