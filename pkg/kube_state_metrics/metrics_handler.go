@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/prometheus/common/expfmt"
 	"k8s.io/klog/v2"
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
@@ -34,8 +35,14 @@ func NewMetricsHandler(getter ClusterMetricsWriterListGetter, diableGZIPEncoding
 // metrics to the response body.
 func (m *MetricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var writers metricsstore.MetricsWriterList
-	for _, wl := range m.getter.GetMetricsWriterList() {
-		writers = append(writers, wl...)
+
+	clusterWriters := m.getter.GetMetricsWriterList()
+	if cluster := mux.Vars(r)["cluster"]; cluster != "" {
+		writers = clusterWriters[cluster]
+	} else {
+		for _, wl := range clusterWriters {
+			writers = append(writers, wl...)
+		}
 	}
 
 	resHeader := w.Header()
