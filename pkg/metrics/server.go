@@ -19,67 +19,44 @@ type Config struct {
 }
 
 func RunServer(config Config) {
-	handlers := []Handler{
-		{
-			LandingName: "Metrics",
-			Path:        "metrics",
-			Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{
-				ErrorLog:           Logger,
-				DisableCompression: config.DisableGZIPEncoding,
-			}),
-		},
+	server := &http.Server{
+		Handler:           buildMetricsServer(config),
+		ReadHeaderTimeout: 6 * time.Second,
 	}
-	server, flags := BuildMetricsServer(
-		config.Endpoint,
-		config.TLSConfig,
-		"clusterpedia clustersynchro manager",
-		"Self-metrics for clusterpedia clustersynchro manager",
-		handlers,
-	)
+
+	flags := &web.FlagConfig{
+		WebListenAddresses: &[]string{config.Endpoint},
+		WebSystemdSocket:   new(bool),
+		WebConfigFile:      &config.TLSConfig,
+	}
 
 	klog.Info("Metrics Server is running...")
 	_ = web.ListenAndServe(server, flags, Logger)
 }
 
-type Handler struct {
-	LandingName string
-	Path        string
-	Handler     http.Handler
-}
-
-func BuildMetricsServer(endpoint, tlsConfigFile, name, desc string, handlers []Handler) (*http.Server, *web.FlagConfig) {
-	var links []web.LandingLinks
+func buildMetricsServer(config Config) *http.ServeMux {
 	mux := http.NewServeMux()
-	for _, handler := range handlers {
-		mux.Handle(handler.Path, handler.Handler)
-		if handler.LandingName != "" {
-			links = append(links, web.LandingLinks{
-				Address: handler.Path,
-				Text:    handler.LandingName,
-			})
-		}
-	}
+	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{
+		ErrorLog:           Logger,
+		DisableCompression: config.DisableGZIPEncoding,
+	}))
 
 	// Add index
 	landingConfig := web.LandingConfig{
-		Name:        name,
-		Description: desc,
+		Name:        "clusterpedia clustersynchro manager",
+		Description: "Self-metrics for clusterpedia clustersynchro manager",
 		Version:     version.Get().String(),
-		Links:       links,
+		Links: []web.LandingLinks{
+			{
+				Text:    "Metrics",
+				Address: "/metrics",
+			},
+		},
 	}
 	landingPage, err := web.NewLandingPage(landingConfig)
 	if err != nil {
 		klog.ErrorS(err, "failed to create landing page")
 	}
 	mux.Handle("/", landingPage)
-
-	return &http.Server{
-			Handler:           mux,
-			ReadHeaderTimeout: 5 * time.Second,
-		},
-		&web.FlagConfig{
-			WebListenAddresses: &[]string{endpoint},
-			WebSystemdSocket:   new(bool),
-			WebConfigFile:      &tlsConfigFile,
-		}
+	return mux
 }
