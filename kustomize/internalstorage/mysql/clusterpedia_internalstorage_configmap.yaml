@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: clusterpedia-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterpedia-internalstorage
+  namespace: clusterpedia-system
+data:
+  internalstorage-config.yaml: |
+    type: "mysql"
+    host: "clusterpedia-internalstorage-mysql"
+    port: 3306
+    user: root
+    database: "clusterpedia"

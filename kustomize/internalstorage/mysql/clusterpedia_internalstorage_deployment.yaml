@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterpedia-internalstorage-mysql
+  namespace: clusterpedia-system
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: mysql
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: internalstorage-mysql
+  namespace: clusterpedia-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-internalstorage-mysql
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: mysql
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-internalstorage
+        internalstorage.clusterpedia.io/type: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8
+        args:
+        - "--default-authentication-plugin=mysql_native_password"
+        env:
+        - name: MYSQL_DATABASE
+          value: "clusterpedia"
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: internalstorage-password
+              key: password
+        ports:
+        - name: mysql
+          containerPort: 3306
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: internalstorage-mysql
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clusterpedia-controller-manager
+  namespace: clusterpedia-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-controller-manager
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-controller-manager
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-controller-manager
+    spec:
+      containers:
+      - name: manager
+        image: ghcr.io/clusterpedia-io/clusterpedia/controller-manager:v0.7.0
+        command:
+        - /usr/local/bin/controller-manager
+      serviceAccountName: clusterpedia-controller-manager
