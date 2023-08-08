@@ -7,3 +7,8 @@ resources:
 - ./controller-manager
 - ./crds
 - ./internalstorage/postgres
+
+patches:
+- path: patches.yaml
+  target:
+    kind: Clusterpedia
