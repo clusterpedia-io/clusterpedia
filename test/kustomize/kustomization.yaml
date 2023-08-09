@@ -6,11 +6,11 @@ resources:
 
 images:
   - name: ghcr.io/clusterpedia-io/clusterpedia/apiserver
-    newName: localtest/apiserver
+    newName: localtest/apiserver-amd64
     newTag: test
   - name: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager
-    newName: localtest/clustersynchro-manager
+    newName: localtest/clustersynchro-manager-amd64
     newTag: test
   - name: ghcr.io/clusterpedia-io/clusterpedia/controller-manager
-    newName: localtest/controller-manager
+    newName: localtest/controller-manager-amd64
     newTag: test

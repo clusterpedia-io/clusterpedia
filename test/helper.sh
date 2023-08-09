@@ -66,20 +66,8 @@ function delete_cluster() {
 # install the Clusterpedia into the kind cluster
 function install_clusterpedia() {
     kubectl apply -f "${ROOT}/deploy/crds"
-    # local charts will be removed, waiting for the kustomize way to be ready
-    helm repo add bitnami https://charts.bitnami.com/bitnami
-    helm dependency build "${ROOT}/charts/clusterpedia"
-    helm install clusterpedia "${ROOT}/charts/clusterpedia" \
-        --namespace clusterpedia-system \
-        --create-namespace \
-        --wait \
-        --set persistenceMatchNode=None \
-        --set clustersynchroManager.image.registry=localtest \
-        --set clustersynchroManager.image.repository=clustersynchro-manager-amd64 \
-        --set clustersynchroManager.image.tag=test \
-        --set apiserver.image.registry=localtest \
-        --set apiserver.image.repository=apiserver-amd64 \
-        --set apiserver.image.tag=test
+    load_image "${name}" localtest/controller-manager-amd64:test
+    kubectl apply -f "${ROOT}/test/kustomize"
     echo kubectl get all -n clusterpedia-system
     kubectl get all -n clusterpedia-system
 }
