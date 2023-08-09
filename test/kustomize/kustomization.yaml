@@ -14,12 +14,12 @@ images:
   - name: apiserver.image.registry
     newName: localtest
   - name : apiserver.image.repository
-    newName: clustersynchro-manager-amd64
+    newName: apiserver-amd64
   - name : apiserver.image.tag
     newTag: test
   - name: controller_manager.image.registry
     newName: localtest
   - name : controller_manager.image.repository
-    newName: clustersynchro-manager-amd64
+    newName: controller_manager-amd64
   - name : controller_manager.image.tag
     newTag: test
