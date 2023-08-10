@@ -4,4 +4,4 @@ metadata:
   name: internalstorage-postgres
   namespace: clusterpedia-system
 spec:
-  select: null
+  selector: null
