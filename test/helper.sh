@@ -54,6 +54,7 @@ function create_cluster() {
     kind create cluster --name "${name}" --image "docker.io/kindest/node:${version}"
     load_image "${name}" localtest/clustersynchro-manager-amd64:test
     load_image "${name}" localtest/apiserver-amd64:test
+    load_image "${name}" localtest/controller-manager-amd64:test
     load_image "${name}" docker.io/bitnami/postgresql:11.15.0-debian-10-r14
 }
 
@@ -66,8 +67,7 @@ function delete_cluster() {
 # install the Clusterpedia into the kind cluster
 function install_clusterpedia() {
     kubectl apply -f "${ROOT}/deploy/crds"
-    load_image "${name}" localtest/controller-manager-amd64:test
-    kubectl apply -f "${ROOT}/test/kustomize"
+    kubectl kustomize "${ROOT}/test/kustomize" | kubectl apply -f -
     echo kubectl get all -n clusterpedia-system
     kubectl get all -n clusterpedia-system
 }
