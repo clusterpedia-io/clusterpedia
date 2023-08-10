@@ -14,3 +14,6 @@ images:
   - name: ghcr.io/clusterpedia-io/clusterpedia/controller-manager
     newName: localtest/controller-manager-amd64
     newTag: test
+
+patches:
+  - path: pvc.patch.yaml
