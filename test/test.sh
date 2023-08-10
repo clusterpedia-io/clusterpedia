@@ -10,7 +10,7 @@ function main() {
     local failed=()
 
     echo "::group::check dependencies"
-    check_dependencies docker kind kubectl helm
+    check_dependencies docker kind kubectl 
     echo "::endgroup::"
 
     echo "::group::Build image"
