@@ -54,7 +54,8 @@ function create_cluster() {
     kind create cluster --name "${name}" --image "docker.io/kindest/node:${version}"
     load_image "${name}" localtest/clustersynchro-manager-amd64:test
     load_image "${name}" localtest/apiserver-amd64:test
-    load_image "${name}" docker.io/bitnami/postgresql:11.15.0-debian-10-r14
+    load_image "${name}" localtest/controller-manager-amd64:test
+    load_image "${name}" postgres:12
 }
 
 # delete the kind cluster
@@ -65,21 +66,7 @@ function delete_cluster() {
 
 # install the Clusterpedia into the kind cluster
 function install_clusterpedia() {
-    kubectl apply -f "${ROOT}/deploy/crds"
-    # local charts will be removed, waiting for the kustomize way to be ready
-    helm repo add bitnami https://charts.bitnami.com/bitnami
-    helm dependency build "${ROOT}/charts/clusterpedia"
-    helm install clusterpedia "${ROOT}/charts/clusterpedia" \
-        --namespace clusterpedia-system \
-        --create-namespace \
-        --wait \
-        --set persistenceMatchNode=None \
-        --set clustersynchroManager.image.registry=localtest \
-        --set clustersynchroManager.image.repository=clustersynchro-manager-amd64 \
-        --set clustersynchroManager.image.tag=test \
-        --set apiserver.image.registry=localtest \
-        --set apiserver.image.repository=apiserver-amd64 \
-        --set apiserver.image.tag=test
+    kubectl kustomize "${ROOT}/test/kustomize" | kubectl apply -f -
     echo kubectl get all -n clusterpedia-system
     kubectl get all -n clusterpedia-system
 }
