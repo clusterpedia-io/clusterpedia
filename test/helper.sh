@@ -56,7 +56,7 @@ function create_cluster() {
     load_image "${name}" localtest/apiserver-amd64:test
     load_image "${name}" localtest/controller-manager-amd64:test
     load_image "${name}" postgres:12
-
+}
 # delete the kind cluster
 function delete_cluster() {
     local name="${1:-kind}"
