@@ -1,0 +1,30 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterpedia
+rules:
+  - apiGroups: ['*']
+    resources: ['*']
+    verbs: ["*"]
+  - nonResourceURLs: ['*']
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: clusterpedia
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: clusterpedia
+subjects:
+  - kind: ServiceAccount
+    name: clusterpedia-apiserver
+    namespace: clusterpedia-system
+  - kind: ServiceAccount
+    name: clusterpedia-clustersynchro-manager
+    namespace: clusterpedia-system
+  - kind: ServiceAccount
+    name: clusterpedia-controller-manager
+    namespace: clusterpedia-system
