@@ -14,5 +14,5 @@ GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
 cd "${API_ROOT}"
-controller-gen crd paths=./cluster/... output:crd:dir="${REPO_ROOT}/deploy/crds"
-controller-gen crd paths=./policy/... output:crd:dir="${REPO_ROOT}/deploy/crds"
+controller-gen crd paths=./cluster/... output:crd:dir="${REPO_ROOT}/kustomize/crds"
+controller-gen crd paths=./policy/... output:crd:dir="${REPO_ROOT}/kustomize/crds"
