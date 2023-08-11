@@ -1,0 +1,35 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: kubevela
+spec:
+  source:
+    group: ""
+    resource: secrets
+    selectorTemplate: |
+      {{ if eq .source.metadata.namespace "vela-system" }}
+        {{ if .source.metadata.labels }}
+          {{ eq (index .source.metadata.labels "cluster.core.oam.dev/cluster-credential-type") "X509Certificate" }}
+        {{ end }}
+      {{ end }}
+  nameTemplate: 'vela-{{ .source.metadata.name }}'
+  template: |
+    spec:
+      apiserver: {{ index .source.data "endpoint" | b64dec }}
+      caData: {{ index .source.data "ca.crt" }}
+      certData: {{ index .source.data "tls.crt" }}
+      keyData: {{ index .source.data "tls.key" }}
+      syncResources:
+        - group: ""
+          resources:
+            - "pods"
+            - "services"
+            - "configmaps"
+            - "secrets"
+            - "namespaces"
+            - "nodes"
+        - group: "apps"
+          resources:
+            - "*"
+      syncResourcesRefName: ""
+  creationCondition: "true"
