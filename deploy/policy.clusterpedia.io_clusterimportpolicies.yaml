@@ -1,1 +1,1 @@
-./crds/policy.clusterpedia.io_clusterimportpolicies.yaml
+../kustomize/crds/policy.clusterpedia.io_clusterimportpolicies.yaml
