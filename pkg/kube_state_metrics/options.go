@@ -45,8 +45,7 @@ func NewOptions() *Options {
 		MetricDenylist:  options.MetricSet{},
 		MetricOptInList: options.MetricSet{},
 
-		Resources:  defaultResources,
-		Namespaces: options.DefaultNamespaces,
+		Resources: defaultResources,
 	}
 }
 
@@ -79,11 +78,12 @@ func (o *Options) MetricsStoreBuilderConfig() *MetricsStoreBuilderConfig {
 		return nil
 	}
 	return &MetricsStoreBuilderConfig{
-		MetricAllowlist: o.MetricAllowlist,
-		MetricDenylist:  o.MetricDenylist,
-		MetricOptInList: o.MetricOptInList,
-		Resources:       o.Resources,
-		Namespaces:      o.Namespaces,
+		MetricAllowlist:    o.MetricAllowlist,
+		MetricDenylist:     o.MetricDenylist,
+		MetricOptInList:    o.MetricOptInList,
+		Resources:          o.Resources,
+		Namespaces:         o.Namespaces,
+		NamespacesDenylist: o.NamespacesDenylist,
 	}
 }
 

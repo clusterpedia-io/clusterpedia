@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-state-metrics/v2/pkg/allowdenylist"
 	"k8s.io/kube-state-metrics/v2/pkg/metric"
@@ -49,6 +50,27 @@ func (config *MetricsStoreBuilderConfig) New() (*MetricsStoreBuilder, error) {
 		return nil, nil
 	}
 
+	var match func(interface{}) (bool, error)
+	if len(config.NamespacesDenylist) != 0 {
+		set := sets.NewString(config.NamespacesDenylist...)
+		match = func(obj interface{}) (bool, error) {
+			typ, err := meta.Accessor(obj)
+			if err != nil {
+				return false, err
+			}
+			return !set.Has(typ.GetNamespace()), nil
+		}
+	} else if len(config.Namespaces) != 0 {
+		set := sets.NewString(config.Namespaces...)
+		match = func(obj interface{}) (bool, error) {
+			typ, err := meta.Accessor(obj)
+			if err != nil {
+				return false, err
+			}
+			return set.Has(typ.GetNamespace()), nil
+		}
+	}
+
 	filter, err := NewFamilyGeneratorFilter(config)
 	if err != nil {
 		return nil, err
@@ -56,6 +78,7 @@ func (config *MetricsStoreBuilderConfig) New() (*MetricsStoreBuilder, error) {
 	return &MetricsStoreBuilder{
 		familyGeneratorFilter: filter,
 		resources:             config.Resources,
+		match:                 match,
 	}, nil
 }
 
@@ -63,6 +86,7 @@ type MetricsStoreBuilder struct {
 	familyGeneratorFilter generator.FamilyGeneratorFilter
 
 	resources options.ResourceSet
+	match     func(obj interface{}) (bool, error)
 }
 
 func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource schema.GroupVersionResource) *MetricsStore {
@@ -123,6 +147,7 @@ func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource sche
 	return &MetricsStore{
 		MetricsStore: storage,
 		convertor:    convertor,
+		match:        builder.match,
 	}
 }
 
@@ -173,9 +198,20 @@ type MetricsStore struct {
 	*metricsstore.MetricsStore
 
 	convertor func(obj interface{}) (interface{}, error)
+	match     func(obj interface{}) (bool, error)
 }
 
 func (store *MetricsStore) Add(obj interface{}) error {
+	if store.match != nil {
+		matched, err := store.match(obj)
+		if err != nil {
+			return err
+		}
+		if !matched {
+			return nil
+		}
+	}
+
 	obj, err := store.convertor(obj)
 	if err != nil {
 		return err
@@ -185,6 +221,16 @@ func (store *MetricsStore) Add(obj interface{}) error {
 }
 
 func (store *MetricsStore) Update(obj interface{}) error {
+	if store.match != nil {
+		matched, err := store.match(obj)
+		if err != nil {
+			return err
+		}
+		if !matched {
+			return nil
+		}
+	}
+
 	obj, err := store.convertor(obj)
 	if err != nil {
 		return err
@@ -194,12 +240,31 @@ func (store *MetricsStore) Update(obj interface{}) error {
 }
 
 func (store *MetricsStore) Delete(obj interface{}) error {
+	if store.match != nil {
+		matched, err := store.match(obj)
+		if err != nil {
+			return err
+		}
+		if !matched {
+			return nil
+		}
+	}
+
 	return store.MetricsStore.Delete(obj)
 }
 
 func (store *MetricsStore) Replace(list []interface{}, rv string) error {
 	objs := make([]interface{}, 0, len(list))
 	for _, obj := range list {
+		if store.match != nil {
+			matched, err := store.match(obj)
+			if err != nil {
+				continue
+			}
+			if !matched {
+				continue
+			}
+		}
 		o, err := store.convertor(obj)
 		if err != nil {
 			return err
