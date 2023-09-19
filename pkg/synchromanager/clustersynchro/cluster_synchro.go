@@ -222,6 +222,7 @@ func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 
 		go func() {
 			timer := time.NewTicker(15 * time.Second)
+			defer timer.Stop()
 			for {
 				select {
 				case <-timer.C:
