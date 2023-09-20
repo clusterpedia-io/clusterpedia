@@ -28,6 +28,10 @@ function main() {
             echo "::group::Running test ${name} on ${env_name}"
             if ! "${env}" "${file}"; then
                 failed+=("'${name} on ${env_name}'")
+                mv "${TEST_ROOT}/logs" "${TEST_ROOT}/logs-${name}-${env_name}"
+            else
+                # Clean up logs
+                rm -rf "${TEST_ROOT}/logs"
             fi
             echo "::endgroup::"
         done

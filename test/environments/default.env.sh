@@ -25,6 +25,7 @@ create_data_plane data-v1-23 v1.23.4 || {
     echo "Failed to create data plane"
     exit 1
 }
+
 "${ROOT}/hack/gen-clusterconfigs.sh"
 
 "${cases}"
