@@ -33,11 +33,11 @@ function cleanup() {
     for release in "${releases[@]}"; do
         delete_data_plane "data-${release//./-}" >/dev/null 2>&1
     done
-    delete_control_plane control-v1-23 >/dev/null 2>&1
+    delete_control_plane control-v1-28 >/dev/null 2>&1
 }
 trap cleanup EXIT
 
-create_control_plane control-v1-23 v1.23.4 || {
+create_control_plane control-v1-28 v1.28.0 || {
     echo "Failed to create control plane"
     exit 1
 }
