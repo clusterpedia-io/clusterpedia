@@ -8,16 +8,20 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
+	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
@@ -99,6 +103,10 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	// genericConfig.OpenAPIConfig.Info.Title = openAPITitle
 	// genericConfig.OpenAPIConfig.Info.Version= openAPIVersion
 
+	genericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
+	genericConfig.OpenAPIV3Config.Info.Title = "clusterpedia apiserver"
+	genericConfig.OpenAPIV3Config.Info.Version = ""
+
 	// todo
 	// support watch to LongRunningFunc
 	genericConfig.LongRunningFunc = func(r *http.Request, requestInfo *genericrequest.RequestInfo) bool {
@@ -137,7 +145,12 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.CoreAPI.ApplyTo(config); err != nil {
 		return err
 	}
-	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, config.ClientConfig, o.FeatureGate); err != nil {
+	client, err := kubernetes.NewForConfig(config.ClientConfig)
+	if err != nil {
+		return err
+	}
+	dynamicClient := dynamic.NewForConfigOrDie(config.ClientConfig)
+	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, client, dynamicClient, o.FeatureGate); err != nil {
 		return err
 	}
 

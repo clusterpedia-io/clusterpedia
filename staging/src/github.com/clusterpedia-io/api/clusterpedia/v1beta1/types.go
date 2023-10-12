@@ -8,6 +8,7 @@ import (
 )
 
 // +k8s:conversion-gen:explicit-from=net/url.Values
+// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ListOptions struct {
@@ -63,6 +64,7 @@ type Resources struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 
 type CollectionResource struct {
 	metav1.TypeMeta `json:",inline"`
@@ -96,6 +98,7 @@ type CollectionResourceType struct {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 
 type CollectionResourceList struct {
 	metav1.TypeMeta `json:",inline"`
