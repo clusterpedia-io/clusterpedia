@@ -1,0 +1,25 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: clusterpedia-internalstorage-nebula
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: nebula
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /var/local/clusterpedia/internalstorage/nebula
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - __NODE_NAME__

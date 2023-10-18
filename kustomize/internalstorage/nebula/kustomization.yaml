@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- clusterpedia_internalstorage_configmap.yaml
+- clusterpedia_internalstorage_deployment.yaml
+- clusterpedia_internalstorage_secret.yaml
