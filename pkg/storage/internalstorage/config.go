@@ -45,6 +45,7 @@ type Config struct {
 
 	MySQL    *MySQLConfig    `yaml:"mysql"`
 	Postgres *PostgresConfig `yaml:"postgres"`
+	Nebula   *NebulaConfig   `yaml:"nebula"`
 
 	Params map[string]string `yaml:"params"`
 
@@ -86,6 +87,14 @@ type MySQLConfig struct {
 
 type PostgresConfig struct {
 	RecoverableErrCodes []string `yaml:"recoverableErrCodes"`
+}
+
+type NebulaConfig struct {
+	TimeOut         time.Duration `yaml:"timeOut"`
+	IdleTime        time.Duration `yaml:"idleTime"`
+	MaxConnPoolSize int           `yaml:"maxConnPoolSize"`
+	MinConnPoolSize int           `yaml:"minConnPoolSize"`
+	UseHTTP2        bool          `yaml:"useHTTP2"`
 }
 
 type ConnPoolConfig struct {
@@ -286,6 +295,28 @@ func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 func (cfg *Config) genSQLiteDSN() (string, error) {
 	if cfg.DSN == "" {
 		return "", errors.New("sqlite: dsn is required")
+	}
+	return cfg.DSN, nil
+}
+
+func (cfg *Config) genNebulaDSN() (string, error) {
+	if cfg.DSN == "" {
+		return "", errors.New("nebula: dsn is required")
+	}
+	if cfg.Nebula.IdleTime <= 0 {
+		return "", errors.New("nebula:Idle Time can't be less than or equal to zero")
+	}
+	if cfg.Nebula.MaxConnPoolSize <= 0 {
+		return "", errors.New("nebula: Max connection pool size can't be less than or equal to zero")
+	}
+	if cfg.Nebula.MinConnPoolSize <= 0 {
+		return "", errors.New("nebula: Min connection pool size can't be less than or equal to zero")
+	}
+	if cfg.Nebula.TimeOut <= 0 {
+		return "", errors.New("nebula:Time Out can't be less than or equal to zero")
+	}
+	if !cfg.Nebula.UseHTTP2 {
+		return "", errors.New("nebula:UseHTTP2 can't be false")
 	}
 	return cfg.DSN, nil
 }
