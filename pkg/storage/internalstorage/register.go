@@ -10,7 +10,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4/stdlib"
 	"github.com/jinzhu/configor"
-	gnebula "github.com/vesoft-inc/nebula-go/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
@@ -69,12 +68,12 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 			return nil, err
 		}
 		dialector = gsqlite.Open(dsn)
-	case "nebula":
-		dsn, err := cfg.genNebulaDSN()
-		if err != nil {
-			return nil, err
-		}
-		dialector = gnebula.Open(dsn)
+	// case "nebula":
+	// 	dsn, err := cfg.genNebulaDSN()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	conn,err := gnebula.NewConnectionPool()
 	default:
 		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)
 	}
