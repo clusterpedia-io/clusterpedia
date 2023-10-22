@@ -6,10 +6,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4/stdlib"
 	"github.com/jinzhu/configor"
+	gnebula "github.com/vesoft-inc/nebula-go/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
@@ -68,12 +70,35 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 			return nil, err
 		}
 		dialector = gsqlite.Open(dsn)
-	// case "nebula":
-	// 	dsn, err := cfg.genNebulaDSN()
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	conn,err := gnebula.NewConnectionPool()
+	case "nebula":
+		nebulaconfig, err := cfg.genNebulaConfig()
+		if err != nil {
+			return nil, err
+		}
+		// TODO : dialector like for nebula
+		port, err := strconv.Atoi(cfg.Port)
+		if err != nil {
+			return nil, err
+		}
+
+		hostAddress := gnebula.HostAddress{Host: cfg.Host, Port: port}
+		hostList := []gnebula.HostAddress{hostAddress}
+		// Initialize connection pool
+		pool, err := gnebula.NewConnectionPool(hostList, *nebulaconfig, nebulalog)
+		if err != nil {
+			nebulalog.Fatal(fmt.Sprintf("Fail to initialize the connection pool, host: %s, port: %d, %s", cfg.Host, port, err.Error()))
+		}
+		// Close all connections in the pool
+		defer pool.Close()
+
+		// Create session
+		session, err := pool.GetSession(cfg.User, cfg.Password)
+		if err != nil {
+			nebulalog.Fatal(fmt.Sprintf("Fail to create a new session from connection pool, username: %s, password: %s, %s",
+				cfg.User, cfg.Password, err.Error()))
+		}
+		// Release session and return connection back to connection pool
+		defer session.Release()
 	default:
 		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)
 	}

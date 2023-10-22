@@ -5,7 +5,7 @@ metadata:
   namespace: clusterpedia-system
 spec:
   ports:
-  - port: 3699
+  - port: 9669
   selector:
     app: clusterpedia-internalstorage
     internalstorage.clusterpedia.io/type: nebula
@@ -59,7 +59,7 @@ spec:
               key: password
         ports:
         - name: nebula
-          containerPort: 3699
+          containerPort: 9669
         volumeMounts:
         - name: data
           mountPath: /var/lib/nebulaql/data

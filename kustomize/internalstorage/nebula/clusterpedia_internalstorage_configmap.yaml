@@ -7,6 +7,6 @@ data:
   internalstorage-config.yaml: |
     type: "nebula"
     host: "clusterpedia-internalstorage-nebula"
-    port: 3699
+    port: 9669
     user: nebula
     database: "clusterpedia"
