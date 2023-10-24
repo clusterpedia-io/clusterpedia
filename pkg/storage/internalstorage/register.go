@@ -6,12 +6,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4/stdlib"
 	"github.com/jinzhu/configor"
-	gnebula "github.com/vesoft-inc/nebula-go/v3"
+	"github.com/zhihu/norm/v3"
+	"github.com/zhihu/norm/v3/dialectors"
 	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
@@ -42,6 +42,7 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	}
 
 	var dialector gorm.Dialector
+	var normDialector *dialectors.NebulaDialector
 	switch cfg.Type {
 	case "mysql":
 		mysqlConfig, err := cfg.genMySQLConfig()
@@ -71,34 +72,11 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		}
 		dialector = gsqlite.Open(dsn)
 	case "nebula":
-		nebulaconfig, err := cfg.genNebulaConfig()
+		NebulaConfig, err := cfg.genNebulaConfig()
 		if err != nil {
 			return nil, err
 		}
-		// TODO : dialector like for nebula
-		port, err := strconv.Atoi(cfg.Port)
-		if err != nil {
-			return nil, err
-		}
-
-		hostAddress := gnebula.HostAddress{Host: cfg.Host, Port: port}
-		hostList := []gnebula.HostAddress{hostAddress}
-		// Initialize connection pool
-		pool, err := gnebula.NewConnectionPool(hostList, *nebulaconfig, nebulalog)
-		if err != nil {
-			nebulalog.Fatal(fmt.Sprintf("Fail to initialize the connection pool, host: %s, port: %d, %s", cfg.Host, port, err.Error()))
-		}
-		// Close all connections in the pool
-		defer pool.Close()
-
-		// Create session
-		session, err := pool.GetSession(cfg.User, cfg.Password)
-		if err != nil {
-			nebulalog.Fatal(fmt.Sprintf("Fail to create a new session from connection pool, username: %s, password: %s, %s",
-				cfg.User, cfg.Password, err.Error()))
-		}
-		// Release session and return connection back to connection pool
-		defer session.Release()
+		normDialector = dialectors.MustNewNebulaDialector(*NebulaConfig)
 	default:
 		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)
 	}
@@ -108,27 +86,35 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		return nil, err
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{SkipDefaultTransaction: true, Logger: logger})
-	if err != nil {
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	connPool, err := cfg.getConnPoolConfig()
-	if err != nil {
-		return nil, err
-	}
-	sqlDB.SetMaxIdleConns(connPool.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
-	sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
+	if cfg.Type != "nebula" {
+		db, err := gorm.Open(dialector, &gorm.Config{SkipDefaultTransaction: true, Logger: logger})
+		if err != nil {
+			return nil, err
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, err
+		}
+		connPool, err := cfg.getConnPoolConfig()
+		if err != nil {
+			return nil, err
+		}
+		sqlDB.SetMaxIdleConns(connPool.MaxIdleConns)
+		sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
+		sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
 
-	if err := db.AutoMigrate(&Resource{}); err != nil {
-		return nil, err
-	}
+		if err := db.AutoMigrate(&Resource{}); err != nil {
+			return nil, err
+		}
 
-	return &StorageFactory{db}, nil
+		return &StorageFactory{db}, nil
+	}
+	if cfg.Type == "nebula" {
+		db := norm.MustOpen(normDialector, norm.Config{})
+		return &StorageFactory{db}, nil // have to create a new nebula storage factory and possibly this function to cater nebula needs
+	}
+	return nil, fmt.Errorf("Cannot create a new storage factory based on the database specified")
+
 }
 
 func newLogger(cfg *Config) (logger.Interface, error) {

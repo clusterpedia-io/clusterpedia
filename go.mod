@@ -17,7 +17,8 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.3
-	github.com/vesoft-inc/nebula-go/v3 v3.0.0
+	github.com/vesoft-inc/nebula-go/v3 v3.3.1
+	github.com/zhihu/norm/v3 v3.0.0
 	go.uber.org/atomic v1.10.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gorm.io/datatypes v1.0.7
@@ -120,6 +121,8 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
+	github.com/vesoft-inc/nebula-go/v2 v2.0.0-ga // indirect
+	github.com/zhihu/norm v0.1.11 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.6 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.6 // indirect
 	go.etcd.io/etcd/client/v2 v2.305.6 // indirect

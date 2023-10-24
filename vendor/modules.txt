@@ -341,11 +341,26 @@ github.com/stoewer/go-strcase
 # github.com/stretchr/testify v1.8.3
 ## explicit; go 1.20
 github.com/stretchr/testify/assert
-# github.com/vesoft-inc/nebula-go/v3 v3.0.0
+# github.com/vesoft-inc/nebula-go/v2 v2.0.0-ga
+## explicit; go 1.13
+github.com/vesoft-inc/nebula-go/v2
+github.com/vesoft-inc/nebula-go/v2/nebula
+github.com/vesoft-inc/nebula-go/v2/nebula/graph
+# github.com/vesoft-inc/nebula-go/v3 v3.3.1
 ## explicit; go 1.13
 github.com/vesoft-inc/nebula-go/v3
 github.com/vesoft-inc/nebula-go/v3/nebula
 github.com/vesoft-inc/nebula-go/v3/nebula/graph
+# github.com/zhihu/norm v0.1.11
+## explicit; go 1.15
+github.com/zhihu/norm/constants
+github.com/zhihu/norm/dialectors
+github.com/zhihu/norm/internal/converts
+github.com/zhihu/norm/internal/utils
+# github.com/zhihu/norm/v3 v3.0.0
+## explicit; go 1.15
+github.com/zhihu/norm/v3
+github.com/zhihu/norm/v3/dialectors
 # go.etcd.io/etcd/api/v3 v3.5.6
 ## explicit; go 1.16
 go.etcd.io/etcd/api/v3/authpb

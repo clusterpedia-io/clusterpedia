@@ -105,3 +105,126 @@ func openAndReadFile(path string) ([]byte, error) {
 	}
 	return b, nil
 }
+
+// SessionPoolConf is the configs of a session pool
+// Note that the space name is bound to the session pool for its lifetime
+type SessionPoolConf struct {
+	username     string        // username for authentication
+	password     string        // password for authentication
+	serviceAddrs []HostAddress // service addresses for session pool
+	hostIndex    int           // index of the host in ServiceAddrs that the next new session will connect to
+	spaceName    string        // The space name that all sessions in the pool are bound to
+	sslConfig    *tls.Config   // Optional SSL config for the connection
+
+	// Basic pool configs
+	// Socket timeout and Socket connection timeout, unit: seconds
+	timeOut time.Duration
+	// The idleTime of the connection, unit: seconds
+	// If connection's idle time is longer than idleTime, it will be delete
+	// 0 value means the connection will not expire
+	idleTime time.Duration
+	// The max sessions in pool for all addresses
+	maxSize int
+	// The min sessions in pool for all addresses
+	minSize int
+}
+
+type SessionPoolConfOption func(*SessionPoolConf)
+
+// NewSessionPoolConfOpt creates a new NewSessionPoolConf with the provided options
+func NewSessionPoolConf(
+	username, password string,
+	serviceAddrs []HostAddress,
+	spaceName string, opts ...SessionPoolConfOption) (*SessionPoolConf, error) {
+	// Set default values for basic pool configs
+	newPoolConf := SessionPoolConf{
+		username:     username,
+		password:     password,
+		serviceAddrs: serviceAddrs,
+		spaceName:    spaceName,
+		timeOut:      0 * time.Millisecond,
+		idleTime:     0 * time.Millisecond,
+		maxSize:      30,
+		minSize:      1,
+		hostIndex:    0,
+	}
+
+	// Iterate the given options and apply them to the config.
+	for _, overwrite := range opts {
+		overwrite(&newPoolConf)
+	}
+
+	if err := newPoolConf.checkMandatoryFields(); err != nil {
+		return nil, err
+	}
+	return &newPoolConf, nil
+}
+
+func WithSSLConfig(sslConfig *tls.Config) SessionPoolConfOption {
+	return func(conf *SessionPoolConf) {
+		conf.sslConfig = sslConfig
+	}
+}
+
+func WithTimeOut(timeOut time.Duration) SessionPoolConfOption {
+	return func(conf *SessionPoolConf) {
+		conf.timeOut = timeOut
+	}
+}
+
+func WithIdleTime(idleTime time.Duration) SessionPoolConfOption {
+	return func(conf *SessionPoolConf) {
+		conf.idleTime = idleTime
+	}
+}
+
+func WithMaxSize(maxSize int) SessionPoolConfOption {
+	return func(conf *SessionPoolConf) {
+		conf.maxSize = maxSize
+	}
+}
+
+func WithMinSize(minSize int) SessionPoolConfOption {
+	return func(conf *SessionPoolConf) {
+		conf.minSize = minSize
+	}
+}
+
+func (conf *SessionPoolConf) checkMandatoryFields() error {
+	// Check mandatory fields
+	if conf.username == "" {
+		return fmt.Errorf("invalid session pool config: Username is empty")
+	}
+	if conf.password == "" {
+		return fmt.Errorf("invalid session pool config: Password is empty")
+	}
+	if len(conf.serviceAddrs) == 0 {
+		return fmt.Errorf("invalid session pool config: Service address is empty")
+	}
+	if conf.spaceName == "" {
+		return fmt.Errorf("invalid session pool config: Space name is empty")
+	}
+	return nil
+}
+
+// checkBasicFields checks the basic fields of the config and
+// sets a default value if the given field value is invalid
+func (conf *SessionPoolConf) checkBasicFields(log Logger) {
+	// Check pool related fields, use default value if the given value is invalid
+	if conf.timeOut < 0 {
+		conf.timeOut = 0 * time.Millisecond
+		log.Warn("Illegal Timeout value, the default value of 0 second has been applied")
+	}
+	if conf.idleTime < 0 {
+		conf.idleTime = 0 * time.Millisecond
+		log.Warn("Invalid IdleTime value, the default value of 0 second has been applied")
+	}
+	if conf.maxSize < 1 {
+		conf.maxSize = 10
+		log.Warn("Invalid MaxSize value, the default value of 10 has been applied")
+	}
+	if conf.minSize < 0 {
+		conf.minSize = 0
+		log.Warn("Invalid MinSize value, the default value of 0 has been applied")
+	}
+}

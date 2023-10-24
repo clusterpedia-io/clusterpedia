@@ -11,6 +11,7 @@ package nebula_go
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/facebook/fbthrift/thrift/lib/go/thrift"
 	"github.com/vesoft-inc/nebula-go/v3/nebula"
@@ -25,14 +26,16 @@ type timezoneInfo struct {
 type Session struct {
 	sessionID  int64
 	connection *connection
-	connPool   *ConnectionPool
+	connPool   *ConnectionPool // the connection pool which the session belongs to. could be nil if the Session is store in the SessionPool
+	sessPool   *SessionPool    // the session pool which the session belongs to. could be nil if the Session is store in the ConnectionPool
 	log        Logger
+	returnedAt time.Time // the timestamp that the session was created or returned.
 	mu         sync.Mutex
 	timezoneInfo
 }
 
 func (session *Session) reconnectWithExecuteErr(err error) error {
-	// Reconnect only if the tranport is closed
+	// Reconnect only if the transport is closed
 	err2, ok := err.(thrift.TransportException)
 	if !ok {
 		return err
@@ -56,7 +59,7 @@ func (session *Session) executeWithReconnect(f func() (interface{}, error)) (int
 	if err2 := session.reconnectWithExecuteErr(err); err2 != nil {
 		return nil, err2
 	}
-	// Execute with the new connetion
+	// Execute with the new connection
 	return f()
 
 }
@@ -68,14 +71,11 @@ func (session *Session) ExecuteWithParameter(stmt string, params map[string]inte
 	if session.connection == nil {
 		return nil, fmt.Errorf("failed to execute: Session has been released")
 	}
-	paramsMap := make(map[string]*nebula.Value)
-	for k, v := range params {
-		nv, er := value2Nvalue(v)
-		if er != nil {
-			return nil, er
-		}
-		paramsMap[k] = nv
+	paramsMap, err := parseParams(params)
+	if err != nil {
+		return nil, err
 	}
+
 	execFunc := func() (interface{}, error) {
 		resp, err := session.connection.executeWithParameter(session.sessionID, stmt, paramsMap)
 		if err != nil {
@@ -165,62 +165,7 @@ func (session *Session) ExecuteJson(stmt string) ([]byte, error) {
 
 // ExecuteJson returns the result of the given query as a json string
 // Date and Datetime will be returned in UTC
-//	JSON struct:
-// {
-//     "results":[
-//         {
-//             "columns":[
-//             ],
-//             "data":[
-//                 {
-//                     "row":[
-//                         "row-data"
-//                     ],
-//                     "meta":[
-//                         "metadata"
-//                     ]
-//                 }
-//             ],
-//             "latencyInUs":0,
-//             "spaceName":"",
-//             "planDesc ":{
-//                 "planNodeDescs":[
-//                     {
-//                         "name":"",
-//                         "id":0,
-//                         "outputVar":"",
-//                         "description":{
-//                             "key":""
-//                         },
-//                         "profiles":[
-//                             {
-//                                 "rows":1,
-//                                 "execDurationInUs":0,
-//                                 "totalDurationInUs":0,
-//                                 "otherStats":{}
-//                             }
-//                         ],
-//                         "branchInfo":{
-//                             "isDoBranch":false,
-//                             "conditionNodeId":-1
-//                         },
-//                         "dependencies":[]
-//                     }
-//                 ],
-//                 "nodeIndexMap":{},
-//                 "format":"",
-//                 "optimize_time_in_us":0
-//             },
-//             "comment ":""
-//         }
-//     ],
-//     "errors":[
-//         {
-//       		"code": 0,
-//       		"message": ""
-//         }
-//     ]
-// }
+// The result is a JSON string in the same format as ExecuteJson()
 func (session *Session) ExecuteJsonWithParameter(stmt string, params map[string]interface{}) ([]byte, error) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -263,7 +208,7 @@ func (session *Session) reConnect() error {
 	return nil
 }
 
-// Release logs out and releases connetion hold by session.
+// Release logs out and releases connection hold by session.
 // The connection will be added into the activeConnectionQueue of the connection pool
 // so that it could be reused.
 func (session *Session) Release() {
@@ -279,13 +224,34 @@ func (session *Session) Release() {
 	if err := session.connection.signOut(session.sessionID); err != nil {
 		session.log.Warn(fmt.Sprintf("Sign out failed, %s", err.Error()))
 	}
-	// Release connection to pool
-	session.connPool.release(session.connection)
+
+	// if the session is created from the connection pool, return the connection to the pool
+	if session.connPool != nil {
+		session.connPool.release(session.connection)
+	}
 	session.connection = nil
 }
 
 func (session *Session) GetSessionID() int64 {
 	return session.sessionID
+}
+
+// Ping checks if the session is valid
+func (session *Session) Ping() error {
+	if session.connection == nil {
+		return fmt.Errorf("failed to ping: Session has been released")
+	}
+	// send ping request
+	resp, err := session.Execute(`RETURN "NEBULA GO PING"`)
+	// check connection level error
+	if err != nil {
+		return fmt.Errorf("session ping failed, %s" + err.Error())
+	}
+	// check session level error
+	if !resp.IsSucceed() {
+		return fmt.Errorf("session ping failed, %s" + resp.GetErrorMsg())
+	}
+	return nil
 }
 
 func IsError(resp *graph.ExecutionResponse) bool {
@@ -310,13 +276,9 @@ func slice2Nlist(list []interface{}) (*nebula.NList, error) {
 // construct map to nebula.NMap
 func map2Nmap(m map[string]interface{}) (*nebula.NMap, error) {
 	var ret nebula.NMap
-	kvs := map[string]*nebula.Value{}
-	for k, v := range m {
-		nv, err := value2Nvalue(v)
-		if err != nil {
-			return nil, err
-		}
-		kvs[k] = nv
+	kvs, err := parseParams(m)
+	if err != nil {
+		return nil, err
 	}
 	ret.Kvs = kvs
 	return &ret, nil
@@ -375,7 +337,7 @@ func value2Nvalue(any interface{}) (value *nebula.Value, err error) {
 	} else if v, ok := any.(nebula.Geography); ok {
 		value.SetGgVal(&v)
 	} else {
-		// unsupport other Value type, use this function carefully
+		// unsupported other Value type, use this function carefully
 		err = fmt.Errorf("Only support convert boolean/float/int/string/map/list to nebula.Value but %T", any)
 	}
 	return

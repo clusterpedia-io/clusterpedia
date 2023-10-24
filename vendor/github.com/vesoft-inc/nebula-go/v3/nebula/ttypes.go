@@ -262,6 +262,9 @@ const (
   ErrorCode_E_WRONGCLUSTER ErrorCode = -2010
   ErrorCode_E_ZONE_NOT_ENOUGH ErrorCode = -2011
   ErrorCode_E_ZONE_IS_EMPTY ErrorCode = -2012
+  ErrorCode_E_SCHEMA_NAME_EXISTS ErrorCode = -2013
+  ErrorCode_E_RELATED_INDEX_EXISTS ErrorCode = -2014
+  ErrorCode_E_RELATED_SPACE_EXISTS ErrorCode = -2015
   ErrorCode_E_STORE_FAILURE ErrorCode = -2021
   ErrorCode_E_STORE_SEGMENT_ILLEGAL ErrorCode = -2022
   ErrorCode_E_BAD_BALANCE_PLAN ErrorCode = -2023
@@ -287,6 +290,11 @@ const (
   ErrorCode_E_JOB_NOT_FINISHED ErrorCode = -2048
   ErrorCode_E_TASK_REPORT_OUT_DATE ErrorCode = -2049
   ErrorCode_E_JOB_NOT_IN_SPACE ErrorCode = -2050
+  ErrorCode_E_JOB_NEED_RECOVER ErrorCode = -2051
+  ErrorCode_E_JOB_ALREADY_FINISH ErrorCode = -2052
+  ErrorCode_E_JOB_SUBMITTED ErrorCode = -2053
+  ErrorCode_E_JOB_NOT_STOPPABLE ErrorCode = -2054
+  ErrorCode_E_JOB_HAS_NO_TARGET_STORAGE ErrorCode = -2055
   ErrorCode_E_INVALID_JOB ErrorCode = -2065
   ErrorCode_E_BACKUP_BUILDING_INDEX ErrorCode = -2066
   ErrorCode_E_BACKUP_SPACE_NOT_FOUND ErrorCode = -2067
@@ -335,11 +343,12 @@ const (
   ErrorCode_E_OUTDATED_EDGE ErrorCode = -3072
   ErrorCode_E_WRITE_WRITE_CONFLICT ErrorCode = -3073
   ErrorCode_E_CLIENT_SERVER_INCOMPATIBLE ErrorCode = -3061
-  ErrorCode_E_WORKER_ID_FAILED ErrorCode = -3062
+  ErrorCode_E_ID_FAILED ErrorCode = -3062
   ErrorCode_E_RAFT_UNKNOWN_PART ErrorCode = -3500
   ErrorCode_E_RAFT_LOG_GAP ErrorCode = -3501
   ErrorCode_E_RAFT_LOG_STALE ErrorCode = -3502
   ErrorCode_E_RAFT_TERM_OUT_OF_DATE ErrorCode = -3503
+  ErrorCode_E_RAFT_UNKNOWN_APPEND_LOG ErrorCode = -3504
   ErrorCode_E_RAFT_WAITING_SNAPSHOT ErrorCode = -3511
   ErrorCode_E_RAFT_SENDING_SNAPSHOT ErrorCode = -3512
   ErrorCode_E_RAFT_INVALID_PEER ErrorCode = -3513
@@ -356,6 +365,7 @@ const (
   ErrorCode_E_RAFT_WRITE_BLOCKED ErrorCode = -3528
   ErrorCode_E_RAFT_BUFFER_OVERFLOW ErrorCode = -3529
   ErrorCode_E_RAFT_ATOMIC_OP_FAILED ErrorCode = -3530
+  ErrorCode_E_LEADER_LEASE_FAILED ErrorCode = -3531
   ErrorCode_E_UNKNOWN ErrorCode = -8000
 )
 
@@ -410,6 +420,9 @@ var ErrorCodeToName = map[ErrorCode]string {
   ErrorCode_E_WRONGCLUSTER: "E_WRONGCLUSTER",
   ErrorCode_E_ZONE_NOT_ENOUGH: "E_ZONE_NOT_ENOUGH",
   ErrorCode_E_ZONE_IS_EMPTY: "E_ZONE_IS_EMPTY",
+  ErrorCode_E_SCHEMA_NAME_EXISTS: "E_SCHEMA_NAME_EXISTS",
+  ErrorCode_E_RELATED_INDEX_EXISTS: "E_RELATED_INDEX_EXISTS",
+  ErrorCode_E_RELATED_SPACE_EXISTS: "E_RELATED_SPACE_EXISTS",
   ErrorCode_E_STORE_FAILURE: "E_STORE_FAILURE",
   ErrorCode_E_STORE_SEGMENT_ILLEGAL: "E_STORE_SEGMENT_ILLEGAL",
   ErrorCode_E_BAD_BALANCE_PLAN: "E_BAD_BALANCE_PLAN",
@@ -435,6 +448,11 @@ var ErrorCodeToName = map[ErrorCode]string {
   ErrorCode_E_JOB_NOT_FINISHED: "E_JOB_NOT_FINISHED",
   ErrorCode_E_TASK_REPORT_OUT_DATE: "E_TASK_REPORT_OUT_DATE",
   ErrorCode_E_JOB_NOT_IN_SPACE: "E_JOB_NOT_IN_SPACE",
+  ErrorCode_E_JOB_NEED_RECOVER: "E_JOB_NEED_RECOVER",
+  ErrorCode_E_JOB_ALREADY_FINISH: "E_JOB_ALREADY_FINISH",
+  ErrorCode_E_JOB_SUBMITTED: "E_JOB_SUBMITTED",
+  ErrorCode_E_JOB_NOT_STOPPABLE: "E_JOB_NOT_STOPPABLE",
+  ErrorCode_E_JOB_HAS_NO_TARGET_STORAGE: "E_JOB_HAS_NO_TARGET_STORAGE",
   ErrorCode_E_INVALID_JOB: "E_INVALID_JOB",
   ErrorCode_E_BACKUP_BUILDING_INDEX: "E_BACKUP_BUILDING_INDEX",
   ErrorCode_E_BACKUP_SPACE_NOT_FOUND: "E_BACKUP_SPACE_NOT_FOUND",
@@ -483,11 +501,12 @@ var ErrorCodeToName = map[ErrorCode]string {
   ErrorCode_E_OUTDATED_EDGE: "E_OUTDATED_EDGE",
   ErrorCode_E_WRITE_WRITE_CONFLICT: "E_WRITE_WRITE_CONFLICT",
   ErrorCode_E_CLIENT_SERVER_INCOMPATIBLE: "E_CLIENT_SERVER_INCOMPATIBLE",
-  ErrorCode_E_WORKER_ID_FAILED: "E_WORKER_ID_FAILED",
+  ErrorCode_E_ID_FAILED: "E_ID_FAILED",
   ErrorCode_E_RAFT_UNKNOWN_PART: "E_RAFT_UNKNOWN_PART",
   ErrorCode_E_RAFT_LOG_GAP: "E_RAFT_LOG_GAP",
   ErrorCode_E_RAFT_LOG_STALE: "E_RAFT_LOG_STALE",
   ErrorCode_E_RAFT_TERM_OUT_OF_DATE: "E_RAFT_TERM_OUT_OF_DATE",
+  ErrorCode_E_RAFT_UNKNOWN_APPEND_LOG: "E_RAFT_UNKNOWN_APPEND_LOG",
   ErrorCode_E_RAFT_WAITING_SNAPSHOT: "E_RAFT_WAITING_SNAPSHOT",
   ErrorCode_E_RAFT_SENDING_SNAPSHOT: "E_RAFT_SENDING_SNAPSHOT",
   ErrorCode_E_RAFT_INVALID_PEER: "E_RAFT_INVALID_PEER",
@@ -504,6 +523,7 @@ var ErrorCodeToName = map[ErrorCode]string {
   ErrorCode_E_RAFT_WRITE_BLOCKED: "E_RAFT_WRITE_BLOCKED",
   ErrorCode_E_RAFT_BUFFER_OVERFLOW: "E_RAFT_BUFFER_OVERFLOW",
   ErrorCode_E_RAFT_ATOMIC_OP_FAILED: "E_RAFT_ATOMIC_OP_FAILED",
+  ErrorCode_E_LEADER_LEASE_FAILED: "E_LEADER_LEASE_FAILED",
   ErrorCode_E_UNKNOWN: "E_UNKNOWN",
 }
 
@@ -558,6 +578,9 @@ var ErrorCodeToValue = map[string]ErrorCode {
   "E_WRONGCLUSTER": ErrorCode_E_WRONGCLUSTER,
   "E_ZONE_NOT_ENOUGH": ErrorCode_E_ZONE_NOT_ENOUGH,
   "E_ZONE_IS_EMPTY": ErrorCode_E_ZONE_IS_EMPTY,
+  "E_SCHEMA_NAME_EXISTS": ErrorCode_E_SCHEMA_NAME_EXISTS,
+  "E_RELATED_INDEX_EXISTS": ErrorCode_E_RELATED_INDEX_EXISTS,
+  "E_RELATED_SPACE_EXISTS": ErrorCode_E_RELATED_SPACE_EXISTS,
   "E_STORE_FAILURE": ErrorCode_E_STORE_FAILURE,
   "E_STORE_SEGMENT_ILLEGAL": ErrorCode_E_STORE_SEGMENT_ILLEGAL,
   "E_BAD_BALANCE_PLAN": ErrorCode_E_BAD_BALANCE_PLAN,
@@ -583,6 +606,11 @@ var ErrorCodeToValue = map[string]ErrorCode {
   "E_JOB_NOT_FINISHED": ErrorCode_E_JOB_NOT_FINISHED,
   "E_TASK_REPORT_OUT_DATE": ErrorCode_E_TASK_REPORT_OUT_DATE,
   "E_JOB_NOT_IN_SPACE": ErrorCode_E_JOB_NOT_IN_SPACE,
+  "E_JOB_NEED_RECOVER": ErrorCode_E_JOB_NEED_RECOVER,
+  "E_JOB_ALREADY_FINISH": ErrorCode_E_JOB_ALREADY_FINISH,
+  "E_JOB_SUBMITTED": ErrorCode_E_JOB_SUBMITTED,
+  "E_JOB_NOT_STOPPABLE": ErrorCode_E_JOB_NOT_STOPPABLE,
+  "E_JOB_HAS_NO_TARGET_STORAGE": ErrorCode_E_JOB_HAS_NO_TARGET_STORAGE,
   "E_INVALID_JOB": ErrorCode_E_INVALID_JOB,
   "E_BACKUP_BUILDING_INDEX": ErrorCode_E_BACKUP_BUILDING_INDEX,
   "E_BACKUP_SPACE_NOT_FOUND": ErrorCode_E_BACKUP_SPACE_NOT_FOUND,
@@ -631,11 +659,12 @@ var ErrorCodeToValue = map[string]ErrorCode {
   "E_OUTDATED_EDGE": ErrorCode_E_OUTDATED_EDGE,
   "E_WRITE_WRITE_CONFLICT": ErrorCode_E_WRITE_WRITE_CONFLICT,
   "E_CLIENT_SERVER_INCOMPATIBLE": ErrorCode_E_CLIENT_SERVER_INCOMPATIBLE,
-  "E_WORKER_ID_FAILED": ErrorCode_E_WORKER_ID_FAILED,
+  "E_ID_FAILED": ErrorCode_E_ID_FAILED,
   "E_RAFT_UNKNOWN_PART": ErrorCode_E_RAFT_UNKNOWN_PART,
   "E_RAFT_LOG_GAP": ErrorCode_E_RAFT_LOG_GAP,
   "E_RAFT_LOG_STALE": ErrorCode_E_RAFT_LOG_STALE,
   "E_RAFT_TERM_OUT_OF_DATE": ErrorCode_E_RAFT_TERM_OUT_OF_DATE,
+  "E_RAFT_UNKNOWN_APPEND_LOG": ErrorCode_E_RAFT_UNKNOWN_APPEND_LOG,
   "E_RAFT_WAITING_SNAPSHOT": ErrorCode_E_RAFT_WAITING_SNAPSHOT,
   "E_RAFT_SENDING_SNAPSHOT": ErrorCode_E_RAFT_SENDING_SNAPSHOT,
   "E_RAFT_INVALID_PEER": ErrorCode_E_RAFT_INVALID_PEER,
@@ -652,6 +681,7 @@ var ErrorCodeToValue = map[string]ErrorCode {
   "E_RAFT_WRITE_BLOCKED": ErrorCode_E_RAFT_WRITE_BLOCKED,
   "E_RAFT_BUFFER_OVERFLOW": ErrorCode_E_RAFT_BUFFER_OVERFLOW,
   "E_RAFT_ATOMIC_OP_FAILED": ErrorCode_E_RAFT_ATOMIC_OP_FAILED,
+  "E_LEADER_LEASE_FAILED": ErrorCode_E_LEADER_LEASE_FAILED,
   "E_UNKNOWN": ErrorCode_E_UNKNOWN,
 }
 
@@ -706,6 +736,9 @@ var ErrorCodeNames = []string {
   "E_WRONGCLUSTER",
   "E_ZONE_NOT_ENOUGH",
   "E_ZONE_IS_EMPTY",
+  "E_SCHEMA_NAME_EXISTS",
+  "E_RELATED_INDEX_EXISTS",
+  "E_RELATED_SPACE_EXISTS",
   "E_STORE_FAILURE",
   "E_STORE_SEGMENT_ILLEGAL",
   "E_BAD_BALANCE_PLAN",
@@ -731,6 +764,11 @@ var ErrorCodeNames = []string {
   "E_JOB_NOT_FINISHED",
   "E_TASK_REPORT_OUT_DATE",
   "E_JOB_NOT_IN_SPACE",
+  "E_JOB_NEED_RECOVER",
+  "E_JOB_ALREADY_FINISH",
+  "E_JOB_SUBMITTED",
+  "E_JOB_NOT_STOPPABLE",
+  "E_JOB_HAS_NO_TARGET_STORAGE",
   "E_INVALID_JOB",
   "E_BACKUP_BUILDING_INDEX",
   "E_BACKUP_SPACE_NOT_FOUND",
@@ -779,11 +817,12 @@ var ErrorCodeNames = []string {
   "E_OUTDATED_EDGE",
   "E_WRITE_WRITE_CONFLICT",
   "E_CLIENT_SERVER_INCOMPATIBLE",
-  "E_WORKER_ID_FAILED",
+  "E_ID_FAILED",
   "E_RAFT_UNKNOWN_PART",
   "E_RAFT_LOG_GAP",
   "E_RAFT_LOG_STALE",
   "E_RAFT_TERM_OUT_OF_DATE",
+  "E_RAFT_UNKNOWN_APPEND_LOG",
   "E_RAFT_WAITING_SNAPSHOT",
   "E_RAFT_SENDING_SNAPSHOT",
   "E_RAFT_INVALID_PEER",
@@ -800,6 +839,7 @@ var ErrorCodeNames = []string {
   "E_RAFT_WRITE_BLOCKED",
   "E_RAFT_BUFFER_OVERFLOW",
   "E_RAFT_ATOMIC_OP_FAILED",
+  "E_LEADER_LEASE_FAILED",
   "E_UNKNOWN",
 }
 
@@ -854,6 +894,9 @@ var ErrorCodeValues = []ErrorCode {
   ErrorCode_E_WRONGCLUSTER,
   ErrorCode_E_ZONE_NOT_ENOUGH,
   ErrorCode_E_ZONE_IS_EMPTY,
+  ErrorCode_E_SCHEMA_NAME_EXISTS,
+  ErrorCode_E_RELATED_INDEX_EXISTS,
+  ErrorCode_E_RELATED_SPACE_EXISTS,
   ErrorCode_E_STORE_FAILURE,
   ErrorCode_E_STORE_SEGMENT_ILLEGAL,
   ErrorCode_E_BAD_BALANCE_PLAN,
@@ -879,6 +922,11 @@ var ErrorCodeValues = []ErrorCode {
   ErrorCode_E_JOB_NOT_FINISHED,
   ErrorCode_E_TASK_REPORT_OUT_DATE,
   ErrorCode_E_JOB_NOT_IN_SPACE,
+  ErrorCode_E_JOB_NEED_RECOVER,
+  ErrorCode_E_JOB_ALREADY_FINISH,
+  ErrorCode_E_JOB_SUBMITTED,
+  ErrorCode_E_JOB_NOT_STOPPABLE,
+  ErrorCode_E_JOB_HAS_NO_TARGET_STORAGE,
   ErrorCode_E_INVALID_JOB,
   ErrorCode_E_BACKUP_BUILDING_INDEX,
   ErrorCode_E_BACKUP_SPACE_NOT_FOUND,
@@ -927,11 +975,12 @@ var ErrorCodeValues = []ErrorCode {
   ErrorCode_E_OUTDATED_EDGE,
   ErrorCode_E_WRITE_WRITE_CONFLICT,
   ErrorCode_E_CLIENT_SERVER_INCOMPATIBLE,
-  ErrorCode_E_WORKER_ID_FAILED,
+  ErrorCode_E_ID_FAILED,
   ErrorCode_E_RAFT_UNKNOWN_PART,
   ErrorCode_E_RAFT_LOG_GAP,
   ErrorCode_E_RAFT_LOG_STALE,
   ErrorCode_E_RAFT_TERM_OUT_OF_DATE,
+  ErrorCode_E_RAFT_UNKNOWN_APPEND_LOG,
   ErrorCode_E_RAFT_WAITING_SNAPSHOT,
   ErrorCode_E_RAFT_SENDING_SNAPSHOT,
   ErrorCode_E_RAFT_INVALID_PEER,
@@ -948,6 +997,7 @@ var ErrorCodeValues = []ErrorCode {
   ErrorCode_E_RAFT_WRITE_BLOCKED,
   ErrorCode_E_RAFT_BUFFER_OVERFLOW,
   ErrorCode_E_RAFT_ATOMIC_OP_FAILED,
+  ErrorCode_E_LEADER_LEASE_FAILED,
   ErrorCode_E_UNKNOWN,
 }
 
@@ -6401,9 +6451,13 @@ func (p *Duration) String() string {
 // Attributes:
 //  - LogID
 //  - TermID
+//  - CommitLogID
+//  - CheckpointPath
 type LogInfo struct {
   LogID LogID `thrift:"log_id,1" db:"log_id" json:"log_id"`
   TermID TermID `thrift:"term_id,2" db:"term_id" json:"term_id"`
+  CommitLogID LogID `thrift:"commit_log_id,3" db:"commit_log_id" json:"commit_log_id"`
+  CheckpointPath []byte `thrift:"checkpoint_path,4" db:"checkpoint_path" json:"checkpoint_path"`
 }
 
 func NewLogInfo() *LogInfo {
@@ -6417,6 +6471,14 @@ func (p *LogInfo) GetLogID() LogID {
 
 func (p *LogInfo) GetTermID() TermID {
   return p.TermID
+}
+
+func (p *LogInfo) GetCommitLogID() LogID {
+  return p.CommitLogID
+}
+
+func (p *LogInfo) GetCheckpointPath() []byte {
+  return p.CheckpointPath
 }
 type LogInfoBuilder struct {
   obj *LogInfo
@@ -6432,6 +6494,8 @@ func (p LogInfoBuilder) Emit() *LogInfo{
   return &LogInfo{
     LogID: p.obj.LogID,
     TermID: p.obj.TermID,
+    CommitLogID: p.obj.CommitLogID,
+    CheckpointPath: p.obj.CheckpointPath,
   }
 }
 
@@ -6445,6 +6509,16 @@ func (l *LogInfoBuilder) TermID(termID TermID) *LogInfoBuilder {
   return l
 }
 
+func (l *LogInfoBuilder) CommitLogID(commitLogID LogID) *LogInfoBuilder {
+  l.obj.CommitLogID = commitLogID
+  return l
+}
+
+func (l *LogInfoBuilder) CheckpointPath(checkpointPath []byte) *LogInfoBuilder {
+  l.obj.CheckpointPath = checkpointPath
+  return l
+}
+
 func (l *LogInfo) SetLogID(logID LogID) *LogInfo {
   l.LogID = logID
   return l
@@ -6452,6 +6526,16 @@ func (l *LogInfo) SetLogID(logID LogID) *LogInfo {
 
 func (l *LogInfo) SetTermID(termID TermID) *LogInfo {
   l.TermID = termID
+  return l
+}
+
+func (l *LogInfo) SetCommitLogID(commitLogID LogID) *LogInfo {
+  l.CommitLogID = commitLogID
+  return l
+}
+
+func (l *LogInfo) SetCheckpointPath(checkpointPath []byte) *LogInfo {
+  l.CheckpointPath = checkpointPath
   return l
 }
 
@@ -6474,6 +6558,14 @@ func (p *LogInfo) Read(iprot thrift.Protocol) error {
       }
     case 2:
       if err := p.ReadField2(iprot); err != nil {
+        return err
+      }
+    case 3:
+      if err := p.ReadField3(iprot); err != nil {
+        return err
+      }
+    case 4:
+      if err := p.ReadField4(iprot); err != nil {
         return err
       }
     default:
@@ -6511,11 +6603,32 @@ func (p *LogInfo)  ReadField2(iprot thrift.Protocol) error {
   return nil
 }
 
+func (p *LogInfo)  ReadField3(iprot thrift.Protocol) error {
+  if v, err := iprot.ReadI64(); err != nil {
+    return thrift.PrependError("error reading field 3: ", err)
+  } else {
+    temp := LogID(v)
+    p.CommitLogID = temp
+  }
+  return nil
+}
+
+func (p *LogInfo)  ReadField4(iprot thrift.Protocol) error {
+  if v, err := iprot.ReadBinary(); err != nil {
+    return thrift.PrependError("error reading field 4: ", err)
+  } else {
+    p.CheckpointPath = v
+  }
+  return nil
+}
+
 func (p *LogInfo) Write(oprot thrift.Protocol) error {
   if err := oprot.WriteStructBegin("LogInfo"); err != nil {
     return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err) }
   if err := p.writeField1(oprot); err != nil { return err }
   if err := p.writeField2(oprot); err != nil { return err }
+  if err := p.writeField3(oprot); err != nil { return err }
+  if err := p.writeField4(oprot); err != nil { return err }
   if err := oprot.WriteFieldStop(); err != nil {
     return thrift.PrependError("write field stop error: ", err) }
   if err := oprot.WriteStructEnd(); err != nil {
@@ -6543,6 +6656,26 @@ func (p *LogInfo) writeField2(oprot thrift.Protocol) (err error) {
   return err
 }
 
+func (p *LogInfo) writeField3(oprot thrift.Protocol) (err error) {
+  if err := oprot.WriteFieldBegin("commit_log_id", thrift.I64, 3); err != nil {
+    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:commit_log_id: ", p), err) }
+  if err := oprot.WriteI64(int64(p.CommitLogID)); err != nil {
+  return thrift.PrependError(fmt.Sprintf("%T.commit_log_id (3) field write error: ", p), err) }
+  if err := oprot.WriteFieldEnd(); err != nil {
+    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:commit_log_id: ", p), err) }
+  return err
+}
+
+func (p *LogInfo) writeField4(oprot thrift.Protocol) (err error) {
+  if err := oprot.WriteFieldBegin("checkpoint_path", thrift.STRING, 4); err != nil {
+    return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:checkpoint_path: ", p), err) }
+  if err := oprot.WriteBinary(p.CheckpointPath); err != nil {
+  return thrift.PrependError(fmt.Sprintf("%T.checkpoint_path (4) field write error: ", p), err) }
+  if err := oprot.WriteFieldEnd(); err != nil {
+    return thrift.PrependError(fmt.Sprintf("%T write field end error 4:checkpoint_path: ", p), err) }
+  return err
+}
+
 func (p *LogInfo) String() string {
   if p == nil {
     return "<nil>"
@@ -6550,7 +6683,9 @@ func (p *LogInfo) String() string {
 
   logIDVal := fmt.Sprintf("%v", p.LogID)
   termIDVal := fmt.Sprintf("%v", p.TermID)
-  return fmt.Sprintf("LogInfo({LogID:%s TermID:%s})", logIDVal, termIDVal)
+  commitLogIDVal := fmt.Sprintf("%v", p.CommitLogID)
+  checkpointPathVal := fmt.Sprintf("%v", p.CheckpointPath)
+  return fmt.Sprintf("LogInfo({LogID:%s TermID:%s CommitLogID:%s CheckpointPath:%s})", logIDVal, termIDVal, commitLogIDVal, checkpointPathVal)
 }
 
 // Attributes:
@@ -6730,11 +6865,11 @@ func (p *DirInfo) String() string {
 // Attributes:
 //  - SpaceID
 //  - Parts
-//  - Path
+//  - DataPath
 type CheckpointInfo struct {
   SpaceID GraphSpaceID `thrift:"space_id,1" db:"space_id" json:"space_id"`
   Parts map[PartitionID]*LogInfo `thrift:"parts,2" db:"parts" json:"parts"`
-  Path []byte `thrift:"path,3" db:"path" json:"path"`
+  DataPath []byte `thrift:"data_path,3" db:"data_path" json:"data_path"`
 }
 
 func NewCheckpointInfo() *CheckpointInfo {
@@ -6750,8 +6885,8 @@ func (p *CheckpointInfo) GetParts() map[PartitionID]*LogInfo {
   return p.Parts
 }
 
-func (p *CheckpointInfo) GetPath() []byte {
-  return p.Path
+func (p *CheckpointInfo) GetDataPath() []byte {
+  return p.DataPath
 }
 type CheckpointInfoBuilder struct {
   obj *CheckpointInfo
@@ -6767,7 +6902,7 @@ func (p CheckpointInfoBuilder) Emit() *CheckpointInfo{
   return &CheckpointInfo{
     SpaceID: p.obj.SpaceID,
     Parts: p.obj.Parts,
-    Path: p.obj.Path,
+    DataPath: p.obj.DataPath,
   }
 }
 
@@ -6781,8 +6916,8 @@ func (c *CheckpointInfoBuilder) Parts(parts map[PartitionID]*LogInfo) *Checkpoin
   return c
 }
 
-func (c *CheckpointInfoBuilder) Path(path []byte) *CheckpointInfoBuilder {
-  c.obj.Path = path
+func (c *CheckpointInfoBuilder) DataPath(dataPath []byte) *CheckpointInfoBuilder {
+  c.obj.DataPath = dataPath
   return c
 }
 
@@ -6796,8 +6931,8 @@ func (c *CheckpointInfo) SetParts(parts map[PartitionID]*LogInfo) *CheckpointInf
   return c
 }
 
-func (c *CheckpointInfo) SetPath(path []byte) *CheckpointInfo {
-  c.Path = path
+func (c *CheckpointInfo) SetDataPath(dataPath []byte) *CheckpointInfo {
+  c.DataPath = dataPath
   return c
 }
 
@@ -6882,7 +7017,7 @@ func (p *CheckpointInfo)  ReadField3(iprot thrift.Protocol) error {
   if v, err := iprot.ReadBinary(); err != nil {
     return thrift.PrependError("error reading field 3: ", err)
   } else {
-    p.Path = v
+    p.DataPath = v
   }
   return nil
 }
@@ -6932,12 +7067,12 @@ func (p *CheckpointInfo) writeField2(oprot thrift.Protocol) (err error) {
 }
 
 func (p *CheckpointInfo) writeField3(oprot thrift.Protocol) (err error) {
-  if err := oprot.WriteFieldBegin("path", thrift.STRING, 3); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:path: ", p), err) }
-  if err := oprot.WriteBinary(p.Path); err != nil {
-  return thrift.PrependError(fmt.Sprintf("%T.path (3) field write error: ", p), err) }
+  if err := oprot.WriteFieldBegin("data_path", thrift.STRING, 3); err != nil {
+    return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:data_path: ", p), err) }
+  if err := oprot.WriteBinary(p.DataPath); err != nil {
+  return thrift.PrependError(fmt.Sprintf("%T.data_path (3) field write error: ", p), err) }
   if err := oprot.WriteFieldEnd(); err != nil {
-    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:path: ", p), err) }
+    return thrift.PrependError(fmt.Sprintf("%T write field end error 3:data_path: ", p), err) }
   return err
 }
 
@@ -6948,8 +7083,8 @@ func (p *CheckpointInfo) String() string {
 
   spaceIDVal := fmt.Sprintf("%v", p.SpaceID)
   partsVal := fmt.Sprintf("%v", p.Parts)
-  pathVal := fmt.Sprintf("%v", p.Path)
-  return fmt.Sprintf("CheckpointInfo({SpaceID:%s Parts:%s Path:%s})", spaceIDVal, partsVal, pathVal)
+  dataPathVal := fmt.Sprintf("%v", p.DataPath)
+  return fmt.Sprintf("CheckpointInfo({SpaceID:%s Parts:%s DataPath:%s})", spaceIDVal, partsVal, dataPathVal)
 }
 
 // Attributes:

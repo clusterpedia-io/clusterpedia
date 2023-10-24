@@ -12,6 +12,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/facebook/fbthrift/thrift/lib/go/thrift"
@@ -42,7 +44,7 @@ func newConnection(severAddress HostAddress) *connection {
 func (cn *connection) open(hostAddress HostAddress, timeout time.Duration, sslConfig *tls.Config) error {
 	ip := hostAddress.Host
 	port := hostAddress.Port
-	newAdd := fmt.Sprintf("%s:%d", ip, port)
+	newAdd := net.JoinHostPort(ip, strconv.Itoa(port))
 	cn.timeout = timeout
 	bufferSize := 128 << 10
 	frameMaxLength := uint32(math.MaxUint32)
@@ -104,17 +106,16 @@ func (cn *connection) authenticate(username, password string) (*graph.AuthRespon
 		}
 		return nil, err
 	}
-	if resp.ErrorCode != nebula.ErrorCode_SUCCEEDED {
-		return nil, fmt.Errorf("fail to authenticate, error: %s", resp.ErrorMsg)
-	}
-	return resp, err
+
+	return resp, nil
 }
 
 func (cn *connection) execute(sessionID int64, stmt string) (*graph.ExecutionResponse, error) {
 	return cn.executeWithParameter(sessionID, stmt, map[string]*nebula.Value{})
 }
 
-func (cn *connection) executeWithParameter(sessionID int64, stmt string, params map[string]*nebula.Value) (*graph.ExecutionResponse, error) {
+func (cn *connection) executeWithParameter(sessionID int64, stmt string,
+	params map[string]*nebula.Value) (*graph.ExecutionResponse, error) {
 	resp, err := cn.graph.ExecuteWithParameter(sessionID, []byte(stmt), params)
 	if err != nil {
 		// reopen the connection if timeout
@@ -160,13 +161,7 @@ func (cn *connection) ping() bool {
 	return err == nil
 }
 
-// Check connection to host address
-func (cn *connection) pingWithParameter() bool {
-	_, err := cn.executeWithParameter(0, "YIELD 1", nil)
-	return err == nil
-}
-
-// Sign out and release seesin ID
+// Sign out and release session ID
 func (cn *connection) signOut(sessionID int64) error {
 	// Release session ID to graphd
 	return cn.graph.Signout(sessionID)

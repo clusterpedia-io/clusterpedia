@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4"
-	gnebula "github.com/vesoft-inc/nebula-go/v3"
+	"github.com/zhihu/norm/v3/dialectors"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
 	"k8s.io/klog/v2"
@@ -299,21 +299,19 @@ func (cfg *Config) genSQLiteDSN() (string, error) {
 	return cfg.DSN, nil
 }
 
-// Initialize logger for nebula
-var nebulalog = gnebula.DefaultLogger{}
-
-func (cfg *Config) genNebulaConfig() (*gnebula.PoolConfig, error) {
+func (cfg *Config) genNebulaConfig() (*dialectors.DialectorConfig, error) {
 	if cfg.DSN == "" {
 		return nil, errors.New("nebula: dsn is required")
 	}
+	var nebulaConfig dialectors.DialectorConfig
+	nebulaConfig.IdleTime = cfg.Nebula.IdleTime
+	nebulaConfig.MaxConnPoolSize = cfg.Nebula.MaxConnPoolSize
+	nebulaConfig.MinConnPoolSize = cfg.Nebula.MinConnPoolSize
+	nebulaConfig.Timeout = cfg.Nebula.TimeOut
+	nebulaConfig.Username = cfg.User
+	nebulaConfig.Password = cfg.Password
 
-	nebulaPoolConfig := gnebula.GetDefaultConf()
-	nebulaPoolConfig.IdleTime = cfg.Nebula.IdleTime
-	nebulaPoolConfig.MaxConnPoolSize = cfg.Nebula.MaxConnPoolSize
-	nebulaPoolConfig.MinConnPoolSize = cfg.Nebula.MinConnPoolSize
-	nebulaPoolConfig.TimeOut = cfg.Nebula.TimeOut
-
-	return &nebulaPoolConfig, nil
+	return &nebulaConfig, nil
 }
 
 func (cfg *Config) addMysqlErrorNumbers() {
