@@ -166,7 +166,9 @@ func buildAPIGroups(groups sets.Set[string], groupversions map[schema.GroupVersi
 		}
 
 		apiGroup.Versions = vds
-		apiGroup.PreferredVersion = vds[0]
+		if len(vds) != 0 {
+			apiGroup.PreferredVersion = vds[0]
+		}
 
 		apiGroups[apiGroup.Name] = apiGroup
 	}
