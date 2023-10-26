@@ -32,5 +32,9 @@ linters-settings:
       - Standard
       - Default
       - Prefix(github.com/clusterpedia-io)
+  staticcheck:
+    checks:
+      - all
+      - "-SA1019" # disable the rule SA1019(Using a deprecated function, variable, constant or field)
 output:
   sort-results: true

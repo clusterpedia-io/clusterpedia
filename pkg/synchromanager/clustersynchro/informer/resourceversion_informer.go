@@ -45,9 +45,9 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		ListerWatcher: lw,
 		ObjectType:    exampleObject,
 		RetryOnError:  false,
-		Process: func(obj interface{}) error {
+		Process: func(obj interface{}, isInInitialList bool) error {
 			deltas := obj.(cache.Deltas)
-			return informer.HandleDeltas(deltas)
+			return informer.HandleDeltas(deltas, isInInitialList)
 		},
 		Queue:             queue,
 		WatchErrorHandler: errorHandler,
@@ -64,7 +64,7 @@ func (informer *resourceVersionInformer) Run(stopCh <-chan struct{}) {
 	informer.controller.Run(stopCh)
 }
 
-func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error {
+func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas, isInInitialList bool) error {
 	for _, d := range deltas {
 		switch d.Type {
 		case cache.Replaced, cache.Added, cache.Updated:
@@ -78,7 +78,7 @@ func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error
 					return err
 				}
 
-				informer.handler.OnAdd(d.Object)
+				informer.handler.OnAdd(d.Object, isInInitialList)
 				break
 			}
 

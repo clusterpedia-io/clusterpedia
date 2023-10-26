@@ -275,7 +275,7 @@ func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
 	}
 }
 
-func (synchro *ResourceSynchro) OnAdd(obj interface{}) {
+func (synchro *ResourceSynchro) OnAdd(obj interface{}, isInInitialList bool) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}

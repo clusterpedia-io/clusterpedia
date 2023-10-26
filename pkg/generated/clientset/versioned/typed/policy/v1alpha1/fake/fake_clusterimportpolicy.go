@@ -8,7 +8,6 @@ import (
 	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -19,9 +18,9 @@ type FakeClusterImportPolicies struct {
 	Fake *FakePolicyV1alpha1
 }
 
-var clusterimportpoliciesResource = schema.GroupVersionResource{Group: "policy.clusterpedia.io", Version: "v1alpha1", Resource: "clusterimportpolicies"}
+var clusterimportpoliciesResource = v1alpha1.SchemeGroupVersion.WithResource("clusterimportpolicies")
 
-var clusterimportpoliciesKind = schema.GroupVersionKind{Group: "policy.clusterpedia.io", Version: "v1alpha1", Kind: "ClusterImportPolicy"}
+var clusterimportpoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("ClusterImportPolicy")
 
 // Get takes name of the clusterImportPolicy, and returns the corresponding clusterImportPolicy object, and an error if there is any.
 func (c *FakeClusterImportPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterImportPolicy, err error) {

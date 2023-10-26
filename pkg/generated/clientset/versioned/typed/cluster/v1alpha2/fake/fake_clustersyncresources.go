@@ -8,7 +8,6 @@ import (
 	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -19,9 +18,9 @@ type FakeClusterSyncResources struct {
 	Fake *FakeClusterV1alpha2
 }
 
-var clustersyncresourcesResource = schema.GroupVersionResource{Group: "cluster.clusterpedia.io", Version: "v1alpha2", Resource: "clustersyncresources"}
+var clustersyncresourcesResource = v1alpha2.SchemeGroupVersion.WithResource("clustersyncresources")
 
-var clustersyncresourcesKind = schema.GroupVersionKind{Group: "cluster.clusterpedia.io", Version: "v1alpha2", Kind: "ClusterSyncResources"}
+var clustersyncresourcesKind = v1alpha2.SchemeGroupVersion.WithKind("ClusterSyncResources")
 
 // Get takes name of the clusterSyncResources, and returns the corresponding clusterSyncResources object, and an error if there is any.
 func (c *FakeClusterSyncResources) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterSyncResources, err error) {

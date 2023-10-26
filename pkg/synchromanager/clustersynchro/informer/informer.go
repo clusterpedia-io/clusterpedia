@@ -27,6 +27,7 @@ func processDeltas(
 	clientState cache.Store,
 	transformer cache.TransformFunc,
 	deltas cache.Deltas,
+	isInInitialList bool,
 ) error {
 	// from oldest to newest
 	for _, d := range deltas {
@@ -50,7 +51,7 @@ func processDeltas(
 				if err := clientState.Add(obj); err != nil {
 					return err
 				}
-				handler.OnAdd(obj)
+				handler.OnAdd(obj, isInInitialList)
 			}
 		case cache.Deleted:
 			if err := clientState.Delete(obj); err != nil {
@@ -98,9 +99,9 @@ func newInformer(
 		FullResyncPeriod: resyncPeriod,
 		RetryOnError:     false,
 
-		Process: func(obj interface{}) error {
+		Process: func(obj interface{}, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {
-				return processDeltas(h, clientState, transformer, deltas)
+				return processDeltas(h, clientState, transformer, deltas, isInInitialList)
 			}
 			return errors.New("object given as Process argument is not Deltas")
 		},

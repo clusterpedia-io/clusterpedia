@@ -233,7 +233,7 @@ type CRDEventHandlerFuncs struct {
 	DeleteFunc func(obj *v1.CustomResourceDefinition)
 }
 
-func (handler CRDEventHandlerFuncs) OnAdd(obj interface{}) {
+func (handler CRDEventHandlerFuncs) OnAdd(obj interface{}, isInInitialList bool) {
 	if handler.AddFunc == nil {
 		return
 	}

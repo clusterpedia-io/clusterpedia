@@ -139,8 +139,11 @@ func run(config *restclient.Config, stopCh <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-
-	mapper, err := apiutil.NewDynamicRESTMapper(config)
+	httpClient, err := restclient.HTTPClientFor(config)
+	if err != nil {
+		return err
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(config, httpClient)
 	if err != nil {
 		return err
 	}
