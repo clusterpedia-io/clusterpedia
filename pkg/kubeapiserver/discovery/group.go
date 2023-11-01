@@ -105,10 +105,9 @@ func (h *clusterGroupDiscoveryHandler) removeClusterDiscoveryAPI(cluster string)
 
 	handlers := make(map[string]*groupDiscoveryHandler, len(currentHandlers)-1)
 	for name, handler := range currentHandlers {
-		if name == cluster {
-			continue
+		if name != cluster {
+			handlers[name] = handler
 		}
-		handlers[name] = handler
 	}
 	h.handlers.Store(handlers)
 }

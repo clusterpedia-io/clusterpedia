@@ -91,11 +91,7 @@ func (m *DiscoveryManager) ResourceEnabled(cluster string, gvr schema.GroupVersi
 		handlers := m.versionHandler.handlers.Load().(map[string]*versionDiscoveryHandler)
 		handler = handlers[cluster]
 	}
-
-	if handler == nil {
-		return false
-	}
-	return handler.gvrs.Has(gvr.String())
+	return handler != nil && handler.gvrs.Has(gvr.String())
 }
 
 func (m *DiscoveryManager) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -213,11 +209,9 @@ func (m *DiscoveryManager) rebuildClusterDiscoveryAPI(cluster string) {
 
 	apigroups := make([]metav1.APIGroup, 0, len(currentgroups))
 	for name, group := range currentgroups {
-		if name == "" {
-			continue
+		if name != "" {
+			apigroups = append(apigroups, group)
 		}
-
-		apigroups = append(apigroups, group)
 	}
 	sortAPIGroupByName(apigroups)
 
@@ -230,10 +224,9 @@ func (m *DiscoveryManager) rebuildGlobalDiscoveryAPI() {
 
 	apigroups := make([]metav1.APIGroup, 0, len(currentgroups))
 	for name, group := range currentgroups {
-		if name == "" {
-			continue
+		if name != "" {
+			apigroups = append(apigroups, group)
 		}
-		apigroups = append(apigroups, group)
 	}
 	sortAPIGroupByName(apigroups)
 
