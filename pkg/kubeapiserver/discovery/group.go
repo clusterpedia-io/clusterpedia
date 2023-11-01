@@ -114,18 +114,16 @@ func (h *clusterGroupDiscoveryHandler) removeClusterDiscoveryAPI(cluster string)
 }
 
 func (h *clusterGroupDiscoveryHandler) rebuildGlobalDiscoveryAPI(source map[string]metav1.APIGroup) {
-	groups := sets.Set[string]{}
 	groupversions := make(map[schema.GroupVersion]struct{})
 	for _, handler := range h.handlers.Load().(map[string]*groupDiscoveryHandler) {
 		for group, apiGroup := range handler.groups {
-			groups.Insert(group)
 			for _, version := range apiGroup.Versions {
 				groupversions[schema.GroupVersion{Group: group, Version: version.Version}] = struct{}{}
 			}
 		}
 	}
 
-	apiGroups := buildAPIGroups(groups, groupversions, source)
+	apiGroups := buildAPIGroups(groupversions, source)
 	h.global.Store(&groupDiscoveryHandler{
 		serializer:                       h.serializer,
 		stripVersionNegotiatedSerializer: h.stripVersionNegotiatedSerializer,
@@ -134,9 +132,12 @@ func (h *clusterGroupDiscoveryHandler) rebuildGlobalDiscoveryAPI(source map[stri
 	})
 }
 
-func buildAPIGroups(groups sets.Set[string], groupversions map[schema.GroupVersion]struct{}, source map[string]metav1.APIGroup) map[string]metav1.APIGroup {
+func buildAPIGroups(groupversions map[schema.GroupVersion]struct{}, source map[string]metav1.APIGroup) map[string]metav1.APIGroup {
+	groups := sets.Set[string]{}
 	unsortedVersions := make(map[string][]metav1.GroupVersionForDiscovery)
 	for gv := range groupversions {
+		groups.Insert(gv.Group)
+
 		if apiGroup := source[gv.Group]; len(apiGroup.Versions) == 0 {
 			unsortedVersions[gv.Group] = append(unsortedVersions[gv.Group],
 				metav1.GroupVersionForDiscovery{

@@ -9,7 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 
@@ -164,10 +163,8 @@ func (m *DiscoveryManager) handleLegacyAPI(pathParts []string, w http.ResponseWr
 }
 
 func (m *DiscoveryManager) SetClusterGroupResource(cluster string, apis map[schema.GroupResource]ResourceDiscoveryAPI) {
-	groups := sets.Set[string]{}
 	apiversions := make(map[schema.GroupVersion][]metav1.APIResource)
-	for gr, api := range apis {
-		groups.Insert(gr.Group)
+	for _, api := range apis {
 		for version := range api.Versions {
 			apiversions[version] = append(apiversions[version], api.Resource)
 		}
@@ -191,7 +188,7 @@ func (m *DiscoveryManager) SetClusterGroupResource(cluster string, apis map[sche
 	}
 
 	allgroups := m.groupSource.GetAPIGroups()
-	apigroups := buildAPIGroups(groups, groupversions, allgroups)
+	apigroups := buildAPIGroups(groupversions, allgroups)
 
 	currentgroups := m.groupHandler.getClusterDiscoveryAPI(cluster)
 	if reflect.DeepEqual(apigroups, currentgroups) {
