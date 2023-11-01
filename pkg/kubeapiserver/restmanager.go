@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
 	"k8s.io/apimachinery/pkg/runtime/serializer/versioning"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/handlers"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/restmapper"
@@ -153,10 +154,10 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		api := discovery.ResourceDiscoveryAPI{
 			Group:    gr.Group,
 			Resource: resource,
-			Versions: make(map[schema.GroupVersion]struct{}, len(versions)),
+			Versions: make(sets.Set[schema.GroupVersion], len(versions)),
 		}
 		for _, version := range versions {
-			api.Versions[version] = struct{}{}
+			api.Versions.Insert(version)
 
 			gvr := gr.WithVersion(version.Version)
 			if _, ok := restinfos[gvr]; !ok {

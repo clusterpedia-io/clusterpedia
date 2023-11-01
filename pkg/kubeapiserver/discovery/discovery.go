@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 
@@ -22,7 +23,7 @@ type APIGroupSource interface {
 type ResourceDiscoveryAPI struct {
 	Group    string
 	Resource metav1.APIResource
-	Versions map[schema.GroupVersion]struct{}
+	Versions sets.Set[schema.GroupVersion]
 }
 
 // DiscoveryManager  管理集群的 discovery api，并处理 /api 和 /apis 的请求
@@ -182,13 +183,8 @@ func (m *DiscoveryManager) SetClusterGroupResource(cluster string, apis map[sche
 	m.versionHandler.setClusterDiscoveryAPI(cluster, apiversions)
 	m.versionHandler.rebuildGlobalDiscoveryAPI()
 
-	groupversions := make(map[schema.GroupVersion]struct{}, len(apiversions))
-	for gv := range apiversions {
-		groupversions[gv] = struct{}{}
-	}
-
 	allgroups := m.groupSource.GetAPIGroups()
-	apigroups := buildAPIGroups(groupversions, allgroups)
+	apigroups := buildAPIGroups(sets.KeySet(apiversions), allgroups)
 
 	currentgroups := m.groupHandler.getClusterDiscoveryAPI(cluster)
 	if reflect.DeepEqual(apigroups, currentgroups) {
