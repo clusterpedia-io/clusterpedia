@@ -99,9 +99,6 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	o.Admission.DisablePlugins = append(o.Admission.DisablePlugins, lifecycle.PluginName)
 
 	genericConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
-	// genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(apiserver.Scheme))
-	// genericConfig.OpenAPIConfig.Info.Title = openAPITitle
-	// genericConfig.OpenAPIConfig.Info.Version= openAPIVersion
 
 	genericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
 	genericConfig.OpenAPIV3Config.Info.Title = "clusterpedia apiserver"
