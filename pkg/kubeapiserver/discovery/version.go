@@ -75,19 +75,18 @@ type clusterVersionDiscoveryHandler struct {
 }
 
 func (h *clusterVersionDiscoveryHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if cluster := request.ClusterNameValue(req.Context()); cluster != "" {
-		handlers := h.handlers.Load().(map[string]*versionDiscoveryHandler)
-		handler, ok := handlers[cluster]
-		if !ok {
-			h.delegate.ServeHTTP(w, req)
-			return
-		}
-
-		handler.ServeHTTP(w, req)
+	cluster := request.ClusterNameValue(req.Context())
+	if cluster == "" {
+		h.global.Load().(*versionDiscoveryHandler).ServeHTTP(w, req)
 		return
 	}
 
-	h.global.Load().(*versionDiscoveryHandler).ServeHTTP(w, req)
+	handlers := h.handlers.Load().(map[string]*versionDiscoveryHandler)
+	if handler, ok := handlers[cluster]; !ok {
+		h.delegate.ServeHTTP(w, req)
+	} else {
+		handler.ServeHTTP(w, req)
+	}
 }
 
 func (h *clusterVersionDiscoveryHandler) getClusterDiscoveryAPI(cluster string) map[schema.GroupVersion][]metav1.APIResource {
@@ -131,10 +130,9 @@ func (h *clusterVersionDiscoveryHandler) removeClusterDiscoveryAPI(cluster strin
 
 	handlers := make(map[string]*versionDiscoveryHandler, len(currentHandlers)-1)
 	for name, handler := range currentHandlers {
-		if name == cluster {
-			continue
+		if name != cluster {
+			handlers[name] = handler
 		}
-		handlers[name] = handler
 	}
 	h.handlers.Store(handlers)
 }
