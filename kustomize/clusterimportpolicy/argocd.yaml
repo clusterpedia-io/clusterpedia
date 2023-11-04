@@ -1,0 +1,41 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: argocd
+spec:
+  source:
+    group: ""
+    resource: clusters
+    selectorTemplate: ""
+  references:
+    - group: ""
+      resource: secrets
+      namespaceTemplate: "{{ .source.spec.authSecretRef.namespace }}"
+      nameTemplate: "{{ .source.spec.authSecretRef.name }}"
+      key: authSecret
+  nameTemplate: "argocd-{{ .source.metadata.name }}"
+  template: |
+    spec:
+      apiserver: "{{ .source.spec.apiEndpoint }}"
+      caData: "{{ .references.authSecret.data.ca }}"
+      tokenData: "{{ .references.authSecret.data.token }}"
+      syncResources:
+        - group: ""
+          resources:
+          - "pods"
+          - "services"
+          - "configmaps"
+          - "secrets"
+          - "namespaces"
+        - group: "apps"
+          resources:
+            - "*"    
+      syncResourcesRefName: ""
+  creationCondition: |
+    {{ if ne .source.spec.apiEndpoint "" }}
+      {{ range .source.status.conditions }}
+        {{ if eq .type "Ready" }}
+          {{ if eq .status "True" }} true {{ end }}
+        {{ end }}
+      {{ end }}
+    {{ end }}    
