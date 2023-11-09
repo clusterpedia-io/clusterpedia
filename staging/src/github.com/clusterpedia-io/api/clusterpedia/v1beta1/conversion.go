@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	metafields "k8s.io/apimachinery/pkg/fields"
 
 	"github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/fields"
@@ -362,6 +363,18 @@ func convert_string_To_fields_Selector(in *string, out *fields.Selector, s conve
 	}
 	*out = selector
 	return nil
+}
+
+func Convert_EnhancedFieldSelector_To_FieldSelector(in *fields.Selector) (*metafields.Selector, error) {
+	out := ""
+	result := metafields.Nothing()
+	if err := convert_fields_Selector_To_string(in, &out, nil); err != nil {
+		return nil, err
+	}
+	if err := metav1.Convert_string_To_fields_Selector(&out, &result, nil); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func convert_fields_Selector_To_string(in *fields.Selector, out *string, s conversion.Scope) error {

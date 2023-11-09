@@ -53,7 +53,7 @@ func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFac
 		for irt := range cr.ResourceTypes {
 			rt := &cr.ResourceTypes[irt]
 			if rt.Resource != "" {
-				config, err := configFactory.NewConfig(rt.GroupResource().WithVersion(""), false)
+				config, err := configFactory.NewConfig(rt.GroupResource().WithVersion(""), false, rt.Kind)
 				if err != nil {
 					continue
 				}

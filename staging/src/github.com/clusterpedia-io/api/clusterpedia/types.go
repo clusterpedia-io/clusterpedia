@@ -49,6 +49,7 @@ type ListOptions struct {
 	Names        []string
 	ClusterNames []string
 	Namespaces   []string
+	ResourcePrefix string
 	OrderBy      []OrderBy
 
 	OwnerName          string

@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -24,6 +24,9 @@ import (
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
+	watchutil "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
+	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
 )
 
 type ResourceStorage struct {
@@ -33,6 +36,12 @@ type ResourceStorage struct {
 	storageGroupResource schema.GroupResource
 	storageVersion       schema.GroupVersion
 	memoryVersion        schema.GroupVersion
+
+	buffer    *watchcomponents.MultiClusterBuffer
+	watchLock sync.Mutex
+
+	eventCache *watchcomponents.EventCache
+	Namespaced bool
 }
 
 func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
@@ -66,18 +75,19 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 	}
 
 	resource := Resource{
-		Cluster:         cluster,
-		OwnerUID:        ownerUID,
-		UID:             metaobj.GetUID(),
-		Name:            metaobj.GetName(),
-		Namespace:       metaobj.GetNamespace(),
-		Group:           s.storageGroupResource.Group,
-		Resource:        s.storageGroupResource.Resource,
-		Version:         s.storageVersion.Version,
-		Kind:            gvk.Kind,
-		ResourceVersion: metaobj.GetResourceVersion(),
-		Object:          buffer.Bytes(),
-		CreatedAt:       metaobj.GetCreationTimestamp().Time,
+		Cluster:                cluster,
+		OwnerUID:               ownerUID,
+		UID:                    metaobj.GetUID(),
+		Name:                   metaobj.GetName(),
+		Namespace:              metaobj.GetNamespace(),
+		Group:                  s.storageGroupResource.Group,
+		Resource:               s.storageGroupResource.Resource,
+		Version:                s.storageVersion.Version,
+		Kind:                   gvk.Kind,
+		ResourceVersion:        metaobj.GetResourceVersion(),
+		ClusterResourceVersion: 0,
+		Object:                 buffer.Bytes(),
+		CreatedAt:              metaobj.GetCreationTimestamp().Time,
 	}
 	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
 		resource.DeletedAt = sql.NullTime{Time: deletedAt.Time, Valid: true}
@@ -209,6 +219,42 @@ func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *interna
 	return offset, amount, query, result, err
 }
 
+func (s *ResourceStorage) genListQuery(ctx context.Context, newfunc func() runtime.Object, opts *internal.ListOptions) ([]runtime.Object, error) {
+	var result [][]byte
+
+	condition := map[string]interface{}{
+		"group":    s.storageGroupResource.Group,
+		"version":  s.storageVersion.Version,
+		"resource": s.storageGroupResource.Resource,
+	}
+	query := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(condition)
+	_, _, query, err := applyListOptionsToResourceQuery(s.db, query, opts)
+	if err != nil {
+		return nil, err
+	}
+	queryResult := query.Find(&result)
+	if queryResult.Error != nil {
+		return nil, queryResult.Error
+	}
+
+	length := len(result)
+	objList := make([]runtime.Object, length)
+
+	for index, value := range result {
+		into := newfunc()
+		obj, _, err := s.codec.Decode(value, nil, into)
+		if err != nil {
+			return nil, err
+		}
+		if obj != into {
+			return nil, fmt.Errorf("Failed to decode resource, into is %T", into)
+		}
+		objList[index] = obj
+	}
+
+	return objList, nil
+}
+
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
 	offset, amount, query, result, err := s.genListObjectsQuery(ctx, opts)
 	if err != nil {
@@ -293,8 +339,74 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	return nil
 }
 
-func (s *ResourceStorage) Watch(_ context.Context, _ *internal.ListOptions) (watch.Interface, error) {
-	return nil, apierrors.NewMethodNotSupported(s.storageGroupResource, "watch")
+func (s *ResourceStorage) Watch(ctx context.Context, newfunc func() runtime.Object, options *internal.ListOptions, gvk schema.GroupVersionKind) (watch.Interface, error) {
+	s.watchLock.Lock()
+	defer s.watchLock.Unlock()
+	initEvents, err := s.fetchInitEvents(ctx, options.ResourceVersion, newfunc, options)
+	if err != nil {
+		// To match the uncached watch implementation, once we have passed authn/authz/admission,
+		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
+		// rather than a directly returned error.
+		return newErrWatcher(err), nil
+	}
+
+	watcher, err := watchcomponents.NewPredicateWatch(ctx, options, gvk, s.Namespaced)
+	if err != nil {
+		return newErrWatcher(err), nil
+	}
+	s.buffer.AppendWatcherBuffer(watcher)
+
+	watcher.SetForget(func() {
+		s.buffer.ForgetWatcher(watcher)
+	})
+
+	go watcher.Process(ctx, initEvents)
+	return watcher, nil
+}
+
+func (s *ResourceStorage) fetchInitEvents(ctx context.Context, rv string, newfunc func() runtime.Object, opts *internal.ListOptions) ([]*watch.Event, error) {
+	if rv == "" {
+		objects, err := s.genListQuery(ctx, newfunc, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		result := make([]*watch.Event, len(objects))
+		for index, value := range objects {
+			event := &watch.Event{
+				Object: value,
+				Type:   watch.Added,
+			}
+			result[index] = event
+		}
+		return result, nil
+	} else {
+		result, err := s.eventCache.GetEvents(rv, func() (string, error) {
+			return s.GetMaxCrv(ctx)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+}
+
+func (s *ResourceStorage) GetMaxCrv(ctx context.Context) (string, error) {
+	maxCrv := "0"
+	var metadataList ResourceMetadataList
+	condition := map[string]interface{}{
+		"group":    s.storageGroupResource.Group,
+		"version":  s.storageVersion.Version,
+		"resource": s.storageGroupResource.Resource,
+	}
+	result := s.db.WithContext(ctx).Model(&Resource{}).Select("cluster_resource_version").Where(condition).Order("cluster_resource_version DESC").Limit(1).Find(&metadataList)
+	if result.Error != nil {
+		return maxCrv, InterpretResourceDBError("", s.storageGroupResource.Resource, result.Error)
+	}
+	for _, metadata := range metadataList {
+		maxCrv = utils.ParseInt642Str(metadata.ClusterResourceVersion)
+	}
+	return maxCrv, nil
 }
 
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
@@ -337,4 +449,27 @@ func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListO
 		query = query.Where("owner_uid IN (?)", ownerQuery)
 	}
 	return query, nil
+}
+
+type errWatcher struct {
+	result chan watch.Event
+}
+
+func newErrWatcher(err error) *errWatcher {
+	errEvent := watchutil.NewErrorEvent(err)
+
+	// Create a watcher with room for a single event, populate it, and close the channel
+	watcher := &errWatcher{result: make(chan watch.Event, 1)}
+	watcher.result <- errEvent
+	close(watcher.result)
+
+	return watcher
+}
+
+func (c *errWatcher) ResultChan() <-chan watch.Event {
+	return c.result
+}
+
+func (c *errWatcher) Stop() {
+	// no-op
 }

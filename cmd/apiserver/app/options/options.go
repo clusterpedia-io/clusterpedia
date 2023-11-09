@@ -24,6 +24,7 @@ import (
 	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
+	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
 )
 
 type ClusterPediaServerOptions struct {
@@ -117,6 +118,8 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.genericOptionsApplyTo(genericConfig); err != nil {
 		return nil, err
 	}
+
+	watchcomponents.InitEventCacheSize(100)
 
 	return &apiserver.Config{
 		GenericConfig:  genericConfig,

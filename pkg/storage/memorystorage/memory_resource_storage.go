@@ -214,7 +214,7 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	return nil
 }
 
-func (s *ResourceStorage) Watch(ctx context.Context, options *internal.ListOptions) (watch.Interface, error) {
+func (s *ResourceStorage) Watch(ctx context.Context, _ func() runtime.Object, options *internal.ListOptions, _ schema.GroupVersionKind) (watch.Interface, error) {
 	resourceversion := options.ResourceVersion
 	watchRV, err := cache.NewClusterResourceVersionFromString(resourceversion)
 	if err != nil {

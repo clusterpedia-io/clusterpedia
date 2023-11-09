@@ -1,6 +1,7 @@
 package storageconfig
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/versioning"
@@ -59,14 +60,14 @@ func (g *StorageConfigFactory) GetStorageGroupResource(groupResource schema.Grou
 	return groupResource
 }
 
-func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewConfig(gvr schema.GroupVersionResource, namespaced bool, kind string) (*storage.ResourceStorageConfig, error) {
 	if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
-		return g.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
+		return g.NewLegacyResourceConfig(gvr.GroupResource(), namespaced, kind)
 	}
-	return g.NewUnstructuredConfig(gvr, namespaced)
+	return g.NewUnstructuredConfig(gvr, namespaced, kind)
 }
 
-func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionResource, namespaced bool, kind string) (*storage.ResourceStorageConfig, error) {
 	version := gvr.GroupVersion()
 	codec := versioning.NewCodec(
 		scheme.UnstructuredCodecs,
@@ -79,6 +80,13 @@ func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionReso
 		version,
 		"unstructuredObjectStorage",
 	)
+
+	newFunc := func() runtime.Object {
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(version.WithKind(kind))
+		return obj
+	}
+
 	return &storage.ResourceStorageConfig{
 		GroupResource:        gvr.GroupResource(),
 		StorageGroupResource: gvr.GroupResource(),
@@ -86,10 +94,11 @@ func (g *StorageConfigFactory) NewUnstructuredConfig(gvr schema.GroupVersionReso
 		StorageVersion:       version,
 		MemoryVersion:        version,
 		Namespaced:           namespaced,
+		NewFunc:              newFunc,
 	}, nil
 }
 
-func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, namespaced bool) (*storage.ResourceStorageConfig, error) {
+func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, namespaced bool, kind string) (*storage.ResourceStorageConfig, error) {
 	chosenStorageResource := g.GetStorageGroupResource(gr)
 
 	storageVersion, err := g.legacyResourceEncodingConfig.StorageEncodingFor(chosenStorageResource)
@@ -112,6 +121,11 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, 
 		return nil, err
 	}
 
+	newFunc := func() runtime.Object {
+		obj, _ := scheme.LegacyResourceScheme.New(memoryVersion.WithKind(kind))
+		return obj
+	}
+
 	return &storage.ResourceStorageConfig{
 		GroupResource:        gr,
 		StorageGroupResource: chosenStorageResource,
@@ -119,5 +133,6 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, 
 		StorageVersion:       codecConfig.StorageVersion,
 		MemoryVersion:        memoryVersion,
 		Namespaced:           namespaced,
+		NewFunc:              newFunc,
 	}, nil
 }

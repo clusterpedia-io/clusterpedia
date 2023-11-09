@@ -27,7 +27,7 @@ var (
 
 func init() {
 	for gvr := range generators {
-		config, err := storageConfigFactory.NewLegacyResourceConfig(gvr.GroupResource(), false)
+		config, err := storageConfigFactory.NewLegacyResourceConfig(gvr.GroupResource(), false, gvrKinds[gvr])
 		if err != nil {
 			panic(err)
 		}
@@ -89,7 +89,7 @@ type MetricsStoreBuilder struct {
 	match     func(obj interface{}) (bool, error)
 }
 
-func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource schema.GroupVersionResource) *MetricsStore {
+func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource schema.GroupVersionResource, kind string) *MetricsStore {
 	if _, ok := builder.resources[resource.Resource]; !ok {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource sche
 		return nil
 	}
 
-	config, err := storageConfigFactory.NewLegacyResourceConfig(resource.GroupResource(), false)
+	config, err := storageConfigFactory.NewLegacyResourceConfig(resource.GroupResource(), false, kind)
 	if err != nil {
 		return nil
 	}

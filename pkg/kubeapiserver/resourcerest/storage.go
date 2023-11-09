@@ -35,6 +35,8 @@ type RESTStorage struct {
 
 	Storage        storage.ResourceStorage
 	TableConvertor rest.TableConvertor
+
+	Kind string
 }
 
 var _ rest.Lister = &RESTStorage{}
@@ -83,6 +85,8 @@ func (s *RESTStorage) resolveListOptions(ctx context.Context) (*internal.ListOpt
 		options.Namespaces = []string{requestInfo.Namespace}
 	}
 
+	options.ResourcePrefix = requestInfo.Resource
+
 	if cluster := request.ClusterNameValue(ctx); cluster != "" {
 		options.ClusterNames = []string{cluster}
 	}
@@ -126,7 +130,19 @@ func (s *RESTStorage) Watch(ctx context.Context, _ *metainternalversion.ListOpti
 		return nil, err
 	}
 
-	inter, err := s.Storage.Watch(ctx, options)
+	requestInfo, ok := genericrequest.RequestInfoFrom(ctx)
+	if !ok {
+		return nil, errors.New("missing requestInfo")
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    requestInfo.APIGroup,
+		Version:  requestInfo.APIVersion,
+		Resource: requestInfo.Resource,
+	}
+	gvk := gvr.GroupVersion().WithKind(s.Kind)
+
+	inter, err := s.Storage.Watch(ctx, s.New, options, gvk)
 	if apierrors.IsMethodNotSupported(err) {
 		return nil, apierrors.NewMethodNotSupported(s.DefaultQualifiedResource, "watch")
 	}

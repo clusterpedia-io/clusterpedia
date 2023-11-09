@@ -19,7 +19,7 @@ func (s *StorageFactory) GetSupportedRequestVerbs() []string {
 	return []string{"get", "list"}
 }
 
-func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
+func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig, initEventCache bool) (storage.ResourceStorage, error) {
 	return &ResourceStorage{
 		db:    s.db,
 		codec: config.Codec,
