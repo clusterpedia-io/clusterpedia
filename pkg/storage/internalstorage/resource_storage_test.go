@@ -268,7 +268,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 			postgreSQL, err := toSQL(postgresDB.Session(&gorm.Session{DryRun: true}), test.listOptions,
 				func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 					rs := newTestResourceStorage(db, test.resource)
-					_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
+					_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options, true)
 					return query, err
 				},
 			)
@@ -284,7 +284,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 				mysqlSQL, err := toSQL(mysqlDBs[version].Session(&gorm.Session{DryRun: true}), test.listOptions,
 					func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 						rs := newTestResourceStorage(db, test.resource)
-						_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
+						_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options, true)
 						return query, err
 					},
 				)
@@ -379,7 +379,7 @@ func TestResourceStorage_Update(t *testing.T) {
 	factory := storageconfig.NewStorageConfigFactory()
 	require.NotNil(factory)
 
-	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true)
+	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true, "Deployment")
 	require.NoError(err)
 	require.NotNil(config)
 
@@ -425,7 +425,7 @@ func TestResourceStorage_Update(t *testing.T) {
 
 	clusterName := "test"
 
-	err = rs.Create(context.Background(), clusterName, obj)
+	err = rs.Create(context.Background(), clusterName, obj, true)
 	require.NoError(err)
 
 	var resourcesAfterCreation []Resource
@@ -445,7 +445,7 @@ func TestResourceStorage_Update(t *testing.T) {
 		"foo2": "bar2",
 	}
 
-	err = rs.Update(context.Background(), clusterName, obj)
+	err = rs.Update(context.Background(), clusterName, obj, true)
 	require.NoError(err)
 
 	var resourcesAfterUpdates []Resource

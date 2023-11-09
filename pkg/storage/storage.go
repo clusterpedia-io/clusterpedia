@@ -34,11 +34,14 @@ type ResourceStorage interface {
 	List(ctx context.Context, listObj runtime.Object, opts *internal.ListOptions) error
 	Watch(ctx context.Context, newfunc func() runtime.Object, options *internal.ListOptions, gvk schema.GroupVersionKind) (watch.Interface, error)
 
-	Create(ctx context.Context, cluster string, obj runtime.Object) error
-	Update(ctx context.Context, cluster string, obj runtime.Object) error
+	Create(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
+	Update(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
 
 	ConvertDeletedObject(obj interface{}) (runtime.Object, error)
-	Delete(ctx context.Context, cluster string, obj runtime.Object) error
+	Delete(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
+
+	ProcessEvent(ctx context.Context, eventType watch.EventType, obj runtime.Object, cluster string) error
+	GetObj(ctx context.Context, cluster, namespace, name string) (runtime.Object, error)
 }
 
 type CollectionResourceStorage interface {

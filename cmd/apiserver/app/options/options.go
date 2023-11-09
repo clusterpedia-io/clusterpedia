@@ -24,7 +24,9 @@ import (
 	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher"
 	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	watchoptions "github.com/clusterpedia-io/clusterpedia/pkg/watcher/options"
 )
 
 type ClusterPediaServerOptions struct {
@@ -43,6 +45,8 @@ type ClusterPediaServerOptions struct {
 	Traces         *genericoptions.TracingOptions
 
 	Storage *storageoptions.StorageOptions
+
+	Subscriber *watchoptions.MiddlerwareOptions
 }
 
 func NewServerOptions() *ClusterPediaServerOptions {
@@ -69,7 +73,8 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Admission:      genericoptions.NewAdmissionOptions(),
 		Traces:         genericoptions.NewTracingOptions(),
 
-		Storage: storageoptions.NewStorageOptions(),
+		Storage:    storageoptions.NewStorageOptions(),
+		Subscriber: watchoptions.NewMiddlerwareOptions(),
 	}
 }
 
@@ -119,12 +124,19 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 		return nil, err
 	}
 
-	watchcomponents.InitEventCacheSize(100)
-
-	return &apiserver.Config{
+	config := &apiserver.Config{
 		GenericConfig:  genericConfig,
 		StorageFactory: storage,
-	}, nil
+	}
+
+	err = watcher.NewSubscriber(o.Subscriber)
+	watchcomponents.InitEventCacheSize(o.Subscriber.CacheSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserver.RecommendedConfig) error {
@@ -185,6 +197,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
+	o.Subscriber.AddFlags(fss.FlagSet("middleware"))
 	return fss
 }
 

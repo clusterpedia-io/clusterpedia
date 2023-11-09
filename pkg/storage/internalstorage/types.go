@@ -68,6 +68,9 @@ type Resource struct {
 	CreatedAt time.Time `gorm:"not null"`
 	SyncedAt  time.Time `gorm:"not null;autoUpdateTime"`
 	DeletedAt sql.NullTime
+
+	Deleted   bool `gorm:"default:false"`
+	Published bool `gorm:"default:false"`
 }
 
 func (res Resource) GroupVersionResource() schema.GroupVersionResource {
@@ -104,6 +107,7 @@ type ResourceMetadata struct {
 	ResourceType           `gorm:"embedded"`
 	ClusterResourceVersion int64
 	Metadata               datatypes.JSON
+	Deleted                bool
 }
 
 func (data ResourceMetadata) ConvertToUnstructured() (*unstructured.Unstructured, error) {

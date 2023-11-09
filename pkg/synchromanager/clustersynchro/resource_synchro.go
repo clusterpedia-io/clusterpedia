@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -100,7 +101,7 @@ func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceS
 		rvs:           config.ResourceVersions,
 
 		// all resources saved to the queue are `runtime.Object`
-		queue: queue.NewPressureQueue(cache.MetaNamespaceKeyFunc),
+		queue: queue.NewPressureQueue(cache.DeletionHandlingMetaNamespaceKeyFunc),
 
 		storage:       config.ResourceStorage,
 		convertor:     config.ObjectConvertor,
@@ -386,12 +387,30 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 
 	obj, ok := event.Object.(runtime.Object)
 	if !ok {
-		return
+		if _, ok = event.Object.(cache.DeletedFinalStateUnknown); !ok {
+			return
+		} else {
+			dfs := event.Object.(cache.DeletedFinalStateUnknown)
+			var se informer.StorageElement
+			if se, ok = dfs.Obj.(informer.StorageElement); !ok {
+				return
+			}
+			var err error
+			obj, err = synchro.storage.GetObj(synchro.ctx, synchro.cluster, se.Namespace, se.Name)
+			if err != nil {
+				return
+			}
+			metaObj, err := meta.Accessor(obj)
+			if err == nil {
+				klog.Warning("DeletedFinalStateUnknown, name: ", metaObj.GetName(), ", time: ", metaObj.GetDeletionTimestamp(),
+					", kind: ", obj.GetObjectKind().GroupVersionKind().Kind, ", cluster: ", synchro.cluster)
+			}
+		}
 	}
 	key, _ := cache.MetaNamespaceKeyFunc(obj)
 
-	var callback func(obj runtime.Object)
-	var handler func(ctx context.Context, obj runtime.Object) error
+	var callback func(obj runtime.Object, eventType watch.EventType)
+	var handler func(ctx context.Context, obj runtime.Object) (watch.EventType, error)
 	if event.Action != queue.Deleted {
 		var err error
 		if obj, err = synchro.convertToStorageVersion(obj); err != nil {
@@ -407,27 +426,41 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		case queue.Updated:
 			handler = synchro.updateOrCreateResource
 		}
-		callback = func(obj runtime.Object) {
+		callback = func(obj runtime.Object, eventType watch.EventType) {
 			metaobj, _ := meta.Accessor(obj)
 			synchro.rvsLock.Lock()
-			synchro.rvs[key] = metaobj.GetResourceVersion()
+			synchro.rvs[key] = informer.StorageElement{
+				Version:   metaobj.GetResourceVersion(),
+				Name:      metaobj.GetName(),
+				Namespace: metaobj.GetNamespace(),
+				Deleted:   false,
+				Published: true,
+			}
 			synchro.rvsLock.Unlock()
+			err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
+			if err != nil {
+				return
+			}
 		}
 	} else {
-		handler, callback = synchro.deleteResource, func(_ runtime.Object) {
+		handler, callback = synchro.deleteResource, func(_ runtime.Object, eventType watch.EventType) {
 			synchro.rvsLock.Lock()
 			delete(synchro.rvs, key)
 			synchro.rvsLock.Unlock()
+			err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
+			if err != nil {
+				return
+			}
 		}
 	}
 
 	// TODO(Iceber): put the event back into the queue to retry?
 	for i := 0; ; i++ {
 		ctx, cancel := context.WithTimeout(synchro.ctx, 30*time.Second)
-		err := handler(ctx, obj)
+		eventType, err := handler(ctx, obj)
 		cancel()
 		if err == nil {
-			callback(obj)
+			callback(obj, eventType)
 
 			if !synchro.isRunnableForStorage.Load() && synchro.queue.Len() == 0 {
 				// Start the informer after processing the data in the queue to ensure that storage is up and running for a period of time.
@@ -535,24 +568,30 @@ func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (run
 	return obj, nil
 }
 
-func (synchro *ResourceSynchro) createOrUpdateResource(ctx context.Context, obj runtime.Object) error {
-	err := synchro.storage.Create(ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) createOrUpdateResource(ctx context.Context, obj runtime.Object) (watch.EventType, error) {
+	err := synchro.storage.Create(ctx, synchro.cluster, obj, true)
 	if genericstorage.IsExist(err) {
-		return synchro.storage.Update(ctx, synchro.cluster, obj)
+		err = synchro.storage.Update(ctx, synchro.cluster, obj, true)
+		return watch.Added, err
 	}
-	return err
+	return watch.Added, err
 }
 
-func (synchro *ResourceSynchro) updateOrCreateResource(ctx context.Context, obj runtime.Object) error {
-	err := synchro.storage.Update(ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) updateOrCreateResource(ctx context.Context, obj runtime.Object) (watch.EventType, error) {
+	err := synchro.storage.Update(ctx, synchro.cluster, obj, true)
 	if genericstorage.IsNotFound(err) {
-		return synchro.storage.Create(ctx, synchro.cluster, obj)
+		err = synchro.storage.Create(ctx, synchro.cluster, obj, true)
+		return watch.Modified, err
 	}
-	return err
+	return watch.Modified, err
 }
 
-func (synchro *ResourceSynchro) deleteResource(ctx context.Context, obj runtime.Object) error {
-	return synchro.storage.Delete(ctx, synchro.cluster, obj)
+func (synchro *ResourceSynchro) deleteResource(ctx context.Context, obj runtime.Object) (watch.EventType, error) {
+	err := synchro.storage.Delete(ctx, synchro.cluster, obj, true)
+	if err != nil {
+		return watch.Deleted, err
+	}
+	return watch.Deleted, err
 }
 
 func (synchro *ResourceSynchro) setStatus(status string, reason, message string) {

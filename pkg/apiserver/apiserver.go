@@ -28,6 +28,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 )
 
 var (
@@ -110,6 +111,10 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	// init event cache pool
 	eventStop := make(chan struct{})
 	watchcomponents.InitEventCachePool(eventStop)
+	err := middleware.GlobalSubscriber.InitSubscriber(eventStop)
+	if err != nil {
+		return nil, err
+	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)
 	if err != nil {
