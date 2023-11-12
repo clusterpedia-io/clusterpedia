@@ -100,6 +100,10 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 
 	genericConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 
+	genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
+	genericConfig.OpenAPIConfig.Info.Title = "clusterpedia apiserver"
+	genericConfig.OpenAPIConfig.Info.Version = ""
+
 	genericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
 	genericConfig.OpenAPIV3Config.Info.Title = "clusterpedia apiserver"
 	genericConfig.OpenAPIV3Config.Info.Version = ""
