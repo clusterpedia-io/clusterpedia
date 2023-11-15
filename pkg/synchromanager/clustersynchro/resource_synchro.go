@@ -317,18 +317,18 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 		return
 	}
 
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-	if err != nil {
-		return
+	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if obj, ok = d.Obj.(*unstructured.Unstructured); !ok {
+			namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
+			if err != nil {
+				return
+			}
+			obj = &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+		}
 	}
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return
+	if o, ok := obj.(*unstructured.Unstructured); ok {
+		synchro.pruneObject(o)
 	}
-
-	// Since it is not necessary to save the complete deleted object to the queue,
-	// we convert the object to `PartialObjectMetadata`
-	obj = &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
 	_ = synchro.queue.Delete(obj)
 }
 
