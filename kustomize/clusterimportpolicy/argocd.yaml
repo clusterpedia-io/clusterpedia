@@ -5,20 +5,28 @@ metadata:
 spec:
   source:
     group: ""
-    resource: clusters
-    selectorTemplate: ""
-  references:
-    - group: ""
-      resource: secrets
-      namespaceTemplate: "{{ .source.spec.authSecretRef.namespace }}"
-      nameTemplate: "{{ .source.spec.authSecretRef.name }}"
-      key: authSecret
-  nameTemplate: "argocd-{{ .source.metadata.name }}"
+    resource: secrets
+    selectorTemplate: |
+      {{ if hasPrefix "argo-" .source.metadata.name }}
+        {{ $ca := (get .source.data "certificate-authority") }}
+        {{ $clientca := (get .source.data "client-certificate") }}
+        {{ $clientkey := (get .source.data "client-key") }}
+
+        {{/* Use a specific data format tofilter out the argocd's secret */}}
+        {{ if and $ca $clientca $clientkey (hasKey .source.data "config") }}
+          {{ $kubeconfig := (b64dec .source.data.config) }}
+          {{ and
+            (contains $ca $kubeconfig)
+            (contains $clientca $kubeconfig)
+            (contains $clientkey $kubeconfig)
+           }}
+        {{ end }}
+      {{ end }}
+  nameTemplate: 'argo-{{ .source.metadata.namespace }}-{{ trimPrefix "argo-" .source.metadata.name }}'
   template: |
     spec:
-      apiserver: "{{ .source.spec.apiEndpoint }}"
-      caData: "{{ .references.authSecret.data.ca }}"
-      tokenData: "{{ .references.authSecret.data.token }}"
+      apiserver: 'https://{{ trimPrefix "argo-" .source.metadata.name }}.{{ .source.metadata.namespace }}.svc'
+      kubeconfig: '{{ .source.data.config }}'
       syncResources:
         - group: ""
           resources:
@@ -29,13 +37,6 @@ spec:
           - "namespaces"
         - group: "apps"
           resources:
-            - "*"    
+            - "*"
       syncResourcesRefName: ""
-  creationCondition: |
-    {{ if ne .source.spec.apiEndpoint "" }}
-      {{ range .source.status.conditions }}
-        {{ if eq .type "Ready" }}
-          {{ if eq .status "True" }} true {{ end }}
-        {{ end }}
-      {{ end }}
-    {{ end }}    
+  creationCondition: "true"
