@@ -28,6 +28,24 @@ import (
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
+type ResourceSynchroConfig struct {
+	schema.GroupVersionResource
+	Kind string
+
+	cache.ListerWatcher
+	runtime.ObjectConvertor
+	storage.ResourceStorage
+
+	*kubestatemetrics.MetricsStore
+
+	ResourceVersions    map[string]interface{}
+	PageSizeForInformer int64
+}
+
+func (c ResourceSynchroConfig) GroupVersionKind() schema.GroupVersionKind {
+	return c.GroupVersionResource.GroupVersion().WithKind(c.Kind)
+}
+
 type ResourceSynchro struct {
 	cluster string
 
@@ -35,6 +53,7 @@ type ResourceSynchro struct {
 	syncResource    schema.GroupVersionResource
 	storageResource schema.GroupVersionResource
 
+	pageSize          int64
 	listerWatcher     cache.ListerWatcher
 	metricsExtraStore informer.ExtraStore
 	metricsWriter     *metricsstore.MetricsWriter
@@ -69,23 +88,22 @@ type ResourceSynchro struct {
 	runningStage string
 }
 
-func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource, kind string, lw cache.ListerWatcher, rvs map[string]interface{},
-	convertor runtime.ObjectConvertor, storage storage.ResourceStorage, metricsStore *kubestatemetrics.MetricsStore,
-) *ResourceSynchro {
-	storageConfig := storage.GetStorageConfig()
+func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceSynchro {
+	storageConfig := config.ResourceStorage.GetStorageConfig()
 	synchro := &ResourceSynchro{
 		cluster:         cluster,
-		syncResource:    syncResource,
+		syncResource:    config.GroupVersionResource,
 		storageResource: storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version),
 
-		listerWatcher: lw,
-		rvs:           rvs,
+		pageSize:      config.PageSizeForInformer,
+		listerWatcher: config.ListerWatcher,
+		rvs:           config.ResourceVersions,
 
 		// all resources saved to the queue are `runtime.Object`
 		queue: queue.NewPressureQueue(cache.MetaNamespaceKeyFunc),
 
-		storage:       storage,
-		convertor:     convertor,
+		storage:       config.ResourceStorage,
+		convertor:     config.ObjectConvertor,
 		memoryVersion: storageConfig.MemoryVersion,
 
 		stopped:              make(chan struct{}),
@@ -100,12 +118,12 @@ func newResourceSynchro(cluster string, syncResource schema.GroupVersionResource
 	synchro.ctx, synchro.cancel = context.WithCancel(context.Background())
 
 	example := &unstructured.Unstructured{}
-	example.SetGroupVersionKind(syncResource.GroupVersion().WithKind(kind))
+	example.SetGroupVersionKind(config.GroupVersionKind())
 	synchro.example = example
 
-	if metricsStore != nil {
-		synchro.metricsExtraStore = metricsStore
-		synchro.metricsWriter = metricsstore.NewMetricsWriter(metricsStore.MetricsStore)
+	if config.MetricsStore != nil {
+		synchro.metricsExtraStore = config.MetricsStore
+		synchro.metricsWriter = metricsstore.NewMetricsWriter(config.MetricsStore.MetricsStore)
 	}
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
@@ -244,10 +262,22 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 			synchro.rvsLock.Unlock()
 		}
 
-		informer.NewResourceVersionInformer(
-			synchro.cluster, synchro.listerWatcher, synchro.cache,
-			synchro.example, synchro, synchro.ErrorHandler, synchro.metricsExtraStore,
-		).Run(informerStopCh)
+		config := informer.InformerConfig{
+			ListerWatcher:     synchro.listerWatcher,
+			Storage:           synchro.cache,
+			ExampleObject:     synchro.example,
+			Handler:           synchro,
+			ErrorHandler:      synchro.ErrorHandler,
+			ExtraStore:        synchro.metricsExtraStore,
+			WatchListPageSize: synchro.pageSize,
+		}
+		if clusterpediafeature.FeatureGate.Enabled(features.StreamHandlePaginatedListForResourceSync) {
+			config.StreamHandleForPaginatedList = true
+		}
+		if clusterpediafeature.FeatureGate.Enabled(features.ForcePaginatedListForResourceSync) {
+			config.ForcePaginatedList = true
+		}
+		informer.NewResourceVersionInformer(synchro.cluster, config).Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
 		if !synchro.isRunnableForStorage.Load() {
