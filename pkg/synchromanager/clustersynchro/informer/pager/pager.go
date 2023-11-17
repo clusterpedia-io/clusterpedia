@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,6 +90,13 @@ func (p *ListPager) ListWithAlloc(ctx context.Context, options metav1.ListOption
 }
 
 func (p *ListPager) list(ctx context.Context, options metav1.ListOptions, allocNew bool) (runtime.Object, bool, error) {
+	resultStream := ResultStream(ctx)
+	defer func() {
+		if resultStream != nil {
+			close(resultStream)
+		}
+	}()
+
 	if options.Limit == 0 {
 		options.Limit = p.PageSize
 	}
@@ -111,7 +118,7 @@ func (p *ListPager) list(ctx context.Context, options metav1.ListOptions, allocN
 			// the "Expired" error occurred in page 2 or later (since full list is intended to prevent a pager.List from
 			// failing when the resource versions is established by the first page request falls out of the compaction
 			// during the subsequent list requests).
-			if !errors.IsResourceExpired(err) || !p.FullListIfExpired || options.Continue == "" {
+			if !apierrors.IsResourceExpired(err) || !p.FullListIfExpired || options.Continue == "" {
 				return nil, paginatedResult, err
 			}
 			// the list expired while we were processing, fall back to a full list at
@@ -135,16 +142,23 @@ func (p *ListPager) list(ctx context.Context, options metav1.ListOptions, allocN
 
 		// initialize the list and fill its contents
 		if list == nil {
-			list = &metainternalversion.List{Items: make([]runtime.Object, 0, options.Limit+1)}
+			list = &metainternalversion.List{}
 			list.ResourceVersion = m.GetResourceVersion()
 			list.SelfLink = m.GetSelfLink()
+			if resultStream == nil {
+				list.Items = make([]runtime.Object, 0, options.Limit+1)
+			}
 		}
 		eachListItemFunc := meta.EachListItem
 		if allocNew {
 			eachListItemFunc = meta.EachListItemWithAlloc
 		}
 		if err := eachListItemFunc(obj, func(obj runtime.Object) error {
-			list.Items = append(list.Items, obj)
+			if resultStream != nil {
+				resultStream <- obj
+			} else {
+				list.Items = append(list.Items, obj)
+			}
 			return nil
 		}); err != nil {
 			return nil, paginatedResult, err
