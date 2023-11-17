@@ -22,10 +22,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/pager"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/trace"
+
+	clspager "github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer/pager"
 )
 
 const defaultExpectedTypeName = "<unspecified>"
@@ -86,6 +87,15 @@ type Reflector struct {
 	WatchListPageSize int64
 	// Called whenever the ListAndWatch drops the connection with an error.
 	watchErrorHandler WatchErrorHandler
+
+	// StreamHandle of paginated list, resources within a pager will be processed
+	// as soon as possible instead of waiting until all resources are pulled before calling the ResourceHandler.
+	StreamHandleForPaginatedList bool
+
+	// Force paging, Reflector will sometimes use APIServer's cache,
+	// even if paging is specified APIServer will return all resources for performance,
+	// then it will skip Reflector's streaming memory optimization.
+	ForcePaginatedList bool
 }
 
 // ResourceVersionUpdater is an interface that allows store implementation to
@@ -349,6 +359,7 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 	initTrace := trace.New("Reflector ListAndWatch", trace.Field{Key: "name", Value: r.name})
 	defer initTrace.LogIfLong(10 * time.Second)
 	var list runtime.Object
+	var itemKeys []interface{}
 	var paginatedResult bool
 	var err error
 	listCh := make(chan struct{}, 1)
@@ -361,7 +372,7 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 		}()
 		// Attempt to gather list in chunks, if supported by listerWatcher, if not, the first
 		// list request will return the full response.
-		pager := pager.New(pager.SimplePageFunc(func(opts metav1.ListOptions) (runtime.Object, error) {
+		pager := clspager.New(clspager.SimplePageFunc(func(opts metav1.ListOptions) (runtime.Object, error) {
 			return r.listerWatcher.List(opts)
 		}))
 		switch {
@@ -387,7 +398,12 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 			pager.PageSize = 0
 		}
 
-		list, paginatedResult, err = pager.List(context.Background(), options)
+		if r.StreamHandleForPaginatedList {
+			list, itemKeys, paginatedResult, err = r.listWithResultStream(context.Background(), pager, options)
+		} else {
+			list, paginatedResult, err = pager.List(context.Background(), options)
+		}
+
 		if isExpiredError(err) || isTooLargeResourceVersionError(err) {
 			r.setIsLastSyncResourceVersionUnavailable(true)
 			// Retry immediately if the resource version used to list is unavailable.
@@ -396,7 +412,13 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 			// resource version it is listing at is expired or the cache may not yet be synced to the provided
 			// resource version. So we need to fallback to resourceVersion="" in all to recover and ensure
 			// the reflector makes forward progress.
-			list, paginatedResult, err = pager.List(context.Background(), metav1.ListOptions{ResourceVersion: r.relistResourceVersion()})
+
+			options := metav1.ListOptions{ResourceVersion: r.relistResourceVersion()}
+			if r.StreamHandleForPaginatedList {
+				list, itemKeys, paginatedResult, err = r.listWithResultStream(context.Background(), pager, options)
+			} else {
+				list, paginatedResult, err = pager.List(context.Background(), options)
+			}
 		}
 		close(listCh)
 	}()
@@ -434,18 +456,47 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 	}
 	resourceVersion = listMetaInterface.GetResourceVersion()
 	initTrace.Step("Resource version extracted")
-	items, err := meta.ExtractList(list)
-	if err != nil {
-		return fmt.Errorf("unable to understand list result %#v (%v)", list, err)
+
+	if len(itemKeys) != 0 {
+		if err := r.syncWithKeys(itemKeys, resourceVersion); err != nil {
+			return fmt.Errorf("unable to sync list result: %v", err)
+		}
+	} else {
+		items, err := meta.ExtractList(list)
+		if err != nil {
+			return fmt.Errorf("unable to understand list result %#v (%v)", list, err)
+		}
+		initTrace.Step("Objects extracted")
+		if err := r.syncWith(items, resourceVersion); err != nil {
+			return fmt.Errorf("unable to sync list result: %v", err)
+		}
 	}
-	initTrace.Step("Objects extracted")
-	if err := r.syncWith(items, resourceVersion); err != nil {
-		return fmt.Errorf("unable to sync list result: %v", err)
-	}
+
 	initTrace.Step("SyncWith done")
 	r.setLastSyncResourceVersion(resourceVersion)
 	initTrace.Step("Resource version updated")
 	return nil
+}
+
+func (r *Reflector) listWithResultStream(ctx context.Context, pager *clspager.ListPager, options metav1.ListOptions) (
+	list runtime.Object, itemKeys []interface{}, paginatedResult bool, err error,
+) {
+	ch := make(chan runtime.Object, 10)
+	go func() {
+		list, paginatedResult, err = pager.List(clspager.WithResultStream(ctx, ch), options)
+	}()
+
+	var key string
+	for obj := range ch {
+		if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+			return
+		}
+		if err = r.store.Add(obj); err != nil {
+			return
+		}
+		itemKeys = append(itemKeys, cache.ExplicitKey(key))
+	}
+	return
 }
 
 // syncWith replaces the store's items with the given list.
@@ -455,6 +506,10 @@ func (r *Reflector) syncWith(items []runtime.Object, resourceVersion string) err
 		found = append(found, item)
 	}
 	return r.store.Replace(found, resourceVersion)
+}
+
+func (r *Reflector) syncWithKeys(keys []interface{}, resourceVersion string) error {
+	return r.store.Replace(keys, resourceVersion)
 }
 
 // watchHandler watches w and sets setLastSyncResourceVersion
@@ -578,6 +633,9 @@ func (r *Reflector) relistResourceVersion() string {
 		return ""
 	}
 	if r.lastSyncResourceVersion == "" {
+		if r.ForcePaginatedList {
+			return ""
+		}
 		// For performance reasons, initial list performed by reflector uses "0" as resource version to allow it to
 		// be served from the watch cache if it is enabled.
 		return "0"
