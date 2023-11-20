@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -96,6 +97,9 @@ type Reflector struct {
 	// even if paging is specified APIServer will return all resources for performance,
 	// then it will skip Reflector's streaming memory optimization.
 	ForcePaginatedList bool
+
+	// Whether the initialization of the List and the replacing of the store has been completed.
+	hasInitializedSynced atomic.Bool
 }
 
 // ResourceVersionUpdater is an interface that allows store implementation to
@@ -245,6 +249,10 @@ func (r *Reflector) resyncChan() (<-chan time.Time, func() bool) {
 	return t.C(), t.Stop
 }
 
+func (r *Reflector) HasInitializedSynced() bool {
+	return r.hasInitializedSynced.Load()
+}
+
 // ListAndWatch first lists all items and get the resource version at the moment of call,
 // and then use the resource version to watch.
 // It returns error if ListAndWatch didn't even try to initialize watch.
@@ -255,6 +263,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
+	r.hasInitializedSynced.Store(true)
 
 	resyncerrc := make(chan error, 1)
 	cancelCh := make(chan struct{})

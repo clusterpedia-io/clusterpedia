@@ -131,7 +131,7 @@ func (c *controller) HasSynced() bool {
 	if c.queue == nil {
 		return false
 	}
-	return c.queue.HasSynced()
+	return c.queue.HasSynced() && c.reflector.HasInitializedSynced()
 }
 
 func (c *controller) LastSyncResourceVersion() string {
