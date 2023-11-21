@@ -109,15 +109,6 @@ function host_docker_internal() {
 
 TMPDIR="${TMPDIR:-/tmp/}"
 
-# Install kwokctl tools
-function install_kwokctl() {
-    if cmd_exist kwokctl; then
-        return 0
-    fi
-    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.4.0/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
-        chmod +x "/usr/local/bin/kwokctl"
-}
-
 # create a control plane cluster and install the Clusterpedia
 function create_control_plane() {
     local name="${1}"
@@ -139,7 +130,10 @@ function create_data_plane() {
     local kubeconfig
     local ip
 
-    install_kwokctl
+    if ! cmd_exist kwokctl; then
+        echo "Please install kwokctl first, see https://kwok.sigs.k8s.io/docs/user/installation/"
+        return 1
+    fi
 
     ip="$(host_docker_internal)"
     kwokctl create cluster --name "${name}" --wait 120s --kubeconfig "" --config - <<EOF

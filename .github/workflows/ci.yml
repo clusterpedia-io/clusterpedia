@@ -76,6 +76,13 @@ jobs:
         with:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
+
+      - name: Set up kwokctl
+        uses: kubernetes-sigs/kwok@main
+        with:
+          command: kwokctl
+          kwok-version: v0.5.2
+
       - name: Run e2e test
         run: ./test/test.sh
 
