@@ -60,6 +60,7 @@ function create_cluster() {
 # delete the kind cluster
 function delete_cluster() {
     local name="${1:-kind}"
+    kind export logs --name "${name}" "${ROOT}/test/logs/kind/${name}"
     kind delete cluster --name "${name}"
 }
 
@@ -127,7 +128,7 @@ function install_kwokctl() {
     if cmd_exist kwokctl; then
         return 0
     fi
-    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.1.0/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
+    wget "https://github.com/kubernetes-sigs/kwok/releases/download/v0.4.0/kwokctl-$(go env GOOS)-$(go env GOARCH)" -O "/usr/local/bin/kwokctl" &&
         chmod +x "/usr/local/bin/kwokctl"
 }
 
@@ -150,38 +151,27 @@ function create_data_plane() {
     local name="${1}"
     local version="${2:-v1.19.16}"
     local kubeconfig
-    local pedia_cluster
     local ip
 
     install_kwokctl
 
-    KWOK_KUBE_VERSION="${version}" kwokctl create cluster --name "${name}" --quiet-pull
     ip="$(host_docker_internal)"
+    kwokctl create cluster --name "${name}" --wait 120s --kubeconfig "" --config - <<EOF
+kind: KwokctlConfiguration
+apiVersion: config.kwok.x-k8s.io/v1alpha1
+options:
+  quietPull: true
+  kubeVersion: ${version}
+  kubeApiserverCertSANs:
+  - ${ip}
+EOF
     kubeconfig="$(kwokctl get kubeconfig --name="${name}" | sed "s#/127.0.0.1:#/${ip}:#" || :)"
     if [[ "${kubeconfig}" == "" ]]; then
         echo "kubeconfig is empty"
         return 1
     fi
-    kwokctl --name="${name}" kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Node
-metadata:
-  annotations:
-    kwok.x-k8s.io/node: fake
-    node.alpha.kubernetes.io/ttl: "0"
-  labels:
-    beta.kubernetes.io/arch: amd64
-    beta.kubernetes.io/os: linux
-    kubernetes.io/arch: amd64
-    kubernetes.io/hostname: fake-node
-    kubernetes.io/os: linux
-    kubernetes.io/role: agent
-    node-role.kubernetes.io/agent: ""
-    type: kwok-controller
-  name: fake-node
-EOF
-    pedia_cluster="$(build_pedia_cluster "${name}" "${kubeconfig}")"
-    echo "${pedia_cluster}" | kubectl apply -f -
+    kwokctl scale node --name="${name}" --replicas 1
+    build_pedia_cluster "${name}" "${kubeconfig}" | kubectl apply -f -
 }
 
 # delete the worker fake cluster
@@ -189,5 +179,6 @@ function delete_data_plane() {
     local name="${1}"
 
     kubectl delete PediaCluster "${name}"
+    kwokctl export logs --name "${name}" "${ROOT}/test/logs/kwok/${name}"
     kwokctl delete cluster --name "${name}"
 }

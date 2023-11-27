@@ -11,17 +11,18 @@ cases="${1}"
 source "$(dirname "${BASH_SOURCE[0]}")/../helper.sh"
 
 releases=(
-    v1.23.5
-    v1.22.8
-    v1.21.11
+    v1.28.2
+    v1.27.6
+    v1.26.9
+    v1.25.14
+    v1.24.15
+    v1.23.17
+    v1.22.17
+    v1.21.14
     v1.20.15
-    v1.19.16
     v1.18.20
-    v1.17.17
     v1.16.15
-    v1.15.12
     v1.14.10
-    v1.13.12
     v1.12.10
     v1.11.10
     v1.10.13
@@ -46,6 +47,7 @@ for release in "${releases[@]}"; do
         exit 1
     }
 done
+
 "${ROOT}/hack/gen-clusterconfigs.sh"
 
 "${cases}"
