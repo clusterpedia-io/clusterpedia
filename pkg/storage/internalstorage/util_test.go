@@ -1,18 +1,145 @@
 package internalstorage
 
 import (
+	"database/sql/driver"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubefields "k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/fields"
 )
+
+func toFindQuery[P any](db *gorm.DB, options P, applyFn func(*gorm.DB, P) (*gorm.DB, error), dryRun bool) (*gorm.DB, error) {
+	query := db.Session(&gorm.Session{DryRun: dryRun}).Model(&Resource{})
+	query, err := applyFn(query, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return query.Find(&Resource{}), nil
+}
+
+// replace db.ToSQL
+func toSQL[P any](db *gorm.DB, options P, applyFn func(*gorm.DB, P) (*gorm.DB, error)) (string, error) {
+	query, err := toFindQuery(db, options, applyFn, true)
+	if err != nil {
+		return "", err
+	}
+
+	return db.Dialector.Explain(query.Statement.SQL.String(), query.Statement.Vars...), nil
+}
+
+func assertSQL[P any](t *testing.T, db *gorm.DB, options P, applyFn func(*gorm.DB, P) (*gorm.DB, error), expectedQuery string, expectedError error) {
+	sql, err := toSQL(db, options, applyFn)
+	if expectedError == nil {
+		require.NoError(t, err)
+		assert.Equal(t, expectedQuery, sql)
+	} else {
+		require.Error(t, err)
+		assert.Equal(t, expectedError, err)
+	}
+}
+
+func toUnexplainedSQL[P any](db *gorm.DB, options P, applyFn func(*gorm.DB, P) (*gorm.DB, error)) (string, error) {
+	query, err := toFindQuery(db, options, applyFn, true)
+	if err != nil {
+		return "", err
+	}
+
+	return query.Statement.SQL.String(), nil
+}
+
+func assertUnexplainedSQL[P any](t *testing.T, db *gorm.DB, options P, applyFn func(*gorm.DB, P) (*gorm.DB, error), expectedQuery string, expectedError error) {
+	sql, err := toUnexplainedSQL(db, options, applyFn)
+	if expectedError == nil {
+		require.NoError(t, err)
+		assert.Equal(t, expectedQuery, sql)
+	} else {
+		require.Error(t, err)
+		assert.Equal(t, expectedError, err)
+	}
+}
+
+func assertDatabaseExecutedSQL[P any](
+	t *testing.T,
+	db *gorm.DB,
+	mock sqlmock.Sqlmock,
+	options P,
+	applyFn func(*gorm.DB, P) (*gorm.DB, error),
+	expectedQuery string,
+	args []driver.Value,
+	expectedError error,
+) {
+	if expectedError == nil {
+		mock.
+			ExpectQuery(expectedQuery).
+			WithArgs(args...).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "test_column", "test_column2", "test_column3"}))
+	}
+
+	query, err := toFindQuery(
+		db,
+		options,
+		applyFn,
+		false,
+	)
+	if expectedError == nil {
+		require.NoError(t, err)
+		require.NotNil(t, query)
+	} else {
+		require.Error(t, err)
+		assert.Equal(t, expectedError, err)
+	}
+
+	err = mock.ExpectationsWereMet()
+	assert.NoError(t, err)
+}
+
+func assertPostgresDatabaseExecutedSQL[P any](
+	t *testing.T,
+	options P,
+	applyFn func(*gorm.DB, P) (*gorm.DB, error),
+	expectedQuery string,
+	args []driver.Value,
+	expectedError error,
+) {
+	db, mock, err := newMockedPostgresDB()
+	require.NoError(t, err)
+	require.NotNil(t, db)
+
+	assertDatabaseExecutedSQL(t, db, mock, options, applyFn, expectedQuery, args, expectedError)
+}
+
+func assertMySQLDatabaseExecutedSQL[P any](
+	t *testing.T,
+	version string,
+	options P,
+	applyFn func(*gorm.DB, P) (*gorm.DB, error),
+	expectedQuery string,
+	args []driver.Value,
+	expectedError error,
+) {
+	db, mock, err := newMockedMySQLDB(version)
+	require.NoError(t, err)
+	require.NotNil(t, db)
+
+	assertDatabaseExecutedSQL(t, db, mock, options, applyFn, expectedQuery, args, expectedError)
+}
 
 type expected struct {
 	postgres string
@@ -531,16 +658,993 @@ func TestApplyListOptionsToQuery_Page(t *testing.T) {
 	}
 }
 
-// replace db.ToSQL
-func toSQL(db *gorm.DB, options *internal.ListOptions, applyFn func(*gorm.DB, *internal.ListOptions) (*gorm.DB, error)) (string, error) {
-	query := db.Session(&gorm.Session{DryRun: true}).Model(&Resource{})
-	query, err := applyFn(query, options)
-	if err != nil {
-		return "", err
+func newURLQueryFieldWhereSQLJSONParamsBase64DecodingError() (string, *apierrors.StatusError) {
+	corruptedBase64Payload := "A==="
+	_, corruptedBase64PayloadError := base64.StdEncoding.DecodeString(corruptedBase64Payload)
+
+	return corruptedBase64Payload, apierrors.NewInvalid(
+		schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"},
+		"urlQuery",
+		field.ErrorList{
+			field.Invalid(
+				field.NewPath(URLQueryFieldWhereSQLJSONParams),
+				corruptedBase64Payload,
+				fmt.Sprintf("failed to decode base64 string: %v", corruptedBase64PayloadError),
+			),
+		},
+	)
+}
+
+func newURLQueryFieldWhereSQLJSONParamsUnmarshalError(originalJSONPayloadContent string) (string, *apierrors.StatusError) {
+	base64EncodedContent := base64.StdEncoding.EncodeToString([]byte(originalJSONPayloadContent))
+	var unmarshalDest []any
+	unmarshalError := json.Unmarshal([]byte(originalJSONPayloadContent), &unmarshalDest)
+
+	return base64EncodedContent, apierrors.NewInvalid(
+		schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"},
+		"urlQuery",
+		field.ErrorList{
+			field.Invalid(
+				field.NewPath(URLQueryFieldWhereSQLJSONParams),
+				base64EncodedContent,
+				fmt.Sprintf("failed to unmarshal decoded base64 string to JSON array: %v", unmarshalError),
+			),
+		},
+	)
+}
+
+func newURLQueryFieldWhereSQLStatementRequiredError() *apierrors.StatusError {
+	var emptyWhereSQLStmt []string
+
+	return apierrors.NewInvalid(
+		schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"},
+		"urlQuery",
+		field.ErrorList{
+			field.Invalid(
+				field.NewPath(URLQueryFieldWhereSQLStatement),
+				emptyWhereSQLStmt,
+				fmt.Sprintf("required when either %s or %s was provided", URLQueryFieldWhereSQLParam, URLQueryFieldWhereSQLJSONParams),
+			),
+		},
+	)
+}
+
+func TestNewURLQueryWhereSQLParamsFromURLValues(t *testing.T) {
+	type testCase struct {
+		name      string
+		urlValues url.Values
+
+		expectedAPIError       *apierrors.StatusError
+		expectedAPIErrorString string
+
+		expectedWhereSQL           string
+		expectedWhereSQLStatement  string
+		expectedWhereSQLParams     []string
+		expectedWhereSQLJSONParams []any
 	}
 
-	stmt := query.Find(interface{}(nil)).Statement
-	return db.Dialector.Explain(stmt.SQL.String(), stmt.Vars...), nil
+	base64DecodingErrorPayload, base64DecodingError := newURLQueryFieldWhereSQLJSONParamsBase64DecodingError()
+	jsonUnmarshalErrorInvalidJSONErrorPayload, jsonUnmarshalErrorInvalidJSONError := newURLQueryFieldWhereSQLJSONParamsUnmarshalError("invalid-json")
+	jsonUnmarshalErrorNonJSONArrayErrorPayload, jsonUnmarshalErrorNonJSONArrayError := newURLQueryFieldWhereSQLJSONParamsUnmarshalError(`{"key1": "value1", "key2": "value2"}`)
+
+	validJSONPayload := `["value1", "value2"]`
+	encodedBase64ValidJSONPayload := base64.StdEncoding.EncodeToString([]byte(validJSONPayload))
+	validJSONPayloadUnmarshal := []any{"value1", "value2"}
+
+	urlQueryFieldWhereSQLStatementRequiredError := newURLQueryFieldWhereSQLStatementRequiredError()
+
+	testCases := []testCase{
+		{
+			name: "WhereSQLWithoutAnyParams",
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = ?"},
+			},
+			expectedWhereSQL: "test_column = ?",
+		},
+		{
+			name: "WhereSQLStatementWithoutAnyParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+			},
+			expectedWhereSQLStatement: "test_column = ?",
+		},
+		{
+			name: "WhereSQLStatementWithWhereSQLParam",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1"},
+			},
+			expectedWhereSQLStatement: "test_column = ?",
+			expectedWhereSQLParams:    []string{"value1"},
+		},
+		{
+			name: "WhereSQLStatementWithMultipleWhereSQLParam",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ? AND test_column2 = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1", "value2"},
+			},
+			expectedWhereSQLStatement: "test_column = ? AND test_column2 = ?",
+			expectedWhereSQLParams:    []string{"value1", "value2"},
+		},
+		{
+			name: "WhereSQLStatementWithWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{encodedBase64ValidJSONPayload},
+			},
+			expectedWhereSQLStatement:  "test_column = ?",
+			expectedWhereSQLJSONParams: validJSONPayloadUnmarshal,
+		},
+		{
+			name: "WhereSQLStatementWithMultipleWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{encodedBase64ValidJSONPayload, encodedBase64ValidJSONPayload},
+			},
+			expectedWhereSQLStatement:  "test_column = ?",
+			expectedWhereSQLJSONParams: validJSONPayloadUnmarshal,
+		},
+		{
+			name: "WhereSQLStatementWithBothWhereSQLParamAndWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:      []string{"value1"},
+				URLQueryFieldWhereSQLJSONParams: []string{encodedBase64ValidJSONPayload},
+			},
+			expectedWhereSQLStatement:  "test_column = ?",
+			expectedWhereSQLParams:     []string{"value1"},
+			expectedWhereSQLJSONParams: validJSONPayloadUnmarshal,
+		},
+		{
+			name: "WhereSQLStatementWithBothMultipleWhereSQLParamAndWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ? AND test_column2 = ?"},
+				URLQueryFieldWhereSQLParam:      []string{"value1", "value2"},
+				URLQueryFieldWhereSQLJSONParams: []string{encodedBase64ValidJSONPayload},
+			},
+			expectedWhereSQLStatement:  "test_column = ? AND test_column2 = ?",
+			expectedWhereSQLParams:     []string{"value1", "value2"},
+			expectedWhereSQLJSONParams: validJSONPayloadUnmarshal,
+		},
+		{
+			name: "CorruptedBase64PayloadValueOfWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{base64DecodingErrorPayload},
+			},
+			expectedAPIError:       base64DecodingError,
+			expectedAPIErrorString: base64DecodingError.Error(),
+		},
+		{
+			name: "InvalidBase64EncodedJSONPayloadValueOfWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{jsonUnmarshalErrorInvalidJSONErrorPayload},
+			},
+			expectedAPIError:       jsonUnmarshalErrorInvalidJSONError,
+			expectedAPIErrorString: jsonUnmarshalErrorInvalidJSONError.Error(),
+		},
+		{
+			name: "NonJSONArrayBase64EncodedJSONPayloadValueOfWhereSQLJSONParams",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{jsonUnmarshalErrorNonJSONArrayErrorPayload},
+			},
+			expectedAPIError:       jsonUnmarshalErrorNonJSONArrayError,
+			expectedAPIErrorString: jsonUnmarshalErrorNonJSONArrayError.Error(),
+		},
+		{
+			name: "WhereSQLParamsWithoutWhereSQLStatement",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLParam: []string{"value1"},
+			},
+			expectedAPIError:       urlQueryFieldWhereSQLStatementRequiredError,
+			expectedAPIErrorString: urlQueryFieldWhereSQLStatementRequiredError.Error(),
+		},
+		{
+			name: "WhereSQLJSONParamsWithoutWhereSQLStatement",
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLJSONParams: []string{encodedBase64ValidJSONPayload},
+			},
+			expectedAPIError:       urlQueryFieldWhereSQLStatementRequiredError,
+			expectedAPIErrorString: urlQueryFieldWhereSQLStatementRequiredError.Error(),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			params, err := NewURLQueryWhereSQLParamsFromURLValues(tc.urlValues)
+			if tc.expectedAPIError == nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+
+				apiError, ok := err.(*apierrors.StatusError)
+				require.True(t, ok)
+				require.NotNil(t, apiError)
+
+				assert.Equal(t, tc.expectedAPIError, apiError)
+				assert.EqualError(t, err, tc.expectedAPIErrorString)
+			}
+
+			assert.Equal(t, tc.expectedWhereSQL, params.WhereSQL)
+			assert.Equal(t, tc.expectedWhereSQLStatement, params.WhereSQLStatement)
+			assert.Equal(t, tc.expectedWhereSQLParams, params.WhereSQLParams)
+			assert.Equal(t, tc.expectedWhereSQLJSONParams, params.WhereSQLJSONParams)
+		})
+	}
+}
+
+type testSQLQueriesAssertionTestCase struct {
+	ignorePostgres                 bool
+	postgresRawQuery               string
+	postgresUnexplainedRawQuery    string
+	postgresSqlmockDBExecutedQuery string
+	postgresSqlmockDBExecutedArgs  []driver.Value
+
+	ignoreMySQL                 bool
+	mysqlRawQuery               string
+	mysqlUnexplainedRawQuery    string
+	mysqlSqlmockDBExecutedQuery string
+	mysqlSqlmockDBExecutedArgs  []driver.Value
+
+	expectedError error
+}
+
+func testSQLQueriesAssertion[P any](t *testing.T, params P, testCase testSQLQueriesAssertionTestCase, applyFn func(*gorm.DB, P) (*gorm.DB, error)) {
+	t.Run("Postgres", func(t *testing.T) {
+		t.Run("RawQuery", func(t *testing.T) {
+			if testCase.ignorePostgres {
+				t.Skip("skipped due to explicit ignoring flag")
+				return
+			}
+
+			assertSQL(t, postgresDB, params, applyFn, testCase.postgresRawQuery, testCase.expectedError)
+		})
+
+		t.Run("UnexplainedRawQuery", func(t *testing.T) {
+			if testCase.ignorePostgres {
+				t.Skip("skipped due to explicit ignoring flag")
+				return
+			}
+
+			assertUnexplainedSQL(t, postgresDB, params, applyFn, testCase.postgresUnexplainedRawQuery, testCase.expectedError)
+		})
+
+		t.Run("DBExecutedQuery", func(t *testing.T) {
+			if testCase.ignorePostgres {
+				t.Skip("skipped due to explicit ignoring flag")
+				return
+			}
+
+			assertPostgresDatabaseExecutedSQL(t, params, applyFn, testCase.postgresSqlmockDBExecutedQuery, testCase.postgresSqlmockDBExecutedArgs, testCase.expectedError)
+		})
+	})
+
+	for version, mysqlDB := range mysqlDBs {
+		version := version
+		mysqlDB := mysqlDB
+
+		t.Run(fmt.Sprintf("MySQL%s", version), func(t *testing.T) {
+			t.Run("RawQuery", func(t *testing.T) {
+				if testCase.ignoreMySQL {
+					t.Skip("skipped due to explicit ignoring flag")
+					return
+				}
+
+				assertSQL(t, mysqlDB, params, applyFn, testCase.mysqlRawQuery, testCase.expectedError)
+			})
+
+			t.Run("UnexplainedRawQuery", func(t *testing.T) {
+				if testCase.ignoreMySQL {
+					t.Skip("skipped due to explicit ignoring flag")
+					return
+				}
+
+				assertUnexplainedSQL(t, mysqlDB, params, applyFn, testCase.mysqlUnexplainedRawQuery, testCase.expectedError)
+			})
+
+			t.Run("DBExecutedQuery", func(t *testing.T) {
+				if testCase.ignoreMySQL {
+					t.Skip("skipped due to explicit ignoring flag")
+					return
+				}
+
+				assertMySQLDatabaseExecutedSQL(t, version, params, applyFn, testCase.mysqlSqlmockDBExecutedQuery, testCase.mysqlSqlmockDBExecutedArgs, testCase.expectedError)
+			})
+		})
+	}
+}
+
+type applyListOptionsURLQueryParameterizedQueryToWhereClauseTestCase struct {
+	testSQLQueriesAssertionTestCase
+
+	name string
+
+	whereSQLParams     URLQueryWhereSQLParams
+	whereSQLJSONParams URLQueryWhereSQLParams
+}
+
+func TestApplyListOptionsURLQueryParameterizedQueryToWhereClause(t *testing.T) {
+	commonTestCases := []applyListOptionsURLQueryParameterizedQueryToWhereClauseTestCase{
+		{
+			name: "WithoutWhereSQLStatement",
+
+			whereSQLParams:     URLQueryWhereSQLParams{},
+			whereSQLJSONParams: URLQueryWhereSQLParams{},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\"",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\"",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\"",
+
+				mysqlRawQuery:               "SELECT * FROM `resources`",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources`",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources`",
+			},
+		},
+		{
+			name: "WithoutAnyParameters/SingleWhereClause",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1",
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1",
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1",
+			},
+		},
+		{
+			name: "WithoutAnyParameters/MultipleWhereClauses",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1 AND created_at > value2",
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1 AND created_at > value2",
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1 AND created_at > value2",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1 AND created_at > value2",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1 AND created_at > value2",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1 AND created_at > value2",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1 AND created_at > value2",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1 AND created_at > value2",
+			},
+		},
+		{
+			name: "WithoutAnyParameters/ExplicitPotentialSQLInjectionPayload",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1 OR 1=1",
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = value1 OR 1=1",
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1 OR 1=1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1 OR 1=1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1 OR 1=1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1 OR 1=1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1 OR 1=1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1 OR 1=1",
+			},
+		},
+		{
+			name: "WithParameters/SingleParameter",
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ?",
+				WhereSQLParams:    []string{"value1"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ?",
+				WhereSQLJSONParams: []any{"value1"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+			},
+		},
+		{
+			name: "WithParameters/MultipleParameters",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ? AND test_column2 = ?",
+				WhereSQLParams:    []string{"value1", "value2"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ? AND test_column2 = ?",
+				WhereSQLJSONParams: []any{"value1", "value2"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1' AND test_column2 = 'value2'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1 AND test_column2 = $2",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1 AND test_column2 = \\$2",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1' AND test_column2 = 'value2'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ? AND test_column2 = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\? AND test_column2 = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+			},
+		},
+		{
+			name: "WithParameters/Mismatched",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ? AND test_column2 = ?",
+				WhereSQLParams:    []string{"value1"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ? AND test_column2 = ?",
+				WhereSQLJSONParams: []any{"value1"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1' AND test_column2 = ?",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1 AND test_column2 = ?",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1 AND test_column2 = \\?",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1' AND test_column2 = ?",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ? AND test_column2 = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\? AND test_column2 = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+			},
+		},
+
+		// Injection test cases
+		// This is the commonly used case where OR 1=1 will make the where clause always true if not well escaped.
+		{
+			name: "DefendSQLInjectionPayload/AlwaysTrue",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ?",
+				WhereSQLParams:    []string{" OR ('1' = '1"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ?",
+				WhereSQLJSONParams: []any{" OR ('1' = '1"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (\\'1\\' = \\'1'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (\\'1\\' = \\'1'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1"},
+			},
+		},
+		// Assume that there is a 'test_column2 = true' where clause after the possible injected where clause
+		// appending -- to the end of the where clause will comment out the rest of the query if not well escaped.
+		{
+			name: "DefendSQLInjectionPayload/Comment",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ? AND test_column2 = true",
+				WhereSQLParams:    []string{" OR ('1' = '1'); --"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ? AND test_column2 = true",
+				WhereSQLJSONParams: []any{" OR ('1' = '1'); --"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (\\'1\\' = \\'1\\'); --' AND test_column2 = true",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1 AND test_column2 = true",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1'); --"},
+
+				ignoreMySQL: true,
+			},
+		},
+		// Same as above but for MySQL
+		{
+			name: "DefendSQLInjectionPayload/Comment",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ? AND test_column2 = true",
+				WhereSQLParams:    []string{" OR ('1' = '1'); #"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ? AND test_column2 = true",
+				WhereSQLJSONParams: []any{" OR ('1' = '1'); #"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				ignorePostgres: true,
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (\\'1\\' = \\'1\\'); #' AND test_column2 = true",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ? AND test_column2 = true",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\? AND test_column2 = true",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1'); #"},
+			},
+		},
+		// This is a bit complicated. Assume that there are three columns in the table, test_column, test_column2 and test_column3.
+		// Attack could use
+		//  UNION SELECT NULL--
+		//  UNION SELECT NULL,NULL–-
+		//  UNION SELECT NULL,NULL--
+		//  UNION SELECT NULL,NULL,NULL,NULL--
+		// to find out the number of columns in the table. And then use
+		//  UNION SELECT 'a' ,NULL,NULL,NULL--
+		//  UNION SELECT NULL,'a',NULL,NULL--
+		//  UNION SELECT NULL,NULL,'a',NULL--
+		//  UNION SELECT NULL,NULL,NULL,'a'--
+		// to find out the types of the columns in the table.
+		// Finally, attacker could use
+		//  UNION SELECT other_column1, other_column2, other_column3 FROM other_table
+		// to extract data from other tables.
+		{
+			name: "DefendSQLInjectionPayload/UNIONBased/ColumnCountDetermination",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ?",
+				WhereSQLParams:    []string{" UNION SELECT NULL,NULL,NULL;--"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ?",
+				WhereSQLJSONParams: []any{" UNION SELECT NULL,NULL,NULL;--"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' UNION SELECT NULL,NULL,NULL;--'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT NULL,NULL,NULL;--"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' UNION SELECT NULL,NULL,NULL;--'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT NULL,NULL,NULL;--"},
+			},
+		},
+		{
+			name: "DefendSQLInjectionPayload/UNIONBased/ColumnTypeDetermination",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ?",
+				WhereSQLParams:    []string{" UNION SELECT 'a',NULL,NULL;--"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ?",
+				WhereSQLJSONParams: []any{" UNION SELECT 'a',NULL,NULL;--"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' UNION SELECT \\'a\\',NULL,NULL;--'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT 'a',NULL,NULL;--"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' UNION SELECT \\'a\\',NULL,NULL;--'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT 'a',NULL,NULL;--"},
+			},
+		},
+		{
+			name: "DefendSQLInjectionPayload/UNIONBased/UNIONAllOverride",
+
+			whereSQLParams: URLQueryWhereSQLParams{
+				WhereSQLStatement: "test_column = ?",
+				WhereSQLParams:    []string{" UNION SELECT other_column1, other_column2, other_column3 FROM other_table"},
+			},
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column = ?",
+				WhereSQLJSONParams: []any{" UNION SELECT other_column1, other_column2, other_column3 FROM other_table"},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' UNION SELECT other_column1, other_column2, other_column3 FROM other_table'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT other_column1, other_column2, other_column3 FROM other_table"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' UNION SELECT other_column1, other_column2, other_column3 FROM other_table'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT other_column1, other_column2, other_column3 FROM other_table"},
+			},
+		},
+	}
+
+	for _, tc := range commonTestCases {
+		tc := tc
+
+		t.Run(fmt.Sprintf("%s/%s", "WhereSQLParams", tc.name), func(t *testing.T) {
+			testSQLQueriesAssertion(
+				t,
+				tc.whereSQLParams,
+				tc.testSQLQueriesAssertionTestCase,
+				func(query *gorm.DB, params URLQueryWhereSQLParams) (*gorm.DB, error) {
+					return applyListOptionsURLQueryParameterizedQueryToWhereClause(query, params), nil
+				},
+			)
+		})
+	}
+	for _, tc := range commonTestCases {
+		tc := tc
+
+		t.Run(fmt.Sprintf("%s/%s", "WhereSQLJSONParams", tc.name), func(t *testing.T) {
+			testSQLQueriesAssertion(
+				t,
+				tc.whereSQLJSONParams,
+				tc.testSQLQueriesAssertionTestCase,
+				func(query *gorm.DB, params URLQueryWhereSQLParams) (*gorm.DB, error) {
+					return applyListOptionsURLQueryParameterizedQueryToWhereClause(query, params), nil
+				},
+			)
+		})
+	}
+
+	now := time.Now()
+
+	advancedWhereClauseWithWhereSQLJSONParamsTestCases := []applyListOptionsURLQueryParameterizedQueryToWhereClauseTestCase{
+		{
+			name: "WithWhereSQLJSONParameters/IN",
+
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column IN ?",
+				WhereSQLJSONParams: []any{[]string{"value1", "value2"}},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column IN ('value1','value2')",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column IN ($1,$2)",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column IN \\(\\$1,\\$2\\)",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column IN ('value1','value2')",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column IN (?,?)",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column IN \\(\\?,\\?\\)",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+			},
+		},
+		{
+			name: "WithWhereSQLJSONParameters/NOT-IN",
+
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column NOT IN ?",
+				WhereSQLJSONParams: []any{[]string{"value1", "value2"}},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column NOT IN ('value1','value2')",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column NOT IN ($1,$2)",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column NOT IN \\(\\$1,\\$2\\)",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column NOT IN ('value1','value2')",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column NOT IN (?,?)",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column NOT IN \\(\\?,\\?\\)",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1", "value2"},
+			},
+		},
+		{
+			name: "WithWhereSQLJSONParameters/SpecialDataTypes/time.Time",
+
+			whereSQLJSONParams: URLQueryWhereSQLParams{
+				WhereSQLStatement:  "test_column <= ?",
+				WhereSQLJSONParams: []any{now},
+			},
+
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               fmt.Sprintf("SELECT * FROM \"resources\" WHERE test_column <= '%s'", now.Format("2006-01-02 15:04:05.999")),
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column <= $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column <= \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{now},
+
+				mysqlRawQuery:               fmt.Sprintf("SELECT * FROM `resources` WHERE test_column <= '%s'", now.Format("2006-01-02 15:04:05.999")),
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column <= ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column <= \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{now},
+			},
+		},
+	}
+
+	for _, tc := range advancedWhereClauseWithWhereSQLJSONParamsTestCases {
+		tc := tc
+		t.Run(fmt.Sprintf("%s/%s", "WhereSQLJSONParams", tc.name), func(t *testing.T) {
+			testSQLQueriesAssertion(
+				t,
+				tc.whereSQLJSONParams,
+				tc.testSQLQueriesAssertionTestCase,
+				func(query *gorm.DB, params URLQueryWhereSQLParams) (*gorm.DB, error) {
+					return applyListOptionsURLQueryParameterizedQueryToWhereClause(query, params), nil
+				},
+			)
+		})
+	}
+}
+
+func TestApplyListOptionsURLQueryToWhereClause(t *testing.T) {
+	type testCase struct {
+		testSQLQueriesAssertionTestCase
+
+		name string
+
+		allowRawSQLQueryEnabled           bool
+		allowParameterizedSQLQueryEnabled bool
+		urlValues                         url.Values
+	}
+
+	corruptedBase64Payload := "A==="
+	_, corruptedBase64PayloadError := base64.StdEncoding.DecodeString(corruptedBase64Payload)
+	require.Error(t, corruptedBase64PayloadError)
+
+	featureGateRelatedTestCases := []testCase{
+		{
+			name:                              "WithURLQueryWhereSQL/NoFeatureGateEnabled",
+			allowRawSQLQueryEnabled:           false,
+			allowParameterizedSQLQueryEnabled: false,
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\"",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\"",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\"",
+
+				mysqlRawQuery:               "SELECT * FROM `resources`",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources`",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources`",
+			},
+		},
+		{
+			name:                              "WithURLQueryFieldWhereSQLStatement/NoFeatureGateEnabled",
+			allowRawSQLQueryEnabled:           false,
+			allowParameterizedSQLQueryEnabled: false,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\"",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\"",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\"",
+
+				mysqlRawQuery:               "SELECT * FROM `resources`",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources`",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources`",
+			},
+		},
+		{
+			name:                              "WithURLQueryWhereSQL/AllowRawSQLQueryEnabled",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: false,
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1",
+			},
+		},
+		{
+			name:                              "WithURLQueryFieldWhereSQLStatementWithParams/AllowRawSQLQueryEnabled",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: false,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+			},
+		},
+		{
+			name:                              "WithURLQueryWhereSQL/AllowParameterizedSQLQueryEnabled",
+			allowRawSQLQueryEnabled:           false,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\"",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\"",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\"",
+
+				mysqlRawQuery:               "SELECT * FROM `resources`",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources`",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources`",
+			},
+		},
+		{
+			name:                              "WithURLQueryFieldWhereSQLStatementWithParams/AllowParameterizedSQLQueryEnabled",
+			allowRawSQLQueryEnabled:           false,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+			},
+		},
+	}
+
+	for _, tc := range featureGateRelatedTestCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			testSQLQueriesAssertion(
+				t,
+				tc.urlValues,
+				tc.testSQLQueriesAssertionTestCase,
+				func(query *gorm.DB, urlValues url.Values) (*gorm.DB, error) {
+					return applyListOptionsURLQueryToWhereClause(query, urlValues, tc.allowRawSQLQueryEnabled, tc.allowParameterizedSQLQueryEnabled)
+				},
+			)
+		})
+	}
+
+	urlQueryFieldWhereSQLJSONParamsBase64DecodingErrorPayload, urlQueryFieldWhereSQLJSONParamsBase64DecodingError := newURLQueryFieldWhereSQLJSONParamsBase64DecodingError()
+
+	testCases := []testCase{
+		{
+			name:                              "Empty",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues:                         url.Values{},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\"",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\"",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\"",
+
+				mysqlRawQuery:               "SELECT * FROM `resources`",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources`",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources`",
+			},
+		},
+		{
+			name:                              "WhereSQLStatementWithoutParams",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1",
+			},
+		},
+		{
+			name:                              "WhereSQLWithoutParams",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1",
+			},
+		},
+		{
+			name:                              "WhereSQLWithParams",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryWhereSQL: []string{"test_column = value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = value1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = value1",
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = value1",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = value1",
+			},
+		},
+		{
+			name:                              "WhereSQLStatementWithParams",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement: []string{"test_column = ?"},
+				URLQueryFieldWhereSQLParam:     []string{"value1"},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = 'value1'",
+				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
+				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
+				postgresSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = 'value1'",
+				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
+				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
+				mysqlSqlmockDBExecutedArgs:  []driver.Value{"value1"},
+			},
+		},
+		{
+			name:                              "ErrorHandling",
+			allowRawSQLQueryEnabled:           true,
+			allowParameterizedSQLQueryEnabled: true,
+			urlValues: url.Values{
+				URLQueryFieldWhereSQLStatement:  []string{"test_column = ?"},
+				URLQueryFieldWhereSQLJSONParams: []string{urlQueryFieldWhereSQLJSONParamsBase64DecodingErrorPayload},
+			},
+			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
+				expectedError: urlQueryFieldWhereSQLJSONParamsBase64DecodingError,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			testSQLQueriesAssertion(
+				t,
+				tc.urlValues,
+				tc.testSQLQueriesAssertionTestCase,
+				func(query *gorm.DB, urlValues url.Values) (*gorm.DB, error) {
+					return applyListOptionsURLQueryToWhereClause(query, urlValues, tc.allowRawSQLQueryEnabled, tc.allowParameterizedSQLQueryEnabled)
+				},
+			)
+		})
+	}
 }
 
 func assertError(t *testing.T, expectedErr string, err error) {
