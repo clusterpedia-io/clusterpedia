@@ -376,6 +376,12 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterSpec(ref common.Referenc
 							Format: "",
 						},
 					},
+					"shardingName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"syncResources"},
 			},
@@ -427,6 +433,12 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterStatus(ref common.Refere
 									},
 								},
 							},
+						},
+					},
+					"shardingName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},

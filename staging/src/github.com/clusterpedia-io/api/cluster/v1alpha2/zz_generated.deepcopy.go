@@ -164,6 +164,11 @@ func (in *ClusterStatus) DeepCopyInto(out *ClusterStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.ShardingName != nil {
+		in, out := &in.ShardingName, &out.ShardingName
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
