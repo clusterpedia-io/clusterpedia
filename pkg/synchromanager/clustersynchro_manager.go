@@ -50,19 +50,19 @@ type Manager struct {
 
 	queue                      workqueue.RateLimitingInterface
 	storage                    storage.StorageFactory
-	metricsStoreBuilder        *kubestatemetrics.MetricsStoreBuilder
 	clusterlister              clusterlister.PediaClusterLister
 	clusterSyncResourcesLister clusterlister.ClusterSyncResourcesLister
 	clusterInformer            cache.SharedIndexInformer
 
-	synchrolock      sync.RWMutex
-	synchros         map[string]*clustersynchro.ClusterSynchro
-	synchroWaitGroup wait.Group
+	clusterSyncConfig clustersynchro.ClusterSyncConfig
+	synchrolock       sync.RWMutex
+	synchros          map[string]*clustersynchro.ClusterSynchro
+	synchroWaitGroup  wait.Group
 }
 
 var _ kubestatemetrics.ClusterMetricsWriterListGetter = &Manager{}
 
-func NewManager(client crdclientset.Interface, storage storage.StorageFactory, metricsStoreBuilder *kubestatemetrics.MetricsStoreBuilder) *Manager {
+func NewManager(client crdclientset.Interface, storage storage.StorageFactory, syncConfig clustersynchro.ClusterSyncConfig) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
@@ -72,7 +72,6 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory, m
 		clusterpediaclient: client,
 
 		storage:                    storage,
-		metricsStoreBuilder:        metricsStoreBuilder,
 		clusterlister:              clusterinformer.Lister(),
 		clusterInformer:            clusterinformer.Informer(),
 		clusterSyncResourcesLister: clusterSyncResourcesInformer.Lister(),
@@ -80,7 +79,8 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory, m
 			NewItemExponentialFailureAndJitterSlowRateLimter(2*time.Second, 15*time.Second, 1*time.Minute, 1.0, defaultRetryNum),
 		),
 
-		synchros: make(map[string]*clustersynchro.ClusterSynchro),
+		clusterSyncConfig: syncConfig,
+		synchros:          make(map[string]*clustersynchro.ClusterSynchro),
 	}
 
 	if _, err := clusterinformer.Informer().AddEventHandler(
@@ -348,7 +348,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	// create resource synchro
 	if synchro == nil {
-		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager.metricsStoreBuilder, manager)
+		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager, manager.clusterSyncConfig)
 		if err != nil {
 			_, forever := err.(clustersynchro.RetryableError)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)

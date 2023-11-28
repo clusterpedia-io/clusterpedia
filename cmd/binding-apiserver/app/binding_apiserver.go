@@ -19,6 +19,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )
@@ -56,7 +57,7 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory, nil)
+			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory, clustersynchro.ClusterSyncConfig{})
 			go synchromanager.Run(1, ctx.Done())
 
 			server, err := completedConfig.New()
