@@ -121,6 +121,7 @@ func assertPostgresDatabaseExecutedSQL[P any](
 	db, mock, err := newMockedPostgresDB()
 	require.NoError(t, err)
 	require.NotNil(t, db)
+	require.NotNil(t, mock)
 
 	assertDatabaseExecutedSQL(t, db, mock, options, applyFn, expectedQuery, args, expectedError)
 }
@@ -137,6 +138,7 @@ func assertMySQLDatabaseExecutedSQL[P any](
 	db, mock, err := newMockedMySQLDB(version)
 	require.NoError(t, err)
 	require.NotNil(t, db)
+	require.NotNil(t, mock)
 
 	assertDatabaseExecutedSQL(t, db, mock, options, applyFn, expectedQuery, args, expectedError)
 }
