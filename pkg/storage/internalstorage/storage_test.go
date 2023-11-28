@@ -8,6 +8,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	gmysql "gorm.io/driver/mysql"
 	gpostgres "gorm.io/driver/postgres"
+	gsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +33,25 @@ func newMockedPostgresDB() (*gorm.DB, sqlmock.Sqlmock, error) {
 	}
 
 	return gormDB, mock, nil
+}
+
+func newSQLiteDB() (*gorm.DB, func(), error) {
+	db, err := gorm.Open(gsqlite.Open("test.db"))
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	err = db.AutoMigrate(&Resource{})
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	return db, func() {
+		err := os.Remove("test.db")
+		if err != nil {
+			panic(err)
+		}
+	}, nil
 }
 
 func newMockedMySQLDB(version string) (*gorm.DB, sqlmock.Sqlmock, error) {

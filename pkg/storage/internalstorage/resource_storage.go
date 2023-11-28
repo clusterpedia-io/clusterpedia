@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -107,7 +108,7 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		"owner_uid":        ownerUID,
 		"uid":              metaobj.GetUID(),
 		"resource_version": metaobj.GetResourceVersion(),
-		"object":           buffer.Bytes(),
+		"object":           datatypes.JSON(buffer.Bytes()),
 	}
 	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
 		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
