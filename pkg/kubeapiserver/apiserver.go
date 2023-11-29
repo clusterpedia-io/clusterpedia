@@ -11,9 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
+	genericfeatures "k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/restmapper"
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
@@ -144,6 +146,10 @@ func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http
 
 	// https://github.com/clusterpedia-io/clusterpedia/issues/54
 	handler = filters.RemoveFieldSelectorFromRequest(handler)
+
+	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {
+		handler = genericapifilters.WithTracing(handler, c.TracerProvider)
+	}
 
 	/* used for debugging
 	handler = genericapifilters.WithWarningRecorder(handler)
