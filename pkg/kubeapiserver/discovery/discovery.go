@@ -26,9 +26,9 @@ type ResourceDiscoveryAPI struct {
 	Versions sets.Set[schema.GroupVersion]
 }
 
-// DiscoveryManager  管理集群的 discovery api，并处理 /api 和 /apis 的请求
+// DiscoveryManager manage the cluster's discovery api and handle requests for /api and /apis
 type DiscoveryManager struct {
-	// groupSource 用来保证所有集群的 API Group 保持一致
+	// groupSource used to ensure that the API Groups of all clusters are consistent
 	groupSource APIGroupSource
 
 	serializer                       runtime.NegotiatedSerializer
@@ -38,8 +38,8 @@ type DiscoveryManager struct {
 	groupHandler   *clusterGroupDiscoveryHandler
 	versionHandler *clusterVersionDiscoveryHandler
 
-	// groups 保存了所有集群支持的 API Group
-	// clusterGroups 保存了每个集群的 API Group
+	// apigroups is an apiGroup list supported by all clusters
+	// clusterGroups API Groups supported by each cluster
 	apigroups        atomic.Value // type: []metav1.APIGroup
 	clusterAPIGroups atomic.Value // type: map[string][]metav1.APIGroup
 

@@ -30,8 +30,8 @@ func pressureEvents(older *Event, newer *Event) *Event {
 	switch newer.Action {
 	case Updated:
 		if older.Action == Deleted {
-			// TODO: 可以比对 resource version
-			// 但是从 informer 中获取的数据应该是可以保证顺序的，所以可以不添加比对
+			// TODO: can compare resource version
+			// but the data obtained from the informer should be in order, so comparison is not needed.
 			return older
 		}
 
