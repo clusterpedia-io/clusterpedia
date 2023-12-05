@@ -39,7 +39,7 @@ type ClusterPediaServerOptions struct {
 	CoreAPI        *genericoptions.CoreAPIOptions
 	FeatureGate    featuregate.FeatureGate
 	Admission      *genericoptions.AdmissionOptions
-	//      Traces         *genericoptions.TracingOptions
+	Traces         *genericoptions.TracingOptions
 
 	Storage *storageoptions.StorageOptions
 }
@@ -66,7 +66,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Admission:      genericoptions.NewAdmissionOptions(),
-		//      Traces:         genericoptions.NewTracingOptions(),
+		Traces:         genericoptions.NewTracingOptions(),
 
 		Storage: storageoptions.NewStorageOptions(),
 	}
@@ -154,6 +154,9 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, client, dynamicClient, o.FeatureGate); err != nil {
 		return err
 	}
+	if err := o.Traces.ApplyTo(nil, &config.Config); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -176,7 +179,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 
 	// o.Admission.AddFlags(fss.FlagSet("admission"))
-	// o.Traces.AddFlags(fss.FlagSet("traces"))
+	o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
 	return fss
