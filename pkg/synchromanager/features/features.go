@@ -61,6 +61,13 @@ const (
 	// owner: @iceber
 	// alpha: v0.8.0
 	StreamHandlePaginatedListForResourceSync featuregate.Feature = "StreamHandlePaginatedListForResourceSync"
+
+	// IgnoreLeaseSync is a feature gate for the ClusterSynchro to skip syncing leases.coordination.k8s.io,
+	// if you enable this feature, these resources will not be synced no matter what `syncResources` are defined.
+	//
+	// owner: @27149chen
+	// alpha: v0.8.0
+	IgnoreLeaseSync featuregate.Feature = "IgnoreLeaseSync"
 )
 
 func init() {
@@ -78,4 +85,5 @@ var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featurega
 
 	ForcePaginatedListForResourceSync:        {Default: false, PreRelease: featuregate.Alpha},
 	StreamHandlePaginatedListForResourceSync: {Default: false, PreRelease: featuregate.Alpha},
+	IgnoreLeaseSync:                          {Default: false, PreRelease: featuregate.Alpha},
 }
