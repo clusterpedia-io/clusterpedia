@@ -18,6 +18,7 @@ type Config struct {
 	EventRecorder record.EventRecorder
 
 	WorkerNumber            int
+	ShardingName            string
 	MetricsServerConfig     metrics.Config
 	KubeMetricsServerConfig *kubestatemetrics.ServerConfig
 	StorageFactory          storage.StorageFactory
