@@ -200,8 +200,8 @@ func TestResourceStorage_genGetObjectQuery(t *testing.T) {
 			"",
 			"",
 			expected{
-				`SELECT "object" FROM "resources" WHERE "cluster" = '' AND "group" = '' AND "name" = '' AND "namespace" = '' AND "resource" = '' AND "version" = '' ORDER BY "resources"."id" LIMIT 1`,
-				"SELECT `object` FROM `resources` WHERE `cluster` = '' AND `group` = '' AND `name` = '' AND `namespace` = '' AND `resource` = '' AND `version` = '' ORDER BY `resources`.`id` LIMIT 1",
+				`SELECT cluster_resource_version, object FROM "resources" WHERE "deleted" = false AND "group" = '' AND "name" = '' AND "namespace" = '' AND "resource" = '' AND "version" = '' ORDER BY "resources"."id" LIMIT 1`,
+				"SELECT cluster_resource_version, object FROM `resources` WHERE `deleted` = false AND `group` = '' AND `name` = '' AND `namespace` = '' AND `resource` = '' AND `version` = '' ORDER BY `resources`.`id` LIMIT 1",
 				"",
 			},
 		},
@@ -212,8 +212,8 @@ func TestResourceStorage_genGetObjectQuery(t *testing.T) {
 			"ns-1",
 			"resource-1",
 			expected{
-				`SELECT "object" FROM "resources" WHERE "cluster" = 'cluster-1' AND "group" = 'apps' AND "name" = 'resource-1' AND "namespace" = 'ns-1' AND "resource" = 'deployments' AND "version" = 'v1' ORDER BY "resources"."id" LIMIT 1`,
-				"SELECT `object` FROM `resources` WHERE `cluster` = 'cluster-1' AND `group` = 'apps' AND `name` = 'resource-1' AND `namespace` = 'ns-1' AND `resource` = 'deployments' AND `version` = 'v1' ORDER BY `resources`.`id` LIMIT 1",
+				`SELECT cluster_resource_version, object FROM "resources" WHERE "cluster" = 'cluster-1' AND "deleted" = false AND "group" = 'apps' AND "name" = 'resource-1' AND "namespace" = 'ns-1' AND "resource" = 'deployments' AND "version" = 'v1' ORDER BY "resources"."id" LIMIT 1`,
+				"SELECT cluster_resource_version, object FROM `resources` WHERE `cluster` = 'cluster-1' AND `deleted` = false AND `group` = 'apps' AND `name` = 'resource-1' AND `namespace` = 'ns-1' AND `resource` = 'deployments' AND `version` = 'v1' ORDER BY `resources`.`id` LIMIT 1",
 				"",
 			},
 		},

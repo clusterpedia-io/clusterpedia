@@ -15,7 +15,7 @@ const (
 	SubscribeerName = "rabbitmq"
 )
 
-func NewPulisher(mo *options.MiddlerwareOptions) (middleware.Publisher, error) {
+func NewPulisher(mo *options.MiddlewareOptions) (middleware.Publisher, error) {
 	if mo.MaxConnections <= 0 {
 		mo.MaxConnections = 3
 	}
@@ -34,7 +34,7 @@ func NewPulisher(mo *options.MiddlerwareOptions) (middleware.Publisher, error) {
 	return publisher, nil
 }
 
-func NewSubscriber(mo *options.MiddlerwareOptions) (middleware.Subscriber, error) {
+func NewSubscriber(mo *options.MiddlewareOptions) (middleware.Subscriber, error) {
 	if mo.MaxConnections <= 0 {
 		mo.MaxConnections = 3
 	}

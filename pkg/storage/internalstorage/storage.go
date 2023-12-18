@@ -10,6 +10,7 @@ import (
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
 	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
@@ -43,8 +44,8 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 		KeyFunc:    utils.GetKeyFunc(gvr, config.Namespaced),
 	}
 
-	// initEventCache is true when Apiserver starts, false when clustersynchro-manager starts
-	if initEventCache {
+	// SubscriberEnabled is true when Apiserver starts and middleware enabled
+	if middleware.SubscriberEnabled {
 		var cache *watchcomponents.EventCache
 		buffer := watchcomponents.GetMultiClusterEventPool().GetClusterBufferByGVR(gvr)
 		cachePool := watchcomponents.GetInitEventCachePool()
@@ -72,7 +73,7 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 
 		resourceStorage.buffer = buffer
 		resourceStorage.eventCache = cache
-	} else {
+	} else if middleware.PublisherEnabled { // PublisherEnabled is true when clustersynchro-manager starts and middleware enabled
 		err := middleware.GlobalPublisher.PublishTopic(gvr, config.Codec)
 		if err != nil {
 			return nil, err
@@ -99,8 +100,11 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 
 func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
 	var resources []Resource
-	result := f.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
-		Where(map[string]interface{}{"cluster": cluster}).
+	result := f.db.WithContext(ctx).Select("group", "version", "resource",
+		"namespace", "name", "resource_version", "deleted", "published").
+		Where(map[string]interface{}{"cluster": cluster, "deleted": false}).
+		//In case deleted event be losted when synchro manager do a leaderelection or reboot
+		Or(map[string]interface{}{"cluster": cluster, "deleted": true, "published": false}).
 		Find(&resources)
 	if result.Error != nil {
 		return nil, InterpretDBError(cluster, result.Error)
@@ -119,7 +123,13 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 		if resource.Namespace != "" {
 			key = resource.Namespace + "/" + resource.Name
 		}
-		versions[key] = resource.ResourceVersion
+		versions[key] = informer.StorageElement{
+			Version:   resource.ResourceVersion,
+			Deleted:   resource.Deleted,
+			Published: resource.Published,
+			Name:      resource.Name,
+			Namespace: resource.Namespace,
+		}
 	}
 	return resourceversions, nil
 }

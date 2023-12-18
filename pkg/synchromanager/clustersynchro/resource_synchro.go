@@ -27,6 +27,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 )
 
 type ResourceSynchroConfig struct {
@@ -347,14 +348,26 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
+
+	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if obj, ok = d.Obj.(*unstructured.Unstructured); !ok {
+			namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
+			if err != nil {
+				return
+			}
+			obj = &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+		}
+	}
+
 	if o, ok := obj.(*unstructured.Unstructured); ok {
 		synchro.pruneObject(o)
 	}
 
-	obj, err := synchro.storage.ConvertDeletedObject(obj)
-	if err != nil {
-		return
-	}
+	// full obj is needed in watch feature
+	//obj, err := synchro.storage.ConvertDeletedObject(obj)
+	//if err != nil {
+	//	return
+	//}
 	_ = synchro.queue.Delete(obj)
 }
 
@@ -389,22 +402,6 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 	if !ok {
 		if _, ok = event.Object.(cache.DeletedFinalStateUnknown); !ok {
 			return
-		} else {
-			dfs := event.Object.(cache.DeletedFinalStateUnknown)
-			var se informer.StorageElement
-			if se, ok = dfs.Obj.(informer.StorageElement); !ok {
-				return
-			}
-			var err error
-			obj, err = synchro.storage.GetObj(synchro.ctx, synchro.cluster, se.Namespace, se.Name)
-			if err != nil {
-				return
-			}
-			metaObj, err := meta.Accessor(obj)
-			if err == nil {
-				klog.Warning("DeletedFinalStateUnknown, name: ", metaObj.GetName(), ", time: ", metaObj.GetDeletionTimestamp(),
-					", kind: ", obj.GetObjectKind().GroupVersionKind().Kind, ", cluster: ", synchro.cluster)
-			}
 		}
 	}
 	key, _ := cache.MetaNamespaceKeyFunc(obj)
@@ -437,9 +434,11 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 				Published: true,
 			}
 			synchro.rvsLock.Unlock()
-			err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
-			if err != nil {
-				return
+			if middleware.PublisherEnabled {
+				err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
+				if err != nil {
+					return
+				}
 			}
 		}
 	} else {
@@ -447,9 +446,11 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 			synchro.rvsLock.Lock()
 			delete(synchro.rvs, key)
 			synchro.rvsLock.Unlock()
-			err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
-			if err != nil {
-				return
+			if middleware.PublisherEnabled {
+				err := synchro.storage.ProcessEvent(context.TODO(), eventType, obj, synchro.cluster)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}

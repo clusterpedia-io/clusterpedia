@@ -11,6 +11,7 @@ import (
 )
 
 var GlobalPublisher Publisher
+var PublisherEnabled bool = false
 
 type Publisher interface {
 	InitPublisher(ctx context.Context) error

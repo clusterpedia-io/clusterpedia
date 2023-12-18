@@ -28,6 +28,7 @@ import (
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/watcher"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 	watchoptions "github.com/clusterpedia-io/clusterpedia/pkg/watcher/options"
 )
 
@@ -50,7 +51,7 @@ type Options struct {
 	WorkerNumber            int // WorkerNumber is the number of worker goroutines
 	PageSizeForResourceSync int64
 	ShardingName            string
-	Publisher               *watchoptions.MiddlerwareOptions
+	Publisher               *watchoptions.MiddlewareOptions
 }
 
 func NewClusterSynchroManagerOptions() (*Options, error) {
@@ -137,9 +138,12 @@ func (o *Options) Config() (*config.Config, error) {
 		return nil, err
 	}
 
-	err = watcher.NewPulisher(o.Publisher)
-	if err != nil {
-		return nil, err
+	middleware.PublisherEnabled = o.Publisher.Enabled
+	if middleware.PublisherEnabled {
+		err = watcher.NewPulisher(o.Publisher)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	kubeconfig, err := clientcmd.BuildConfigFromFlags(o.Master, o.Kubeconfig)

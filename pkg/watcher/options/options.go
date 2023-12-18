@@ -6,7 +6,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type MiddlerwareOptions struct {
+type MiddlewareOptions struct {
+	Enabled                     bool // middleware enabled
 	Name                        string
 	ServerIp                    string
 	ServerPort                  int
@@ -20,11 +21,11 @@ type MiddlerwareOptions struct {
 	CacheSize                   int
 }
 
-func NewMiddlerwareOptions() *MiddlerwareOptions {
-	return &MiddlerwareOptions{Name: "apiserver", CacheSize: 100}
+func NewMiddlerwareOptions() *MiddlewareOptions {
+	return &MiddlewareOptions{Enabled: false, Name: "rabbitmq", CacheSize: 100}
 }
 
-func (o *MiddlerwareOptions) Validate() []error {
+func (o *MiddlewareOptions) Validate() []error {
 	if o == nil {
 		return nil
 	}
@@ -45,7 +46,8 @@ func (o *MiddlerwareOptions) Validate() []error {
 	return errors
 }
 
-func (o *MiddlerwareOptions) AddFlags(fs *pflag.FlagSet) {
+func (o *MiddlewareOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&o.Enabled, "middleware-enabled", o.Enabled, "middlerware enabled")
 	fs.StringVar(&o.Name, "middleware-name", o.Name, "middlerware name")
 	fs.StringVar(&o.ServerIp, "middleware-serverIp", o.ServerIp, "middlerware server Ip")
 	fs.IntVar(&o.ServerPort, "middleware-serverPort", o.ServerPort, "middlerware server port")

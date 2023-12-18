@@ -8,8 +8,8 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/options"
 )
 
-type NewPublisherFunc func(mo *options.MiddlerwareOptions) (middleware.Publisher, error)
-type NewSubscriberFunc func(mo *options.MiddlerwareOptions) (middleware.Subscriber, error)
+type NewPublisherFunc func(mo *options.MiddlewareOptions) (middleware.Publisher, error)
+type NewSubscriberFunc func(mo *options.MiddlewareOptions) (middleware.Subscriber, error)
 
 var publisherFuncs = make(map[string]NewPublisherFunc)
 var subscriberFuncs = make(map[string]NewSubscriberFunc)
@@ -33,7 +33,7 @@ func RegisterSubscriberFunc(name string, f NewSubscriberFunc) {
 	subscriberFuncs[name] = f
 }
 
-func NewPulisher(mo *options.MiddlerwareOptions) error {
+func NewPulisher(mo *options.MiddlewareOptions) error {
 	provider, ok := publisherFuncs[mo.Name]
 	if !ok {
 		return fmt.Errorf("publisher %s is unregistered", mo.Name)
@@ -48,7 +48,7 @@ func NewPulisher(mo *options.MiddlerwareOptions) error {
 	return nil
 }
 
-func NewSubscriber(mo *options.MiddlerwareOptions) error {
+func NewSubscriber(mo *options.MiddlewareOptions) error {
 	provider, ok := subscriberFuncs[mo.Name]
 	if !ok {
 		return fmt.Errorf("publisher %s is unregistered", mo.Name)

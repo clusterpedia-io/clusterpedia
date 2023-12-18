@@ -18,7 +18,7 @@ import (
 
 type FilterWithAttrsFunc func(key string, l labels.Set, f fields.Set) bool
 
-// CacheWatcaher implements watch.Interface
+// MultiClusterWatcher implements watch.Interface
 type MultiClusterWatcher struct {
 	input chan *watch.Event
 	//output
@@ -78,7 +78,7 @@ func (w *MultiClusterWatcher) NonblockingAdd(event *watch.Event) bool {
 	}
 }
 
-// Nil timer means that add will not block (if it can't send event immediately, it will break the watcher)
+// Add Nil timer means that add will not block (if it can't send event immediately, it will break the watcher)
 func (w *MultiClusterWatcher) Add(event *watch.Event, timer *time.Timer) bool {
 	// Try to send the event immediately, without blocking.
 	if w.NonblockingAdd(event) {
@@ -145,11 +145,11 @@ func internalToUnstructured(internal runtime.Object, gvk schema.GroupVersionKind
 	if err != nil {
 		return nil, err
 	}
-	unstructured, err := externalToUnstructured(into)
+	toUnstructured, err := externalToUnstructured(into)
 	if err != nil {
 		return nil, err
 	}
-	return unstructured, nil
+	return toUnstructured, nil
 }
 
 func externalToUnstructured(obj interface{}) (*unstructured.Unstructured, error) {
@@ -160,17 +160,11 @@ func externalToUnstructured(obj interface{}) (*unstructured.Unstructured, error)
 	return &unstructured.Unstructured{Object: uncastObj}, nil
 }
 
-// apiserver\pkg\storage\cacher\cacher.go:1339  这里区别比较大 估计会有bug
+// apiserver\pkg\storage\cacher\cacher.go:1339
 func (w *MultiClusterWatcher) convertToWatchEvent(event *watch.Event) *watch.Event {
 	if event.Type == watch.Error || w.filter == nil {
 		return event
 	}
-
-	// defer func() {
-	// 	if err := recover(); err != nil {
-	// 		klog.Error(err)
-	// 	}
-	// }()
 
 	unstructuredData, err := internalToUnstructured(event.Object, w.gvk)
 	if err != nil {

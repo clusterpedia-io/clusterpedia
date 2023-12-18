@@ -288,19 +288,40 @@ func (s *ResourceStorage) GetObj(ctx context.Context, cluster, namespace, name s
 	return obj, nil
 }
 
+func (s *ResourceStorage) GenGetObjectQuery(ctx context.Context, cluster, namespace, name string) *gorm.DB {
+	condition := map[string]interface{}{
+		"namespace": namespace,
+		"name":      name,
+		"group":     s.storageGroupResource.Group,
+		"version":   s.storageVersion.Version,
+		"resource":  s.storageGroupResource.Resource,
+		"deleted":   false,
+	}
+
+	if cluster != "" {
+		condition["cluster"] = cluster
+	}
+	return s.db.WithContext(ctx).Model(&Resource{}).Select("cluster_resource_version, object").Where(condition)
+}
+
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
-	var objects [][]byte
-	if result := s.genGetObjectQuery(ctx, cluster, namespace, name).First(&objects); result.Error != nil {
+	var resource Resource
+	if result := s.GenGetObjectQuery(ctx, cluster, namespace, name).First(&resource); result.Error != nil {
 		return InterpretResourceDBError(cluster, namespace+"/"+name, result.Error)
 	}
 
-	obj, _, err := s.codec.Decode(objects[0], nil, into)
+	obj, _, err := s.codec.Decode(resource.Object, nil, into)
 	if err != nil {
 		return err
 	}
 	if obj != into {
 		return fmt.Errorf("Failed to decode resource, into is %T", into)
 	}
+	metaObj, err := meta.Accessor(obj)
+	if err != nil {
+		return err
+	}
+	metaObj.SetResourceVersion(utils.ParseInt642Str(resource.ClusterResourceVersion))
 	return nil
 }
 
@@ -310,14 +331,13 @@ func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *interna
 		result = &ResourceMetadataList{}
 	}
 
-	var condition map[string]interface{}
+	condition := map[string]interface{}{
+		"group":    s.storageGroupResource.Group,
+		"version":  s.storageVersion.Version,
+		"resource": s.storageGroupResource.Resource,
+	}
 	if !isAll {
-		condition = map[string]interface{}{
-			"group":    s.storageGroupResource.Group,
-			"version":  s.storageVersion.Version,
-			"resource": s.storageGroupResource.Resource,
-			"deleted":  false,
-		}
+		condition["deleted"] = false
 	}
 
 	query := s.db.WithContext(ctx).Model(&Resource{}).Where(condition)
@@ -332,6 +352,7 @@ func (s *ResourceStorage) genListQuery(ctx context.Context, newfunc func() runti
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
 		"resource": s.storageGroupResource.Resource,
+		"deleted":  false,
 	}
 	query := s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(condition)
 	_, _, query, err := applyListOptionsToResourceQuery(s.db, query, opts)

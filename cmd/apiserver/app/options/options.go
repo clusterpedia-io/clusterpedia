@@ -26,6 +26,7 @@ import (
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/watcher"
 	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 	watchoptions "github.com/clusterpedia-io/clusterpedia/pkg/watcher/options"
 )
 
@@ -46,7 +47,7 @@ type ClusterPediaServerOptions struct {
 
 	Storage *storageoptions.StorageOptions
 
-	Subscriber *watchoptions.MiddlerwareOptions
+	Subscriber *watchoptions.MiddlewareOptions
 }
 
 func NewServerOptions() *ClusterPediaServerOptions {
@@ -129,11 +130,13 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 		StorageFactory: storage,
 	}
 
-	err = watcher.NewSubscriber(o.Subscriber)
-	watchcomponents.InitEventCacheSize(o.Subscriber.CacheSize)
-
-	if err != nil {
-		return nil, err
+	middleware.SubscriberEnabled = o.Subscriber.Enabled
+	if middleware.SubscriberEnabled {
+		err = watcher.NewSubscriber(o.Subscriber)
+		if err != nil {
+			return nil, err
+		}
+		watchcomponents.InitEventCacheSize(o.Subscriber.CacheSize)
 	}
 
 	return config, nil

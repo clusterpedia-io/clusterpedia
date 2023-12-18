@@ -7,6 +7,7 @@ import (
 )
 
 var GlobalSubscriber Subscriber
+var SubscriberEnabled bool = false
 
 type Subscriber interface {
 	InitSubscriber(stopCh <-chan struct{}) error

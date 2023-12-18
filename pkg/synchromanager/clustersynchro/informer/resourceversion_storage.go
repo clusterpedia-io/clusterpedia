@@ -33,12 +33,21 @@ func (c *ResourceVersionStorage) Add(obj interface{}) error {
 	if err != nil {
 		return cache.KeyError{Obj: obj, Err: err}
 	}
+
+	c.cacheStorage.Delete(key)
+
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return err
 	}
 
-	c.cacheStorage.Add(key, accessor.GetResourceVersion())
+	c.cacheStorage.Add(key, StorageElement{
+		Version:   accessor.GetResourceVersion(),
+		Deleted:   false,
+		Published: true,
+		Name:      accessor.GetName(),
+		Namespace: accessor.GetNamespace(),
+	})
 	return nil
 }
 
@@ -52,7 +61,13 @@ func (c *ResourceVersionStorage) Update(obj interface{}) error {
 		return err
 	}
 
-	c.cacheStorage.Update(key, accessor.GetResourceVersion())
+	c.cacheStorage.Update(key, StorageElement{
+		Version:   accessor.GetResourceVersion(),
+		Deleted:   false,
+		Published: true,
+		Name:      accessor.GetName(),
+		Namespace: accessor.GetNamespace(),
+	})
 	return nil
 }
 

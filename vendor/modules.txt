@@ -337,6 +337,9 @@ github.com/spf13/pflag
 # github.com/stoewer/go-strcase v1.2.0
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
+# github.com/streadway/amqp v1.1.0
+## explicit; go 1.10
+github.com/streadway/amqp
 # github.com/stretchr/testify v1.8.3
 ## explicit; go 1.20
 github.com/stretchr/testify/assert

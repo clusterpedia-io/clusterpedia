@@ -26,6 +26,8 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 )
 
 func init() {
@@ -98,6 +100,12 @@ func Run(ctx context.Context, c *config.Config) error {
 	}
 
 	if !c.LeaderElection.LeaderElect {
+		if middleware.PublisherEnabled {
+			err := middleware.GlobalPublisher.InitPublisher(ctx)
+			if err != nil {
+				return err
+			}
+		}
 		synchromanager.Run(c.WorkerNumber, ctx.Done())
 		return nil
 	}
@@ -138,12 +146,22 @@ func Run(ctx context.Context, c *config.Config) error {
 				defer close(done)
 
 				stopCh := ctx.Done()
+				if middleware.PublisherEnabled {
+					err := middleware.GlobalPublisher.InitPublisher(ctx)
+					if err != nil {
+						return
+					}
+				}
 				synchromanager.Run(c.WorkerNumber, stopCh)
 			},
 			OnStoppedLeading: func() {
 				klog.Info("leaderelection lost")
 				if done != nil {
 					<-done
+				}
+				if middleware.PublisherEnabled {
+					middleware.GlobalPublisher.StopPublisher()
+					components.EC.CloseChannels()
 				}
 			},
 		},

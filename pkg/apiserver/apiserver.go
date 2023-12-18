@@ -110,10 +110,12 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 
 	// init event cache pool
 	eventStop := make(chan struct{})
-	watchcomponents.InitEventCachePool(eventStop)
-	err := middleware.GlobalSubscriber.InitSubscriber(eventStop)
-	if err != nil {
-		return nil, err
+	if middleware.SubscriberEnabled {
+		watchcomponents.InitEventCachePool(eventStop)
+		err := middleware.GlobalSubscriber.InitSubscriber(eventStop)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)
