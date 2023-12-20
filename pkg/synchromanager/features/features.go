@@ -45,6 +45,13 @@ const (
 	// owner: @iceber
 	// alpha: v0.6.0
 	HealthCheckerWithStandaloneTCP featuregate.Feature = "HealthCheckerWithStandaloneTCP"
+
+	// IgnoreLeaseSync is a feature gate for the ClusterSynchro to skip syncing leases.coordination.k8s.io,
+	// if you enable this feature, these resources will not be synced no matter what `syncResources` are defined.
+	//
+	// owner: @27149chen
+	// alpha: v0.8.0
+	IgnoreLeaseSync featuregate.Feature = "IgnoreLeaseSync"
 )
 
 func init() {
@@ -59,4 +66,5 @@ var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featurega
 	AllowSyncAllCustomResources:    {Default: false, PreRelease: featuregate.Alpha},
 	AllowSyncAllResources:          {Default: false, PreRelease: featuregate.Alpha},
 	HealthCheckerWithStandaloneTCP: {Default: false, PreRelease: featuregate.Alpha},
+	IgnoreLeaseSync:                {Default: false, PreRelease: featuregate.Alpha},
 }
