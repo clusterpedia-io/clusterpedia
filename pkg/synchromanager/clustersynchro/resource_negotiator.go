@@ -88,7 +88,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
 
-			if clusterpediafeature.FeatureGate.Enabled(features.IgnoreLeaseSync) {
+			if clusterpediafeature.FeatureGate.Enabled(features.IgnoreSyncLease) {
 				// skip leases.coordination.k8s.io
 				if syncGR.String() == "leases.coordination.k8s.io" {
 					continue
