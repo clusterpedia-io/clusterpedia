@@ -467,6 +467,7 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 	initTrace.Step("Resource version extracted")
 
 	if len(itemKeys) != 0 {
+		klog.V(4).Infof("%s: list resources<%v> with stream handling for paginated list", r.name, r.expectedTypeName)
 		if err := r.syncWithKeys(itemKeys, resourceVersion); err != nil {
 			return fmt.Errorf("unable to sync list result: %v", err)
 		}
@@ -476,6 +477,10 @@ func (r *Reflector) list(stopCh <-chan struct{}) error {
 			return fmt.Errorf("unable to understand list result %#v (%v)", list, err)
 		}
 		initTrace.Step("Objects extracted")
+
+		if r.StreamHandleForPaginatedList {
+			klog.V(3).Infof("%s: list %v resources<%v> without stream handling, although StreamHandleForPaginatedList is enabled", r.name, len(items), r.expectedTypeName)
+		}
 		if err := r.syncWith(items, resourceVersion); err != nil {
 			return fmt.Errorf("unable to sync list result: %v", err)
 		}
