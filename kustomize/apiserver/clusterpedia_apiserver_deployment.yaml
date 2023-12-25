@@ -42,6 +42,7 @@ spec:
         - --secure-port=443
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
         - --tracing-config-file=/etc/clusterpedia/trace/tracing-config.yaml
+        - --feature-gates=APIServerTracing=true
         - -v=3
         env:
         - name: DB_PASSWORD
