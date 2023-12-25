@@ -72,7 +72,7 @@ func (f *StorageFactory) CleanCluster(ctx context.Context, cluster string) error
 }
 
 func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error {
-	result := s.db.Where(map[string]interface{}{
+	result := s.db.WithContext(ctx).Where(map[string]interface{}{
 		"cluster":  cluster,
 		"group":    gvr.Group,
 		"version":  gvr.Version,
