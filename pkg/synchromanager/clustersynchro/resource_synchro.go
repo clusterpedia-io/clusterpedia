@@ -346,18 +346,13 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
-
-	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
-		if obj, ok = d.Obj.(*unstructured.Unstructured); !ok {
-			namespace, name, err := cache.SplitMetaNamespaceKey(d.Key)
-			if err != nil {
-				return
-			}
-			obj = &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
-		}
-	}
 	if o, ok := obj.(*unstructured.Unstructured); ok {
 		synchro.pruneObject(o)
+	}
+
+	obj, err := synchro.storage.ConvertDeletedObject(obj)
+	if err != nil {
+		return
 	}
 	_ = synchro.queue.Delete(obj)
 }

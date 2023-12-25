@@ -36,6 +36,8 @@ type ResourceStorage interface {
 
 	Create(ctx context.Context, cluster string, obj runtime.Object) error
 	Update(ctx context.Context, cluster string, obj runtime.Object) error
+
+	ConvertDeletedObject(obj interface{}) (runtime.Object, error)
 	Delete(ctx context.Context, cluster string, obj runtime.Object) error
 }
 
