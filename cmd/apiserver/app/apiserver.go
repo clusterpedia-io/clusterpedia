@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -68,25 +67,15 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 	return cmd
 }
 
-var wrapedDefaultFeatureGate = map[featuregate.Feature]bool{
-	// https://github.com/clusterpedia-io/clusterpedia/issues/196
-	genericfeatures.RemainingItemCount: false,
-
-	genericfeatures.APIServerTracing: false,
-}
-
 func init() {
 	runtime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 
+	// The feature gate `RemainingItemCount` should default to false
+	// https://github.com/clusterpedia-io/clusterpedia/issues/196
 	gates := utilfeature.DefaultMutableFeatureGate.GetAll()
-	for feature, value := range wrapedDefaultFeatureGate {
-		gate, ok := gates[feature]
-		if !ok {
-			panic(fmt.Sprintf("FeatureGate[%s] is not existed in the default feature gates", feature))
-		}
-		gate.Default = value
-		gates[feature] = gate
-	}
+	gate := gates[genericfeatures.RemainingItemCount]
+	gate.Default = false
+	gates[genericfeatures.RemainingItemCount] = gate
 
 	utilfeature.DefaultMutableFeatureGate = featuregate.NewFeatureGate()
 	runtime.Must(utilfeature.DefaultMutableFeatureGate.Add(gates))
