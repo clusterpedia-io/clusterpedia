@@ -110,6 +110,7 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		"uid":              metaobj.GetUID(),
 		"resource_version": metaobj.GetResourceVersion(),
 		"object":           datatypes.JSON(buffer.Bytes()),
+		"created_at":       metaobj.GetCreationTimestamp().Time,
 	}
 	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
 		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
