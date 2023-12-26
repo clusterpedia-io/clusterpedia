@@ -18,7 +18,7 @@ Clusterpedia can synchronize resources with multiple clusters and provide more p
 
 > The capability of Clusterpedia is not only to search for and view but also simply control resources in the future, just like Wikipedia that supports for editing entries.
 
-<img src="https://github.com/cncf/artwork/blob/master/other/illustrations/ashley-mcnamara/transparent/cncf-cloud-gophers-transparent.png" style="width:600px;" />
+<img src="https://github.com/cncf/artwork/blob/main/other/illustrations/ashley-mcnamara/transparent/cncf-cloud-gophers-transparent.png" style="width:600px;" />
 
 **Clusterpedia is a [Cloud Native Computing Foundation](https://cncf.io/) sandbox project.**
 > If you want to join the clusterpedia channel on CNCF slack, please **[get invite to CNCF slack](https://slack.cncf.io/)** and then join the [#clusterpedia](https://cloud-native.slack.com/messages/clusterpedia) channel.
