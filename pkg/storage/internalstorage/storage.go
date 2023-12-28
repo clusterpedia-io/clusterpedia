@@ -12,7 +12,31 @@ import (
 )
 
 type StorageFactory struct {
-	db *gorm.DB
+	db             *gorm.DB
+	AutoMigration  *bool
+	DivisionPolicy DivisionPolicy
+	Mapper         []ResourceMapper
+}
+
+func (s *StorageFactory) AutoMigrate() error {
+	if s.AutoMigration != nil && *s.AutoMigration {
+		switch s.DivisionPolicy {
+			if err := s.db.AutoMigrate(&Resource{}); err != nil {
+				return err
+			}
+		case "", DivisionPolicyNone:
+		case DivisionPolicyGroupResource:
+
+		}
+
+		if s.DivisionPolicy == "" || s.DivisionPolicy == DivisionPolicyNone {
+			if err := s.db.AutoMigrate(&Resource{}); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *StorageFactory) GetSupportedRequestVerbs() []string {

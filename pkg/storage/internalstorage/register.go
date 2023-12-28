@@ -93,10 +93,6 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
 
-	if err := db.AutoMigrate(&Resource{}); err != nil {
-		return nil, err
-	}
-
 	return &StorageFactory{db}, nil
 }
 
