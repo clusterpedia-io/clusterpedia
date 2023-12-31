@@ -46,6 +46,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type == 'Ready')].status"
@@ -54,6 +55,7 @@ const (
 // +kubebuilder:printcolumn:name="Validated",type=string,JSONPath=".status.conditions[?(@.type == 'Validated')].reason",priority=10
 // +kubebuilder:printcolumn:name="SynchroRunning",type=string,JSONPath=".status.conditions[?(@.type == 'SynchroRunning')].reason",priority=10
 // +kubebuilder:printcolumn:name="ClusterHealthy",type=string,JSONPath=".status.conditions[?(@.type == 'ClusterHealthy')].reason",priority=10
+// +kubebuilder:printcolumn:name="ShardingName",type=string,JSONPath=".status.shardingName",priority=10
 type PediaCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -92,6 +94,9 @@ type ClusterSpec struct {
 
 	// +optional
 	SyncResourcesRefName string `json:"syncResourcesRefName,omitempty"`
+
+	// +optional
+	ShardingName string `json:"shardingName,omitempty"`
 }
 
 type ClusterGroupResources struct {
@@ -118,6 +123,9 @@ type ClusterStatus struct {
 
 	// +optional
 	SyncResources []ClusterGroupResourcesStatus `json:"syncResources,omitempty"`
+
+	// +optional
+	ShardingName *string `json:"shardingName,omitempty"`
 }
 
 type ClusterGroupResourcesStatus struct {

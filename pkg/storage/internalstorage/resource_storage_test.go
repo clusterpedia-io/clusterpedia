@@ -1,15 +1,22 @@
 package internalstorage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )
 
 func testApplyListOptionsToResourceQuery(t *testing.T, name string, options *internal.ListOptions, expected expected) {
@@ -356,6 +363,104 @@ func TestResourceStorage_deleteObject(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestResourceStorage_Update(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	db, cleanup, err := newSQLiteDB()
+	require.NoError(err)
+	require.NotNil(db)
+	defer cleanup()
+
+	rs := newTestResourceStorage(db, appsv1.SchemeGroupVersion.WithResource("deployments"))
+
+	factory := storageconfig.NewStorageConfigFactory()
+	require.NotNil(factory)
+
+	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true)
+	require.NoError(err)
+	require.NotNil(config)
+
+	rs.codec = config.Codec
+	trueRef := true
+
+	obj := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "foobar",
+			OwnerReferences: []metav1.OwnerReference{
+				{UID: "fooer-id", Name: "fooer", Controller: &trueRef},
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"foo": "bar",
+					},
+				},
+			},
+		},
+	}
+
+	metaObj, err := meta.Accessor(obj)
+	require.NoError(err)
+	ownerRef := metaObj.GetOwnerReferences()
+	require.Len(ownerRef, 1)
+
+	var buffer bytes.Buffer
+	err = rs.codec.Encode(obj, &buffer)
+	require.NoError(err)
+
+	owner := metav1.GetControllerOfNoCopy(metaObj)
+	require.NotNil(owner)
+
+	ownerUID := owner.UID
+	require.NotEmpty(ownerUID)
+
+	clusterName := "test"
+
+	err = rs.Create(context.Background(), clusterName, obj)
+	require.NoError(err)
+
+	var resourcesAfterCreation []Resource
+	err = db.
+		Where(Resource{
+			Cluster:   clusterName,
+			Name:      "foo",
+			Namespace: "foobar",
+		}).
+		Find(&resourcesAfterCreation).
+		Error
+	require.NoError(err)
+	require.Len(resourcesAfterCreation, 1)
+	assert.NotEmpty(resourcesAfterCreation[0].Object)
+
+	obj.Spec.Template.ObjectMeta.Labels = map[string]string{
+		"foo2": "bar2",
+	}
+
+	err = rs.Update(context.Background(), clusterName, obj)
+	require.NoError(err)
+
+	var resourcesAfterUpdates []Resource
+	err = db.
+		Where(Resource{
+			Cluster:   clusterName,
+			Name:      "foo",
+			Namespace: "foobar",
+		}).
+		Find(&resourcesAfterUpdates).
+		Error
+	require.NoError(err)
+	require.Len(resourcesAfterUpdates, 1)
+	assert.NotEmpty(resourcesAfterUpdates[0].Object)
+	assert.NotEqual(resourcesAfterUpdates[0].Object, resourcesAfterCreation[0].Object)
 }
 
 func newTestResourceStorage(db *gorm.DB, storageGVK schema.GroupVersionResource) *ResourceStorage {

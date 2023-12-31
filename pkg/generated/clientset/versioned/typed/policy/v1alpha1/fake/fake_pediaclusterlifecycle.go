@@ -8,7 +8,6 @@ import (
 	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -19,9 +18,9 @@ type FakePediaClusterLifecycles struct {
 	Fake *FakePolicyV1alpha1
 }
 
-var pediaclusterlifecyclesResource = schema.GroupVersionResource{Group: "policy.clusterpedia.io", Version: "v1alpha1", Resource: "pediaclusterlifecycles"}
+var pediaclusterlifecyclesResource = v1alpha1.SchemeGroupVersion.WithResource("pediaclusterlifecycles")
 
-var pediaclusterlifecyclesKind = schema.GroupVersionKind{Group: "policy.clusterpedia.io", Version: "v1alpha1", Kind: "PediaClusterLifecycle"}
+var pediaclusterlifecyclesKind = v1alpha1.SchemeGroupVersion.WithKind("PediaClusterLifecycle")
 
 // Get takes name of the pediaClusterLifecycle, and returns the corresponding pediaClusterLifecycle object, and an error if there is any.
 func (c *FakePediaClusterLifecycles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PediaClusterLifecycle, err error) {

@@ -29,7 +29,6 @@ var recoverableErrors = []error{
 	io.ErrUnexpectedEOF,
 	os.ErrDeadlineExceeded,
 	syscall.ECONNREFUSED,
-	driver.ErrBadConn,
 }
 
 func init() {
@@ -63,6 +62,10 @@ func InterpretDBError(key string, err error) error {
 
 	if os.IsTimeout(err) {
 		return storage.NewRecoverableException(err)
+	}
+
+	if errors.Is(err, driver.ErrBadConn) {
+		return storage.NewRecoverableException(fmt.Errorf("storage error: database connection error: %s", err))
 	}
 
 	for _, re := range recoverableErrors {

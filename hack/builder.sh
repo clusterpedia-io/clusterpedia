@@ -91,6 +91,7 @@ function build_component() {
     local LDFLAGS=${BUILD_LDFLAGS:-""}
     if [ -f ${CLUSTERPEDIA_REPO}/ldflags.sh ]; then
         cd ${CLUSTERPEDIA_REPO} && source ./ldflags.sh
+        LDFLAGS+=" $(extra_ldflags)"
     fi
 
     if [[ "${GOOS}" == "linux" ]]; then
@@ -98,9 +99,11 @@ function build_component() {
         LDFLAGS+=" -extldflags -static"
     fi
 
+    set -x
     cd $TMP_CLUSTERPEDIA
     GOPATH=$TMP_GOPATH GO111MODULE=off CGO_ENABLED=1 CC_FOR_TARGET=$CC_FOR_TARGET CC=$CC \
         go build -tags "json1 $GOOS" -ldflags "${LDFLAGS}" -o $OUTPUT_DIR/bin/$1 ./cmd/$1
+    set +x
 }
 
 cleanup
@@ -161,9 +164,11 @@ function build_plugin() {
         cd ${PLUGIN_REPO} && source ./ldflags.sh
     fi
 
+    set -x
     cd $TMP_PLUGIN
     GOPATH=$TMP_GOPATH GO111MODULE=off CGO_ENABLED=1 CC_FOR_TARGET=$CC_FOR_TARGET CC=$CC \
         go build -ldflags "${LDFLAGS}" -buildmode=plugin -o $OUTPUT_DIR/plugins/$1
+    set +x
 }
 
 copy_plugin_repo

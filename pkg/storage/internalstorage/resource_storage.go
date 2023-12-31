@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	genericstorage "k8s.io/apiserver/pkg/storage"
+	"k8s.io/client-go/tools/cache"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -107,7 +109,8 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		"owner_uid":        ownerUID,
 		"uid":              metaobj.GetUID(),
 		"resource_version": metaobj.GetResourceVersion(),
-		"object":           buffer.Bytes(),
+		"object":           datatypes.JSON(buffer.Bytes()),
+		"created_at":       metaobj.GetCreationTimestamp().Time,
 	}
 	if deletedAt := metaobj.GetDeletionTimestamp(); deletedAt != nil {
 		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
@@ -122,6 +125,22 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		"name":      metaobj.GetName(),
 	}).Updates(updatedResource)
 	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
+}
+
+func (c *ResourceStorage) ConvertDeletedObject(obj interface{}) (runtime.Object, error) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Since it is not necessary to save the complete deleted object to the queue,
+	// we convert the object to `PartialObjectMetadata`
+	return &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}, nil
 }
 
 func (s *ResourceStorage) deleteObject(cluster, namespace, name string) *gorm.DB {

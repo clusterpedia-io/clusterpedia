@@ -42,9 +42,32 @@ const (
 	AllowSyncAllResources featuregate.Feature = "AllowSyncAllResources"
 
 	// HealthCheckerWithStandaloneTCP is a feature gate for the cluster health checker to use standalone tcp
+	//
 	// owner: @iceber
 	// alpha: v0.6.0
 	HealthCheckerWithStandaloneTCP featuregate.Feature = "HealthCheckerWithStandaloneTCP"
+
+	// ForcePaginatedListForResourceSync is a feature gate for ResourceSync's reflector to force paginated list,
+	// reflector will sometimes use APIServer's cache, even if paging is specified APIServer will return all resources for performance,
+	// then it will skip Reflector's streaming memory optimization.
+	//
+	// owner: @iceber
+	// alpha: v0.8.0
+	ForcePaginatedListForResourceSync featuregate.Feature = "ForcePaginatedListForResourceSync"
+
+	// StreamHandlePaginatedListForResourceSync is a feature gate for ResourceSync's reflector to handle echo paginated resources,
+	// resources within a pager will be processed as soon as possible instead of waiting until all resources are pulled before calling the ResourceHandler.
+	//
+	// owner: @iceber
+	// alpha: v0.8.0
+	StreamHandlePaginatedListForResourceSync featuregate.Feature = "StreamHandlePaginatedListForResourceSync"
+
+	// IgnoreSyncLease is a feature gate for the ClusterSynchro to skip syncing leases.coordination.k8s.io,
+	// if you enable this feature, these resources will not be synced no matter what `syncResources` are defined.
+	//
+	// owner: @27149chen
+	// alpha: v0.8.0
+	IgnoreSyncLease featuregate.Feature = "IgnoreSyncLease"
 )
 
 func init() {
@@ -59,4 +82,8 @@ var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featurega
 	AllowSyncAllCustomResources:    {Default: false, PreRelease: featuregate.Alpha},
 	AllowSyncAllResources:          {Default: false, PreRelease: featuregate.Alpha},
 	HealthCheckerWithStandaloneTCP: {Default: false, PreRelease: featuregate.Alpha},
+
+	ForcePaginatedListForResourceSync:        {Default: false, PreRelease: featuregate.Alpha},
+	StreamHandlePaginatedListForResourceSync: {Default: false, PreRelease: featuregate.Alpha},
+	IgnoreSyncLease:                          {Default: false, PreRelease: featuregate.Alpha},
 }

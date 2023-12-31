@@ -18,8 +18,12 @@ function build_component() {
     LDFLAGS=${BUILD_LDFLAGS:-""}
     if [ -f ./ldflags.sh ]; then
         source ./ldflags.sh
+        LDFLAGS+=" $(extra_ldflags)"
     fi
+
+    set -x
 	CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ${OUTPUT_DIR}/bin/$1 ./cmd/$1
+    set +x
 }
 
 build_component $1

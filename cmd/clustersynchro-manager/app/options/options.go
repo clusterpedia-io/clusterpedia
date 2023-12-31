@@ -26,6 +26,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 )
 
 const (
@@ -44,7 +45,9 @@ type Options struct {
 	Metrics          *metrics.Options
 	KubeStateMetrics *kubestatemetrics.Options
 
-	WorkerNumber int // WorkerNumber is the number of worker goroutines
+	WorkerNumber            int // WorkerNumber is the number of worker goroutines
+	PageSizeForResourceSync int64
+	ShardingName            string
 }
 
 func NewClusterSynchroManagerOptions() (*Options, error) {
@@ -88,6 +91,10 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	genericfs.Float32Var(&o.ClientConnection.QPS, "kube-api-qps", o.ClientConnection.QPS, "QPS to use while talking with kubernetes apiserver.")
 	genericfs.Int32Var(&o.ClientConnection.Burst, "kube-api-burst", o.ClientConnection.Burst, "Burst to use while talking with kubernetes apiserver.")
 	genericfs.IntVar(&o.WorkerNumber, "worker-number", o.WorkerNumber, "The number of worker goroutines.")
+	genericfs.StringVar(&o.ShardingName, "sharding-name", o.ShardingName, "The sharding name of manager.")
+
+	syncfs := fss.FlagSet("resource sync")
+	syncfs.Int64Var(&o.PageSizeForResourceSync, "page-size", o.PageSizeForResourceSync, "The requested chunk size of initial and resync watch lists for resource sync")
 
 	options.BindLeaderElectionFlags(&o.LeaderElection, genericfs)
 
@@ -155,6 +162,10 @@ func (o *Options) Config() (*config.Config, error) {
 	}
 	kubeStateMetricsServerConfig := o.KubeStateMetrics.ServerConfig(metricsConfig)
 
+	if o.ShardingName != "" {
+		o.LeaderElection.ResourceName = fmt.Sprintf("%s-%s", o.LeaderElection.ResourceName, o.ShardingName)
+	}
+
 	return &config.Config{
 		CRDClient:     crdclient,
 		Kubeconfig:    kubeconfig,
@@ -162,10 +173,15 @@ func (o *Options) Config() (*config.Config, error) {
 
 		StorageFactory: storagefactory,
 		WorkerNumber:   o.WorkerNumber,
+		ShardingName:   o.ShardingName,
 
 		MetricsServerConfig:     metricsConfig,
 		KubeMetricsServerConfig: kubeStateMetricsServerConfig,
-		MetricsStoreBuilder:     metricsStoreBuilder,
+
+		ClusterSyncConfig: clustersynchro.ClusterSyncConfig{
+			MetricsStoreBuilder:     metricsStoreBuilder,
+			PageSizeForResourceSync: o.PageSizeForResourceSync,
+		},
 
 		LeaderElection: o.LeaderElection,
 	}, nil

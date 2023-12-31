@@ -8,16 +8,20 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
+	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
@@ -35,7 +39,7 @@ type ClusterPediaServerOptions struct {
 	CoreAPI        *genericoptions.CoreAPIOptions
 	FeatureGate    featuregate.FeatureGate
 	Admission      *genericoptions.AdmissionOptions
-	//      Traces         *genericoptions.TracingOptions
+	Traces         *genericoptions.TracingOptions
 
 	Storage *storageoptions.StorageOptions
 }
@@ -62,7 +66,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Admission:      genericoptions.NewAdmissionOptions(),
-		//      Traces:         genericoptions.NewTracingOptions(),
+		Traces:         genericoptions.NewTracingOptions(),
 
 		Storage: storageoptions.NewStorageOptions(),
 	}
@@ -95,9 +99,14 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	o.Admission.DisablePlugins = append(o.Admission.DisablePlugins, lifecycle.PluginName)
 
 	genericConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
-	// genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(apiserver.Scheme))
-	// genericConfig.OpenAPIConfig.Info.Title = openAPITitle
-	// genericConfig.OpenAPIConfig.Info.Version= openAPIVersion
+
+	genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
+	genericConfig.OpenAPIConfig.Info.Title = "clusterpedia apiserver"
+	genericConfig.OpenAPIConfig.Info.Version = ""
+
+	genericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(apiserver.Scheme))
+	genericConfig.OpenAPIV3Config.Info.Title = "clusterpedia apiserver"
+	genericConfig.OpenAPIV3Config.Info.Version = ""
 
 	// todo
 	// support watch to LongRunningFunc
@@ -137,7 +146,15 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.CoreAPI.ApplyTo(config); err != nil {
 		return err
 	}
-	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, config.ClientConfig, o.FeatureGate); err != nil {
+	client, err := kubernetes.NewForConfig(config.ClientConfig)
+	if err != nil {
+		return err
+	}
+	dynamicClient := dynamic.NewForConfigOrDie(config.ClientConfig)
+	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, client, dynamicClient, o.FeatureGate); err != nil {
+		return err
+	}
+	if err := o.Traces.ApplyTo(nil, &config.Config); err != nil {
 		return err
 	}
 
@@ -162,7 +179,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 
 	// o.Admission.AddFlags(fss.FlagSet("admission"))
-	// o.Traces.AddFlags(fss.FlagSet("traces"))
+	o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
 	return fss

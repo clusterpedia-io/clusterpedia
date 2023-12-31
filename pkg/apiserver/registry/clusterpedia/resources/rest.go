@@ -24,6 +24,7 @@ type REST struct {
 var _ genericrest.Scoper = &REST{}
 var _ genericrest.Storage = &REST{}
 var _ genericrest.Connecter = &REST{}
+var _ genericrest.SingularNameProvider = &REST{}
 
 // NewREST returns a RESTStorage object that will work against API services
 func NewREST(resourceHandler http.Handler) *REST {
@@ -44,6 +45,11 @@ func (r *REST) Destroy() {
 // NamespaceScoped returns false because Resources is not namespaced
 func (r *REST) NamespaceScoped() bool {
 	return false
+}
+
+// GetSingularName implements rest.SingularNameProvider interface
+func (s *REST) GetSingularName() string {
+	return "resources"
 }
 
 // ConnectMethods returns the list of HTTP methods handled by Connect

@@ -8,11 +8,13 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	kubecache "k8s.io/client-go/tools/cache"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -80,6 +82,24 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 	}
 
 	return nil
+}
+
+func (s *ResourceStorage) ConvertDeletedObject(obj interface{}) (runobj runtime.Object, _ error) {
+	if d, ok := obj.(kubecache.DeletedFinalStateUnknown); ok {
+		if obj, ok := d.Obj.(runtime.Object); ok {
+			return obj, nil
+		}
+		namespace, name, err := kubecache.SplitMetaNamespaceKey(d.Key)
+		if err != nil {
+			return nil, err
+		}
+		return &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}, nil
+	}
+
+	if obj, ok := obj.(runtime.Object); ok {
+		return obj, nil
+	}
+	return nil, fmt.Errorf("Invalid Type(%T): couldn't convert deleted object", obj)
 }
 
 func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {

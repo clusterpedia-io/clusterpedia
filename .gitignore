@@ -6,5 +6,30 @@
 # OSX trash
 .DS_Store
 
+# Certificate related credential files
+# Encoding of certificates and private keys
+*.pem
+*.der
+# Certificate related
+*.crt
+*.cer
+*.ca-bundle
+# Certificate signing request
+*.csr
+# Certificate revoking list
+*.crl
+# Private key related
+*.key
+*.p12
+*.pfx
+# PKCS#7 related
+*.p7b
+*.p7r
+*.p7r
+*.spc
+
 # apiserver local up cert trash
 apiserver.local.config
+
+# SQLite DB Files
+*.db

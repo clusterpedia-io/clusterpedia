@@ -49,6 +49,15 @@ type Config struct {
 
 	// WatchListPageSize is the requested chunk size of initial and relist watch lists.
 	WatchListPageSize int64
+
+	// StreamHandle of paginated list, resources within a pager will be processed
+	// as soon as possible instead of waiting until all resources are pulled before calling the ResourceHandler.
+	StreamHandleForPaginatedList bool
+
+	// Force paging, Reflector will sometimes use APIServer's cache,
+	// even if paging is specified APIServer will return all resources for performance,
+	// then it will skip Reflector's streaming memory optimization.
+	ForcePaginatedList bool
 }
 
 type controller struct {
@@ -86,6 +95,8 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 	}
 	r.ShouldResync = c.config.ShouldResync
 	r.WatchListPageSize = c.config.WatchListPageSize
+	r.ForcePaginatedList = c.config.ForcePaginatedList
+	r.StreamHandleForPaginatedList = c.config.StreamHandleForPaginatedList
 
 	c.reflectorMutex.Lock()
 	c.reflector = r
@@ -120,7 +131,7 @@ func (c *controller) HasSynced() bool {
 	if c.queue == nil {
 		return false
 	}
-	return c.queue.HasSynced()
+	return c.queue.HasSynced() && c.reflector.HasInitializedSynced()
 }
 
 func (c *controller) LastSyncResourceVersion() string {

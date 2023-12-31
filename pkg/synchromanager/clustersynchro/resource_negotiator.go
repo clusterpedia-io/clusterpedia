@@ -87,6 +87,14 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	for _, groupResources := range syncResources {
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
+
+			if clusterpediafeature.FeatureGate.Enabled(features.IgnoreSyncLease) {
+				// skip leases.coordination.k8s.io
+				if syncGR.String() == "leases.coordination.k8s.io" {
+					continue
+				}
+			}
+
 			apiResource, supportedVersions := negotiator.dynamicDiscovery.GetAPIResourceAndVersions(syncGR)
 			if apiResource == nil || len(supportedVersions) == 0 {
 				continue

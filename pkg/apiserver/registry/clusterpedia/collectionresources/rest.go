@@ -38,6 +38,7 @@ var _ rest.Lister = &REST{}
 var _ rest.Scoper = &REST{}
 var _ rest.Getter = &REST{}
 var _ rest.Storage = &REST{}
+var _ rest.SingularNameProvider = &REST{}
 
 func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFactory) *REST {
 	crs, err := factory.GetCollectionResources(context.TODO())
@@ -89,6 +90,11 @@ func (s *REST) NewList() runtime.Object {
 
 func (s *REST) NamespaceScoped() bool {
 	return false
+}
+
+// GetSingularName implements rest.SingularNameProvider interface
+func (s *REST) GetSingularName() string {
+	return "collectionresources"
 }
 
 func (s *REST) List(ctx context.Context, options *metainternal.ListOptions) (runtime.Object, error) {

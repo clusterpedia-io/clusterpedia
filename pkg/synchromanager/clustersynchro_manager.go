@@ -48,21 +48,22 @@ type Manager struct {
 	clusterpediaclient crdclientset.Interface
 	informerFactory    externalversions.SharedInformerFactory
 
+	shardingName               string
 	queue                      workqueue.RateLimitingInterface
 	storage                    storage.StorageFactory
-	metricsStoreBuilder        *kubestatemetrics.MetricsStoreBuilder
 	clusterlister              clusterlister.PediaClusterLister
 	clusterSyncResourcesLister clusterlister.ClusterSyncResourcesLister
 	clusterInformer            cache.SharedIndexInformer
 
-	synchrolock      sync.RWMutex
-	synchros         map[string]*clustersynchro.ClusterSynchro
-	synchroWaitGroup wait.Group
+	clusterSyncConfig clustersynchro.ClusterSyncConfig
+	synchrolock       sync.RWMutex
+	synchros          map[string]*clustersynchro.ClusterSynchro
+	synchroWaitGroup  wait.Group
 }
 
 var _ kubestatemetrics.ClusterMetricsWriterListGetter = &Manager{}
 
-func NewManager(client crdclientset.Interface, storage storage.StorageFactory, metricsStoreBuilder *kubestatemetrics.MetricsStoreBuilder) *Manager {
+func NewManager(client crdclientset.Interface, storage storage.StorageFactory, syncConfig clustersynchro.ClusterSyncConfig, shardingName string) *Manager {
 	factory := externalversions.NewSharedInformerFactory(client, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
@@ -70,9 +71,9 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory, m
 	manager := &Manager{
 		informerFactory:    factory,
 		clusterpediaclient: client,
+		shardingName:       shardingName,
 
 		storage:                    storage,
-		metricsStoreBuilder:        metricsStoreBuilder,
 		clusterlister:              clusterinformer.Lister(),
 		clusterInformer:            clusterinformer.Informer(),
 		clusterSyncResourcesLister: clusterSyncResourcesInformer.Lister(),
@@ -80,7 +81,8 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory, m
 			NewItemExponentialFailureAndJitterSlowRateLimter(2*time.Second, 15*time.Second, 1*time.Minute, 1.0, defaultRetryNum),
 		),
 
-		synchros: make(map[string]*clustersynchro.ClusterSynchro),
+		clusterSyncConfig: syncConfig,
+		synchros:          make(map[string]*clustersynchro.ClusterSynchro),
 	}
 
 	if _, err := clusterinformer.Informer().AddEventHandler(
@@ -166,7 +168,9 @@ func (manager *Manager) addCluster(obj interface{}) {
 func (manager *Manager) updateCluster(older, newer interface{}) {
 	oldObj := older.(*clusterv1alpha2.PediaCluster)
 	newObj := newer.(*clusterv1alpha2.PediaCluster)
-	if newObj.DeletionTimestamp.IsZero() && equality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
+	if newObj.DeletionTimestamp.IsZero() &&
+		equality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) &&
+		oldObj.Status.ShardingName == newObj.Status.ShardingName {
 		return
 	}
 
@@ -181,6 +185,17 @@ func (manager *Manager) enqueue(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return
+	}
+
+	if cluster, ok := obj.(*clusterv1alpha2.PediaCluster); ok {
+		currentSharding := cluster.Status.ShardingName
+		if cluster.Spec.ShardingName != manager.shardingName {
+			if currentSharding == nil || *currentSharding != manager.shardingName {
+				return
+			}
+		} else if currentSharding != nil && *currentSharding != manager.shardingName {
+			return
+		}
 	}
 
 	manager.queue.Add(key)
@@ -256,6 +271,17 @@ func (manager *Manager) processNextCluster() (continued bool) {
 
 // if err returned is not nil, cluster will be requeued
 func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) controller.Result {
+	if cluster.Status.ShardingName == nil && cluster.Spec.ShardingName != manager.shardingName {
+		return controller.NoRequeueResult
+	}
+
+	if cluster.Status.ShardingName != nil && *cluster.Status.ShardingName != manager.shardingName {
+		return controller.NoRequeueResult
+	}
+	// After the above filtering， The cluster will be in the following state：
+	// 1. spec.sharding == manager.shardingName and status.sharding == nil
+	// 2. spec.sharding == manager.shardingName and status != nil and status.sharding == manager.shardingName
+	// 3. spec.sharding != manager.shardingName and status != nil and status.sharding == manager.shardingName
 	if !cluster.DeletionTimestamp.IsZero() {
 		klog.InfoS("remove cluster", "cluster", cluster.Name)
 		if err := manager.removeCluster(cluster.Name); err != nil {
@@ -285,6 +311,20 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 			return controller.RequeueResult(defaultRetryNum)
 		}
 	}
+
+	if cluster.Spec.ShardingName != manager.shardingName {
+		// status.sharding == manager.shardingName
+		manager.stopClusterSynchro(cluster.Name)
+
+		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, nil); err != nil {
+			klog.ErrorS(err, "Failed to remove cluster shardingName status", "cluster", cluster.Name)
+			return controller.RequeueResult(defaultRetryNum)
+		}
+
+		return controller.NoRequeueResult
+	}
+
+	cluster.Status.ShardingName = &manager.shardingName
 
 	manager.synchrolock.RLock()
 	synchro := manager.synchros[cluster.Name]
@@ -348,7 +388,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	// create resource synchro
 	if synchro == nil {
-		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager.metricsStoreBuilder, manager)
+		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager, manager.clusterSyncConfig)
 		if err != nil {
 			_, forever := err.(clustersynchro.RetryableError)
 			klog.ErrorS(err, "Failed to create cluster synchro", "cluster", cluster.Name)
@@ -387,6 +427,11 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 			return controller.NoRequeueResult
 		}
 
+		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, &manager.shardingName); err != nil {
+			klog.ErrorS(err, "Failed to update cluster shardingName status", "cluster", cluster.Name)
+			return controller.RequeueResult(defaultRetryNum)
+		}
+
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
 
 		manager.synchrolock.Lock()
@@ -396,6 +441,17 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	synchro.SetResources(syncResources, cluster.Spec.SyncAllCustomResources)
 	return controller.NoRequeueResult
+}
+
+func (manager *Manager) stopClusterSynchro(name string) {
+	manager.synchrolock.Lock()
+	synchro := manager.synchros[name]
+	delete(manager.synchros, name)
+	manager.synchrolock.Unlock()
+
+	if synchro != nil {
+		synchro.Shutdown(true)
+	}
 }
 
 func (manager *Manager) removeCluster(name string) error {
@@ -529,6 +585,12 @@ func (manager *Manager) updateClusterStatus(ctx context.Context, name string, up
 			klog.V(2).InfoS("Update Cluster Status", "cluster", cluster.Name, "conditions", cluster.Status.Conditions)
 		}
 		return err
+	})
+}
+
+func (manager *Manager) UpdateClusterShardingStatus(ctx context.Context, name string, shardingName *string) error {
+	return manager.updateClusterStatus(ctx, name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+		clusterStatus.ShardingName = shardingName
 	})
 }
 

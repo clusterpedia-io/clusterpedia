@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.13.0
   name: pediaclusters.cluster.clusterpedia.io
 spec:
   group: cluster.clusterpedia.io
@@ -35,6 +34,10 @@ spec:
       type: string
     - jsonPath: .status.conditions[?(@.type == 'ClusterHealthy')].reason
       name: ClusterHealthy
+      priority: 10
+      type: string
+    - jsonPath: .status.shardingName
+      name: ShardingName
       priority: 10
       type: string
     name: v1alpha2
@@ -68,6 +71,8 @@ spec:
                 type: string
               kubeconfig:
                 format: byte
+                type: string
+              shardingName:
                 type: string
               syncAllCustomResources:
                 type: boolean
@@ -170,6 +175,8 @@ spec:
                   - type
                   type: object
                 type: array
+              shardingName:
+                type: string
               syncResources:
                 items:
                   properties:

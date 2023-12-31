@@ -25,6 +25,11 @@ import (
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
+type ClusterSyncConfig struct {
+	MetricsStoreBuilder     *kubestatemetrics.MetricsStoreBuilder
+	PageSizeForResourceSync int64
+}
+
 type ClusterSynchro struct {
 	name string
 
@@ -32,7 +37,7 @@ type ClusterSynchro struct {
 	ClusterStatusUpdater ClusterStatusUpdater
 
 	storage              storage.StorageFactory
-	metricsStoreBuilder  *kubestatemetrics.MetricsStoreBuilder
+	syncConfig           ClusterSyncConfig
 	healthChecker        *healthChecker
 	dynamicDiscovery     discovery.DynamicDiscoveryInterface
 	listerWatcherFactory informer.DynamicListerWatcherFactory
@@ -69,7 +74,7 @@ type ClusterStatusUpdater interface {
 
 type RetryableError error
 
-func New(name string, config *rest.Config, storage storage.StorageFactory, metricsStoreBuilder *kubestatemetrics.MetricsStoreBuilder, updater ClusterStatusUpdater) (*ClusterSynchro, error) {
+func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater, syncConfig ClusterSyncConfig) (*ClusterSynchro, error) {
 	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
@@ -103,6 +108,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, metri
 		ClusterStatusUpdater: updater,
 		storage:              storage,
 
+		syncConfig:           syncConfig,
 		healthChecker:        healthChecker,
 		dynamicDiscovery:     dynamicDiscovery,
 		listerWatcherFactory: listWatchFactory,
@@ -115,8 +121,6 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, metri
 		stopRunnerCh:   make(chan struct{}),
 
 		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
-
-		metricsStoreBuilder: metricsStoreBuilder,
 	}
 
 	var refresherOnce sync.Once
@@ -352,18 +356,20 @@ func (s *ClusterSynchro) refreshSyncResources() {
 			}
 
 			var metricsStore *kubestatemetrics.MetricsStore
-			if s.metricsStoreBuilder != nil {
-				metricsStore = s.metricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
+			if s.syncConfig.MetricsStoreBuilder != nil {
+				metricsStore = s.syncConfig.MetricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
 			}
-			synchro := newResourceSynchro(
-				s.name,
-				config.syncResource,
-				config.kind,
-				s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
-				rvs,
-				config.convertor,
-				resourceStorage,
-				metricsStore,
+			synchro := newResourceSynchro(s.name,
+				ResourceSynchroConfig{
+					GroupVersionResource: config.syncResource,
+					Kind:                 config.kind,
+					ListerWatcher:        s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
+					ObjectConvertor:      config.convertor,
+					ResourceStorage:      resourceStorage,
+					MetricsStore:         metricsStore,
+					ResourceVersions:     rvs,
+					PageSizeForInformer:  s.syncConfig.PageSizeForResourceSync,
+				},
 			)
 			s.waitGroup.StartWithChannel(s.closer, synchro.Run)
 			s.storageResourceSynchros.Store(storageGVR, synchro)

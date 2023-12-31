@@ -19,7 +19,21 @@ type resourceVersionInformer struct {
 	listerWatcher cache.ListerWatcher
 }
 
-func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *ResourceVersionStorage, exampleObject runtime.Object, handler ResourceEventHandler, errorHandler WatchErrorHandler, extraStore ExtraStore) ResourceVersionInformer {
+type InformerConfig struct {
+	cache.ListerWatcher
+	Storage *ResourceVersionStorage
+
+	ExampleObject runtime.Object
+	Handler       ResourceEventHandler
+	ErrorHandler  WatchErrorHandler
+	ExtraStore    ExtraStore
+
+	WatchListPageSize            int64
+	ForcePaginatedList           bool
+	StreamHandleForPaginatedList bool
+}
+
+func NewResourceVersionInformer(name string, config InformerConfig) ResourceVersionInformer {
 	if name == "" {
 		panic("name is required")
 	}
@@ -27,9 +41,9 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 	// storage: NewResourceVersionStorage(cache.DeletionHandlingMetaNamespaceKeyFunc),
 	informer := &resourceVersionInformer{
 		name:          name,
-		listerWatcher: lw,
-		storage:       storage,
-		handler:       handler,
+		listerWatcher: config.ListerWatcher,
+		storage:       config.Storage,
+		handler:       config.Handler,
 	}
 
 	var queue cache.Queue = cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
@@ -37,22 +51,26 @@ func NewResourceVersionInformer(name string, lw cache.ListerWatcher, storage *Re
 		KnownObjects:          informer.storage,
 		EmitDeltaTypeReplaced: true,
 	})
-	if extraStore != nil {
-		queue = &queueWithExtraStore{Queue: queue, extra: extraStore}
+	if config.ExtraStore != nil {
+		queue = &queueWithExtraStore{Queue: queue, extra: config.ExtraStore}
 	}
 
-	config := &Config{
-		ListerWatcher: lw,
-		ObjectType:    exampleObject,
-		RetryOnError:  false,
-		Process: func(obj interface{}) error {
-			deltas := obj.(cache.Deltas)
-			return informer.HandleDeltas(deltas)
+	informer.controller = NewNamedController(informer.name,
+		&Config{
+			ListerWatcher: config.ListerWatcher,
+			ObjectType:    config.ExampleObject,
+			RetryOnError:  false,
+			Process: func(obj interface{}, isInInitialList bool) error {
+				deltas := obj.(cache.Deltas)
+				return informer.HandleDeltas(deltas, isInInitialList)
+			},
+			Queue:                        queue,
+			WatchErrorHandler:            config.ErrorHandler,
+			WatchListPageSize:            config.WatchListPageSize,
+			ForcePaginatedList:           config.ForcePaginatedList,
+			StreamHandleForPaginatedList: config.StreamHandleForPaginatedList,
 		},
-		Queue:             queue,
-		WatchErrorHandler: errorHandler,
-	}
-	informer.controller = NewNamedController(informer.name, config)
+	)
 	return informer
 }
 
@@ -64,10 +82,14 @@ func (informer *resourceVersionInformer) Run(stopCh <-chan struct{}) {
 	informer.controller.Run(stopCh)
 }
 
-func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error {
+func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas, isInInitialList bool) error {
 	for _, d := range deltas {
 		switch d.Type {
 		case cache.Replaced, cache.Added, cache.Updated:
+			if _, ok := d.Object.(cache.ExplicitKey); ok {
+				return nil
+			}
+
 			version, exists, err := informer.storage.Get(d.Object)
 			if err != nil {
 				return err
@@ -78,7 +100,7 @@ func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas) error
 					return err
 				}
 
-				informer.handler.OnAdd(d.Object)
+				informer.handler.OnAdd(d.Object, isInInitialList)
 				break
 			}
 

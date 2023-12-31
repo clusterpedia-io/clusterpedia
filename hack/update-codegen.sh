@@ -13,7 +13,7 @@ GO111MODULE=on go install k8s.io/code-generator/cmd/conversion-gen
 GO111MODULE=on go install k8s.io/code-generator/cmd/client-gen
 GO111MODULE=on go install k8s.io/code-generator/cmd/lister-gen
 GO111MODULE=on go install k8s.io/code-generator/cmd/informer-gen
-# GO111MODULE=on go install k8s.io/code-generator/cmd/openapi-gen
+GO111MODULE=on go install k8s.io/code-generator/cmd/openapi-gen
 
 GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
@@ -94,10 +94,10 @@ informer-gen \
     --output-package="github.com/clusterpedia-io/clusterpedia/pkg/generated/informers" \
     --plural-exceptions="ClusterSyncResources:ClusterSyncResources"
 
-#echo "Generating with openapi-gen"
-#openapi-gen \
-#  --go-header-file hack/boilerplate.go.txt \
-#  --input-dirs=github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1 \
-#  --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/version" \
-#  --output-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi \
-#  -O zz_generated.openapi
+echo "Generating with openapi-gen"
+openapi-gen \
+    --go-header-file hack/boilerplate.go.txt \
+    --input-dirs="github.com/clusterpedia-io/clusterpedia/pkg/apis/pedia/v1alpha1,github.com/clusterpedia-io/api/cluster/v1alpha2,github.com/clusterpedia-io/api/policy/v1alpha1,github.com/clusterpedia-io/api/clusterpedia/v1beta1" \
+    --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/version" \
+    --output-package=github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi \
+    -O zz_generated.openapi

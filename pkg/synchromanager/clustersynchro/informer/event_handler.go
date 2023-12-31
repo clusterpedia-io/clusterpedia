@@ -43,21 +43,21 @@ type FilteringResourceEventHandler struct {
 	Handler    ResourceEventHandler
 }
 
-func (r FilteringResourceEventHandler) OnAdd(obj interface{}) {
+func (r FilteringResourceEventHandler) OnAdd(obj interface{}, isInInitialList bool) {
 	if !r.FilterFunc(obj) {
 		return
 	}
-	r.Handler.OnAdd(obj)
+	r.Handler.OnAdd(obj, isInInitialList)
 }
 
-func (r FilteringResourceEventHandler) OnUpdate(oldObj, newObj interface{}) {
+func (r FilteringResourceEventHandler) OnUpdate(oldObj, newObj interface{}, isInInitialList bool) {
 	newer := r.FilterFunc(newObj)
 	older := r.FilterFunc(oldObj)
 	switch {
 	case newer && older:
 		r.Handler.OnUpdate(oldObj, newObj)
 	case newer && !older:
-		r.Handler.OnAdd(newObj)
+		r.Handler.OnAdd(newObj, isInInitialList)
 	case !newer && older:
 		r.Handler.OnDelete(oldObj)
 	default:

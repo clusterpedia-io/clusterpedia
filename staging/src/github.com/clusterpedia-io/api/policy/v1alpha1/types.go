@@ -23,6 +23,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
 // +kubebuilder:printcolumn:name="Validated",type=string,JSONPath=".status.conditions[?(@.type == 'Validated')].reason"
@@ -69,6 +70,7 @@ type ClusterImportPolicyStatus struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster"
 // +kubebuilder:printcolumn:name="Created",type=string,JSONPath=".status.conditions[?(@.type == 'Created')].reason"
@@ -312,6 +314,7 @@ func (r DependentResource) GroupVersionResource() schema.GroupVersionResource {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 
 type ClusterImportPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -324,6 +327,7 @@ type ClusterImportPolicyList struct {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 
 type PediaClusterLifecycleList struct {
 	metav1.TypeMeta `json:",inline"`

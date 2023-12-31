@@ -23,12 +23,12 @@ type APIGroupSource interface {
 type ResourceDiscoveryAPI struct {
 	Group    string
 	Resource metav1.APIResource
-	Versions map[schema.GroupVersion]struct{}
+	Versions sets.Set[schema.GroupVersion]
 }
 
-// DiscoveryManager  管理集群的 discovery api，并处理 /api 和 /apis 的请求
+// DiscoveryManager manage the cluster's discovery api and handle requests for /api and /apis
 type DiscoveryManager struct {
-	// groupSource 用来保证所有集群的 API Group 保持一致
+	// groupSource used to ensure that the API Groups of all clusters are consistent
 	groupSource APIGroupSource
 
 	serializer                       runtime.NegotiatedSerializer
@@ -38,8 +38,8 @@ type DiscoveryManager struct {
 	groupHandler   *clusterGroupDiscoveryHandler
 	versionHandler *clusterVersionDiscoveryHandler
 
-	// groups 保存了所有集群支持的 API Group
-	// clusterGroups 保存了每个集群的 API Group
+	// apigroups is an apiGroup list supported by all clusters
+	// clusterGroups API Groups supported by each cluster
 	apigroups        atomic.Value // type: []metav1.APIGroup
 	clusterAPIGroups atomic.Value // type: map[string][]metav1.APIGroup
 
@@ -91,11 +91,7 @@ func (m *DiscoveryManager) ResourceEnabled(cluster string, gvr schema.GroupVersi
 		handlers := m.versionHandler.handlers.Load().(map[string]*versionDiscoveryHandler)
 		handler = handlers[cluster]
 	}
-
-	if handler == nil {
-		return false
-	}
-	return handler.gvrs.Has(gvr.String())
+	return handler != nil && handler.gvrs.Has(gvr.String())
 }
 
 func (m *DiscoveryManager) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -164,10 +160,8 @@ func (m *DiscoveryManager) handleLegacyAPI(pathParts []string, w http.ResponseWr
 }
 
 func (m *DiscoveryManager) SetClusterGroupResource(cluster string, apis map[schema.GroupResource]ResourceDiscoveryAPI) {
-	groups := sets.Set[string]{}
 	apiversions := make(map[schema.GroupVersion][]metav1.APIResource)
-	for gr, api := range apis {
-		groups.Insert(gr.Group)
+	for _, api := range apis {
 		for version := range api.Versions {
 			apiversions[version] = append(apiversions[version], api.Resource)
 		}
@@ -185,13 +179,8 @@ func (m *DiscoveryManager) SetClusterGroupResource(cluster string, apis map[sche
 	m.versionHandler.setClusterDiscoveryAPI(cluster, apiversions)
 	m.versionHandler.rebuildGlobalDiscoveryAPI()
 
-	groupversions := make(map[schema.GroupVersion]struct{}, len(apiversions))
-	for gv := range apiversions {
-		groupversions[gv] = struct{}{}
-	}
-
 	allgroups := m.groupSource.GetAPIGroups()
-	apigroups := buildAPIGroups(groups, groupversions, allgroups)
+	apigroups := buildAPIGroups(sets.KeySet(apiversions), allgroups)
 
 	currentgroups := m.groupHandler.getClusterDiscoveryAPI(cluster)
 	if reflect.DeepEqual(apigroups, currentgroups) {
@@ -220,11 +209,9 @@ func (m *DiscoveryManager) rebuildClusterDiscoveryAPI(cluster string) {
 
 	apigroups := make([]metav1.APIGroup, 0, len(currentgroups))
 	for name, group := range currentgroups {
-		if name == "" {
-			continue
+		if name != "" {
+			apigroups = append(apigroups, group)
 		}
-
-		apigroups = append(apigroups, group)
 	}
 	sortAPIGroupByName(apigroups)
 
@@ -237,10 +224,9 @@ func (m *DiscoveryManager) rebuildGlobalDiscoveryAPI() {
 
 	apigroups := make([]metav1.APIGroup, 0, len(currentgroups))
 	for name, group := range currentgroups {
-		if name == "" {
-			continue
+		if name != "" {
+			apigroups = append(apigroups, group)
 		}
-		apigroups = append(apigroups, group)
 	}
 	sortAPIGroupByName(apigroups)
 

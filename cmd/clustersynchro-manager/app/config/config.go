@@ -9,6 +9,7 @@ import (
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	metrics "github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 )
 
 type Config struct {
@@ -17,10 +18,11 @@ type Config struct {
 	EventRecorder record.EventRecorder
 
 	WorkerNumber            int
+	ShardingName            string
 	MetricsServerConfig     metrics.Config
 	KubeMetricsServerConfig *kubestatemetrics.ServerConfig
-	MetricsStoreBuilder     *kubestatemetrics.MetricsStoreBuilder
 	StorageFactory          storage.StorageFactory
+	ClusterSyncConfig       clustersynchro.ClusterSyncConfig
 
 	LeaderElection   componentbaseconfig.LeaderElectionConfiguration
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
