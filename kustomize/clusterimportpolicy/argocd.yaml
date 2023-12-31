@@ -8,17 +8,13 @@ spec:
     resource: secrets
     selectorTemplate: |
       {{ if hasPrefix "argo-" .source.metadata.name }}
-        {{ $ca := (get .source.data "certificate-authority") }}
-        {{ $clientca := (get .source.data "client-certificate") }}
-        {{ $clientkey := (get .source.data "client-key") }}
-
-        {{/* Use a specific data format tofilter out the argocd's secret */}}
-        {{ if and $ca $clientca $clientkey (hasKey .source.data "config") }}
+        {{ $name := (get .source.data "name") }}
+        {{ $serverurl := (get .source.data "server") }}
+        {{ if and $name $serverurl (hasKey .source.data "config") }}
           {{ $kubeconfig := (b64dec .source.data.config) }}
           {{ and
-            (contains $ca $kubeconfig)
-            (contains $clientca $kubeconfig)
-            (contains $clientkey $kubeconfig)
+            (contains $name $kubeconfig)
+            (contains $serverurl $kubeconfig)
            }}
         {{ end }}
       {{ end }}
@@ -26,7 +22,7 @@ spec:
   template: |
     spec:
       apiserver: 'https://{{ trimPrefix "argo-" .source.metadata.name }}.{{ .source.metadata.namespace }}.svc'
-      kubeconfig: '{{ .source.data.config }}'
+      kubeconfig: '{'tlsClientConfig':{'insecure':false}}'
       syncResources:
         - group: ""
           resources:
