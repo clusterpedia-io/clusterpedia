@@ -17,6 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/component-base/tracing"
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
@@ -148,7 +149,7 @@ func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http
 	handler = filters.RemoveFieldSelectorFromRequest(handler)
 
 	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {
-		handler = genericapifilters.WithTracing(handler, c.TracerProvider)
+		handler = tracing.WithTracing(handler, c.TracerProvider, "ClusterpediaAPI")
 	}
 
 	/* used for debugging
