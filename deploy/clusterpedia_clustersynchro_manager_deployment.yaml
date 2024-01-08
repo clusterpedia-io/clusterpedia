@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
       - name: manager
-        image: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager:v0.7.0
+        image: ghcr.io/clusterpedia-io/clusterpedia/clustersynchro-manager:v0.8.0
         command:
         - /usr/local/bin/clustersynchro-manager
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
