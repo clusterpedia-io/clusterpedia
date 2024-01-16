@@ -18,7 +18,7 @@ ENV:
             eg. CLUSTERPEDIA_REPO=/clusterpedia
 
     PLUGIN_REPO: plugin repo path, required if the pwd is not the plugin repository.
-            eg. CLUSTERPEDIA_REPO=/plugins/sample-storage-layer
+            eg. CLUSTERPEDIA_REPO=/plugins/sample-storage
 
     OUTPUT_DIR: default is the root of the repository or pwd,
                 the component binary will be output in \$OUTPUT_DIR/bin, the plugins will be output in \$OUTPUT_DIR/plugins.
