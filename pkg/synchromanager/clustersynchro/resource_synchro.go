@@ -441,7 +441,7 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 		}
 		if !storage.IsRecoverableException(err) {
 			klog.ErrorS(err, "Failed to storage resource", "cluster", synchro.cluster,
-				"action", event.Action, "resource", synchro.storageResource, "key", key)
+				"action", event.Action, "resource", synchro.storageResource, "key", key, "error", err.Error())
 
 			if !synchro.isRunnableForStorage.Load() && synchro.queue.Len() == 0 {
 				// if the storage returns an error on stopForStorage that cannot be recovered
