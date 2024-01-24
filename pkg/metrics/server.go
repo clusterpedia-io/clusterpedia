@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 	"k8s.io/klog/v2"
 
+	"github.com/clusterpedia-io/clusterpedia/pkg/pprof"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
 
@@ -40,7 +41,8 @@ func buildMetricsServer(config Config) *http.ServeMux {
 		ErrorLog:           Logger,
 		DisableCompression: config.DisableGZIPEncoding,
 	}))
-
+	// add profiler
+	pprof.RegisterProfileHandler(mux)
 	// Add index
 	landingConfig := web.LandingConfig{
 		Name:        "clusterpedia clustersynchro manager",
