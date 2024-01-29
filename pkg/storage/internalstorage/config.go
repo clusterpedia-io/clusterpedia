@@ -15,8 +15,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
 	"k8s.io/klog/v2"
-
-	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 )
 
 const (
@@ -29,9 +27,9 @@ const (
 type DivisionPolicy string
 
 const (
-	DivisionPolicyNone          DivisionPolicy = "None"
-	DivisionPolicyGroupResource DivisionPolicy = "GroupResource"
-	DivisionPolicyCustom        DivisionPolicy = "Custom"
+	DivisionPolicyNone                 DivisionPolicy = "None"
+	DivisionPolicyGroupVersionResource DivisionPolicy = "GVR"
+	DivisionPolicyCustom               DivisionPolicy = "Custom"
 )
 
 type Config struct {
@@ -58,28 +56,10 @@ type Config struct {
 
 	Params map[string]string `yaml:"params"`
 
-	AutoMigration  *bool            `yaml:"autoMigration"` // If set to false, no tables will be created
-	DivisionPolicy DivisionPolicy   `yaml:"divisionPolicy"`
-	Mapper         []ResourceMapper `yaml:"mapper"` // Only DivisionPolicy is DivisionPolicyCustom it need to specify the mapping between resource and table
+	SkipAutoMigration bool           `yaml:"skipAutoMigration"` // If set to false, no tables will be created
+	DivisionPolicy    DivisionPolicy `yaml:"divisionPolicy"`
 
 	Log *LogConfig `yaml:"log"`
-}
-
-type ResourceMapper struct {
-	Table     *Table                                  `yaml:"table"`
-	Resources []clusterv1alpha2.ClusterGroupResources `yaml:"resources"`
-}
-
-type Table struct {
-	Name        string       `yaml:"name"`
-	ExtraFields []ExtraField `yaml:"extraFields"`
-}
-
-type ExtraField struct {
-	Name      string `yaml:"name"`
-	PlainPath string `yaml:"plainPath"`
-	Type      string `yaml:"type"`
-	Index     string `yaml:"index"`
 }
 
 type LogConfig struct {

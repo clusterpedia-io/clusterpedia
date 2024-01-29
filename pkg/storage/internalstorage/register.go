@@ -93,7 +93,19 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
 
-	return &StorageFactory{db}, nil
+	if !cfg.SkipAutoMigration && (cfg.DivisionPolicy == DivisionPolicyNone || cfg.DivisionPolicy == "") {
+		if exist := db.Migrator().HasTable("resources"); !exist {
+			if err := db.AutoMigrate(&Resource{}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return &StorageFactory{
+		db:                db,
+		SkipAutoMigration: cfg.SkipAutoMigration,
+		DivisionPolicy:    cfg.DivisionPolicy,
+	}, nil
 }
 
 func newLogger(cfg *Config) (logger.Interface, error) {
