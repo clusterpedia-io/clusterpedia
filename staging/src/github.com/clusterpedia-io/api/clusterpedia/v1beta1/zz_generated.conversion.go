@@ -196,6 +196,7 @@ func autoConvert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions
 	// WARNING: in.Names requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.ClusterNames requires manual conversion: inconvertible types (string vs []string)
 	// WARNING: in.Namespaces requires manual conversion: inconvertible types (string vs []string)
+	out.ResourcePrefix = in.ResourcePrefix
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types (string vs []github.com/clusterpedia-io/api/clusterpedia.OrderBy)
 	out.OwnerUID = in.OwnerUID
 	out.OwnerName = in.OwnerName
@@ -222,6 +223,7 @@ func autoConvert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedi
 	if err := runtime.Convert_Slice_string_To_string(&in.Namespaces, &out.Namespaces, s); err != nil {
 		return err
 	}
+	out.ResourcePrefix = in.ResourcePrefix
 	// WARNING: in.OrderBy requires manual conversion: inconvertible types ([]github.com/clusterpedia-io/api/clusterpedia.OrderBy vs string)
 	out.OwnerName = in.OwnerName
 	out.OwnerUID = in.OwnerUID
@@ -261,6 +263,13 @@ func autoConvert_url_Values_To_v1beta1_ListOptions(in *url.Values, out *ListOpti
 		}
 	} else {
 		out.Namespaces = ""
+	}
+	if values, ok := map[string][]string(*in)["resourcePrefix"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.ResourcePrefix, s); err != nil {
+			return err
+		}
+	} else {
+		out.ResourcePrefix = ""
 	}
 	if values, ok := map[string][]string(*in)["orderby"]; ok && len(values) > 0 {
 		if err := runtime.Convert_Slice_string_To_string(&values, &out.OrderBy, s); err != nil {

@@ -200,8 +200,8 @@ func TestResourceStorage_genGetObjectQuery(t *testing.T) {
 			"",
 			"",
 			expected{
-				`SELECT "object" FROM "resources" WHERE "cluster" = '' AND "group" = '' AND "name" = '' AND "namespace" = '' AND "resource" = '' AND "version" = '' ORDER BY "resources"."id" LIMIT 1`,
-				"SELECT `object` FROM `resources` WHERE `cluster` = '' AND `group` = '' AND `name` = '' AND `namespace` = '' AND `resource` = '' AND `version` = '' ORDER BY `resources`.`id` LIMIT 1",
+				`SELECT cluster_resource_version, object FROM "resources" WHERE "deleted" = false AND "group" = '' AND "name" = '' AND "namespace" = '' AND "resource" = '' AND "version" = '' ORDER BY "resources"."id" LIMIT 1`,
+				"SELECT cluster_resource_version, object FROM `resources` WHERE `deleted` = false AND `group` = '' AND `name` = '' AND `namespace` = '' AND `resource` = '' AND `version` = '' ORDER BY `resources`.`id` LIMIT 1",
 				"",
 			},
 		},
@@ -212,8 +212,8 @@ func TestResourceStorage_genGetObjectQuery(t *testing.T) {
 			"ns-1",
 			"resource-1",
 			expected{
-				`SELECT "object" FROM "resources" WHERE "cluster" = 'cluster-1' AND "group" = 'apps' AND "name" = 'resource-1' AND "namespace" = 'ns-1' AND "resource" = 'deployments' AND "version" = 'v1' ORDER BY "resources"."id" LIMIT 1`,
-				"SELECT `object` FROM `resources` WHERE `cluster` = 'cluster-1' AND `group` = 'apps' AND `name` = 'resource-1' AND `namespace` = 'ns-1' AND `resource` = 'deployments' AND `version` = 'v1' ORDER BY `resources`.`id` LIMIT 1",
+				`SELECT cluster_resource_version, object FROM "resources" WHERE "cluster" = 'cluster-1' AND "deleted" = false AND "group" = 'apps' AND "name" = 'resource-1' AND "namespace" = 'ns-1' AND "resource" = 'deployments' AND "version" = 'v1' ORDER BY "resources"."id" LIMIT 1`,
+				"SELECT cluster_resource_version, object FROM `resources` WHERE `cluster` = 'cluster-1' AND `deleted` = false AND `group` = 'apps' AND `name` = 'resource-1' AND `namespace` = 'ns-1' AND `resource` = 'deployments' AND `version` = 'v1' ORDER BY `resources`.`id` LIMIT 1",
 				"",
 			},
 		},
@@ -268,7 +268,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 			postgreSQL, err := toSQL(postgresDB.Session(&gorm.Session{DryRun: true}), test.listOptions,
 				func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 					rs := newTestResourceStorage(db, test.resource)
-					_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
+					_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options, true)
 					return query, err
 				},
 			)
@@ -284,7 +284,7 @@ func TestResourceStorage_genListObjectQuery(t *testing.T) {
 				mysqlSQL, err := toSQL(mysqlDBs[version].Session(&gorm.Session{DryRun: true}), test.listOptions,
 					func(db *gorm.DB, options *internal.ListOptions) (*gorm.DB, error) {
 						rs := newTestResourceStorage(db, test.resource)
-						_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options)
+						_, _, query, _, err := rs.genListObjectsQuery(context.TODO(), options, true)
 						return query, err
 					},
 				)
@@ -379,7 +379,7 @@ func TestResourceStorage_Update(t *testing.T) {
 	factory := storageconfig.NewStorageConfigFactory()
 	require.NotNil(factory)
 
-	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true)
+	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true, "Deployment")
 	require.NoError(err)
 	require.NotNil(config)
 
@@ -425,7 +425,7 @@ func TestResourceStorage_Update(t *testing.T) {
 
 	clusterName := "test"
 
-	err = rs.Create(context.Background(), clusterName, obj)
+	err = rs.Create(context.Background(), clusterName, obj, true)
 	require.NoError(err)
 
 	var resourcesAfterCreation []Resource
@@ -445,7 +445,7 @@ func TestResourceStorage_Update(t *testing.T) {
 		"foo2": "bar2",
 	}
 
-	err = rs.Update(context.Background(), clusterName, obj)
+	err = rs.Update(context.Background(), clusterName, obj, true)
 	require.NoError(err)
 
 	var resourcesAfterUpdates []Resource

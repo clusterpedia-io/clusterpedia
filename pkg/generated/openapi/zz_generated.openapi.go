@@ -928,6 +928,12 @@ func schema_clusterpedia_io_api_clusterpedia_v1beta1_ListOptions(ref common.Refe
 							Format: "",
 						},
 					},
+					"resourcePrefix": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"orderby": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},

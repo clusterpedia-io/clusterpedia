@@ -28,6 +28,25 @@ var generators = map[schema.GroupVersionResource]func(allowAnnotationsList, allo
 	{Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"}: ingressClassMetricFamilies,
 }
 
+var gvrKinds = map[schema.GroupVersionResource]string{
+	{Version: "v1", Resource: "pods"}:       "Pod",
+	{Version: "v1", Resource: "secrets"}:    "Secret",
+	{Version: "v1", Resource: "nodes"}:      "Node",
+	{Version: "v1", Resource: "namespaces"}: "Namespace",
+	{Version: "v1", Resource: "services"}:   "Service",
+
+	{Group: "apps", Version: "v1", Resource: "deployments"}:  "Deployment",
+	{Group: "apps", Version: "v1", Resource: "daemonsets"}:   "DaemonSet",
+	{Group: "apps", Version: "v1", Resource: "statefulsets"}: "StatefulSet",
+	{Group: "apps", Version: "v1", Resource: "replicasets"}:  "ReplicaSet",
+
+	{Group: "batch", Version: "v1", Resource: "jobs"}:     "Job",
+	{Group: "batch", Version: "v1", Resource: "cronjobs"}: "CronJob",
+
+	{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"}:      "Ingress",
+	{Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"}: "IngressClass",
+}
+
 var rToGVR = make(map[string]schema.GroupVersionResource)
 
 func init() {

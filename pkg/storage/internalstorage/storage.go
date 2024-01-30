@@ -6,9 +6,14 @@ import (
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
+	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 )
 
 type StorageFactory struct {
@@ -19,15 +24,69 @@ func (s *StorageFactory) GetSupportedRequestVerbs() []string {
 	return []string{"get", "list"}
 }
 
-func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
-	return &ResourceStorage{
+func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig, initEventCache bool) (storage.ResourceStorage, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    config.StorageGroupResource.Group,
+		Version:  config.StorageVersion.Version,
+		Resource: config.StorageGroupResource.Resource,
+	}
+
+	resourceStorage := &ResourceStorage{
 		db:    s.db,
 		codec: config.Codec,
 
 		storageGroupResource: config.StorageGroupResource,
 		storageVersion:       config.StorageVersion,
 		memoryVersion:        config.MemoryVersion,
-	}, nil
+
+		Namespaced: config.Namespaced,
+		newFunc:    config.NewFunc,
+		KeyFunc:    utils.GetKeyFunc(gvr, config.Namespaced),
+	}
+
+	// SubscriberEnabled is true when Apiserver starts and middleware enabled
+	if middleware.SubscriberEnabled {
+		var cache *watchcomponents.EventCache
+		buffer := watchcomponents.GetMultiClusterEventPool().GetClusterBufferByGVR(gvr)
+		cachePool := watchcomponents.GetInitEventCachePool()
+		cache = cachePool.GetWatchEventCacheByGVR(gvr)
+		err := middleware.GlobalSubscriber.SubscribeTopic(gvr, config.Codec, config.NewFunc)
+		if err != nil {
+			return nil, err
+		}
+		enqueueFunc := func(event *watch.Event) {
+			if event.Type != watch.Error {
+				cache.Enqueue(event)
+			}
+			err := buffer.ProcessEvent(event.Object, event.Type)
+			if err != nil {
+				return
+			}
+		}
+		clearfunc := func() {
+			cache.Clear()
+		}
+		err = middleware.GlobalSubscriber.EventReceiving(gvr, enqueueFunc, clearfunc)
+		if err != nil {
+			return nil, err
+		}
+
+		resourceStorage.buffer = buffer
+		resourceStorage.eventCache = cache
+	} else if middleware.PublisherEnabled { // PublisherEnabled is true when clustersynchro-manager starts and middleware enabled
+		err := middleware.GlobalPublisher.PublishTopic(gvr, config.Codec)
+		if err != nil {
+			return nil, err
+		}
+		err = middleware.GlobalPublisher.EventSending(gvr, watchcomponents.EC.StartChan, resourceStorage.PublishEvent, resourceStorage.GenCrv2Event)
+		if err != nil {
+			return nil, err
+		}
+
+		resourceStorage.eventChan = watchcomponents.EC.StartChan(gvr)
+	}
+
+	return resourceStorage, nil
 }
 
 func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionResource) (storage.CollectionResourceStorage, error) {
@@ -41,8 +100,11 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 
 func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
 	var resources []Resource
-	result := f.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
-		Where(map[string]interface{}{"cluster": cluster}).
+	result := f.db.WithContext(ctx).Select("group", "version", "resource",
+		"namespace", "name", "resource_version", "deleted", "published").
+		Where(map[string]interface{}{"cluster": cluster, "deleted": false}).
+		//In case deleted event be losted when synchro manager do a leaderelection or reboot
+		Or(map[string]interface{}{"cluster": cluster, "deleted": true, "published": false}).
 		Find(&resources)
 	if result.Error != nil {
 		return nil, InterpretDBError(cluster, result.Error)
@@ -61,7 +123,13 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 		if resource.Namespace != "" {
 			key = resource.Namespace + "/" + resource.Name
 		}
-		versions[key] = resource.ResourceVersion
+		versions[key] = informer.StorageElement{
+			Version:   resource.ResourceVersion,
+			Deleted:   resource.Deleted,
+			Published: resource.Published,
+			Name:      resource.Name,
+			Namespace: resource.Namespace,
+		}
 	}
 	return resourceversions, nil
 }

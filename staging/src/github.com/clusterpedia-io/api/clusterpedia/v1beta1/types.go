@@ -24,6 +24,9 @@ type ListOptions struct {
 	Namespaces string `json:"namespaces,omitempty"`
 
 	// +optional
+	ResourcePrefix string `json:"resourcePrefix,omitempty"`
+
+	// +optional
 	OrderBy string `json:"orderby,omitempty"`
 
 	// +optional

@@ -18,7 +18,7 @@ func (s *StorageFactory) GetSupportedRequestVerbs() []string {
 	return []string{"get", "list", "watch"}
 }
 
-func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
+func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig, _ bool) (storage.ResourceStorage, error) {
 	storages.Lock()
 	defer storages.Unlock()
 

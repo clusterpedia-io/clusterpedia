@@ -5,6 +5,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+type StorageElement struct {
+	Version   string
+	Deleted   bool
+	Published bool
+	Name      string
+	Namespace string
+}
+
 type ResourceVersionStorage struct {
 	keyFunc cache.KeyFunc
 
@@ -25,12 +33,21 @@ func (c *ResourceVersionStorage) Add(obj interface{}) error {
 	if err != nil {
 		return cache.KeyError{Obj: obj, Err: err}
 	}
+
+	c.cacheStorage.Delete(key)
+
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return err
 	}
 
-	c.cacheStorage.Add(key, accessor.GetResourceVersion())
+	c.cacheStorage.Add(key, StorageElement{
+		Version:   accessor.GetResourceVersion(),
+		Deleted:   false,
+		Published: true,
+		Name:      accessor.GetName(),
+		Namespace: accessor.GetNamespace(),
+	})
 	return nil
 }
 
@@ -44,7 +61,13 @@ func (c *ResourceVersionStorage) Update(obj interface{}) error {
 		return err
 	}
 
-	c.cacheStorage.Update(key, accessor.GetResourceVersion())
+	c.cacheStorage.Update(key, StorageElement{
+		Version:   accessor.GetResourceVersion(),
+		Deleted:   false,
+		Published: true,
+		Name:      accessor.GetName(),
+		Namespace: accessor.GetNamespace(),
+	})
 	return nil
 }
 
@@ -58,16 +81,26 @@ func (c *ResourceVersionStorage) Delete(obj interface{}) error {
 	return nil
 }
 
-func (c *ResourceVersionStorage) Get(obj interface{}) (string, bool, error) {
+func (c *ResourceVersionStorage) Get(obj interface{}) (*StorageElement, bool, error) {
 	key, err := c.keyFunc(obj)
 	if err != nil {
-		return "", false, cache.KeyError{Obj: obj, Err: err}
+		return nil, false, cache.KeyError{Obj: obj, Err: err}
 	}
 	version, exists := c.cacheStorage.Get(key)
-	if exists {
-		return version.(string), exists, nil
+	if !exists {
+		return nil, false, nil
 	}
-	return "", false, nil
+
+	var se StorageElement
+	var ok bool
+	if se, ok = version.(StorageElement); !ok {
+		return nil, false, nil
+	}
+
+	if !se.Deleted {
+		return &se, exists, nil
+	}
+	return nil, false, nil
 }
 
 func (c *ResourceVersionStorage) ListKeys() []string {

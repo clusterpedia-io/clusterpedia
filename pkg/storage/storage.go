@@ -20,7 +20,7 @@ type StorageFactory interface {
 	GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error)
 	GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error)
 
-	NewResourceStorage(config *ResourceStorageConfig) (ResourceStorage, error)
+	NewResourceStorage(config *ResourceStorageConfig, initEventCache bool) (ResourceStorage, error)
 	NewCollectionResourceStorage(cr *internal.CollectionResource) (CollectionResourceStorage, error)
 
 	CleanCluster(ctx context.Context, cluster string) error
@@ -32,13 +32,16 @@ type ResourceStorage interface {
 
 	Get(ctx context.Context, cluster, namespace, name string, obj runtime.Object) error
 	List(ctx context.Context, listObj runtime.Object, opts *internal.ListOptions) error
-	Watch(ctx context.Context, options *internal.ListOptions) (watch.Interface, error)
+	Watch(ctx context.Context, newfunc func() runtime.Object, options *internal.ListOptions, gvk schema.GroupVersionKind) (watch.Interface, error)
 
-	Create(ctx context.Context, cluster string, obj runtime.Object) error
-	Update(ctx context.Context, cluster string, obj runtime.Object) error
+	Create(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
+	Update(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
 
 	ConvertDeletedObject(obj interface{}) (runtime.Object, error)
-	Delete(ctx context.Context, cluster string, obj runtime.Object) error
+	Delete(ctx context.Context, cluster string, obj runtime.Object, crvUpdated bool) error
+
+	ProcessEvent(ctx context.Context, eventType watch.EventType, obj runtime.Object, cluster string) error
+	GetObj(ctx context.Context, cluster, namespace, name string) (runtime.Object, error)
 }
 
 type CollectionResourceStorage interface {
@@ -55,6 +58,8 @@ type ResourceStorageConfig struct {
 	StorageVersion schema.GroupVersion
 
 	Codec runtime.Codec
+
+	NewFunc func() runtime.Object
 }
 
 type storageRecoverableExceptionError struct {

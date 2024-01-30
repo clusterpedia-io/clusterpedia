@@ -27,6 +27,8 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
+	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
+	"github.com/clusterpedia-io/clusterpedia/pkg/watcher/middleware"
 )
 
 var (
@@ -106,6 +108,16 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 		return nil, fmt.Errorf("CompletedConfig.New() called with config.StorageFactory == nil")
 	}
 
+	// init event cache pool
+	eventStop := make(chan struct{})
+	if middleware.SubscriberEnabled {
+		watchcomponents.InitEventCachePool(eventStop)
+		err := middleware.GlobalSubscriber.InitSubscriber(eventStop)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config.ClientConfig)
 	if err != nil {
 		return nil, err
@@ -159,6 +171,11 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	}
 
 	genericServer.AddPostStartHookOrDie("start-clusterpedia-informers", func(context genericapiserver.PostStartHookContext) error {
+		// inform to close event watch
+		go func() {
+			<-context.StopCh
+			close(eventStop)
+		}()
 		clusterpediaInformerFactory.Start(context.StopCh)
 		clusterpediaInformerFactory.WaitForCacheSync(context.StopCh)
 

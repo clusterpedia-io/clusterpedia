@@ -12,6 +12,7 @@ import (
 	clusterinformer "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/cluster/v1alpha2"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
+	watchcomponents "github.com/clusterpedia-io/clusterpedia/pkg/watcher/components"
 )
 
 type ClusterResourceController struct {
@@ -36,14 +37,16 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 		AddFunc: func(obj interface{}) {
 			controller.updateClusterResources(obj.(*clusterv1alpha2.PediaCluster))
 		},
-		UpdateFunc: func(_, obj interface{}) {
+		UpdateFunc: func(oldObj, obj interface{}) {
 			cluster := obj.(*clusterv1alpha2.PediaCluster)
 			if !cluster.DeletionTimestamp.IsZero() {
+				controller.clearCache(cluster)
 				controller.removeCluster(cluster.Name)
 				return
 			}
 
-			controller.updateClusterResources(obj.(*clusterv1alpha2.PediaCluster))
+			controller.updateCache(oldObj.(*clusterv1alpha2.PediaCluster), cluster)
+			controller.updateClusterResources(cluster)
 		},
 		DeleteFunc: func(obj interface{}) {
 			clusterName, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -60,7 +63,7 @@ func NewClusterResourceController(restManager *RESTManager, discoveryManager *di
 	return controller
 }
 
-func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alpha2.PediaCluster) {
+func (c *ClusterResourceController) convertCluster2Map(cluster *clusterv1alpha2.PediaCluster) ResourceInfoMap {
 	resources := ResourceInfoMap{}
 	for _, groupResources := range cluster.Status.SyncResources {
 		for _, resource := range groupResources.Resources {
@@ -68,7 +71,7 @@ func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alp
 				continue
 			}
 
-			versions := sets.Set[string]{}
+			versions := sets.New[string]()
 			for _, cond := range resource.SyncConditions {
 				versions.Insert(cond.Version)
 			}
@@ -81,6 +84,49 @@ func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alp
 			}
 		}
 	}
+
+	return resources
+}
+
+func (c *ClusterResourceController) updateCache(oldCluster *clusterv1alpha2.PediaCluster, cluster *clusterv1alpha2.PediaCluster) {
+	if ecp := watchcomponents.GetInitEventCachePool(); ecp == nil {
+		return
+	}
+	oldResources := c.convertCluster2Map(oldCluster)
+	resources := c.convertCluster2Map(cluster)
+	for gr, ri := range oldResources {
+		for version := range ri.Versions {
+			if !resources[gr].Versions.Has(version) {
+				// gr has deleted, clear the cache of this gv
+				watchcomponents.GetInitEventCachePool().ClearCacheByGVR(schema.GroupVersionResource{
+					Group: gr.Group, Version: version, Resource: gr.Resource,
+				})
+			}
+		}
+	}
+}
+
+func (c *ClusterResourceController) clearCache(cluster *clusterv1alpha2.PediaCluster) {
+	if ecp := watchcomponents.GetInitEventCachePool(); ecp == nil {
+		return
+	}
+	currentResources := c.clusterresources[cluster.Name]
+	resources := c.convertCluster2Map(cluster)
+
+	for gr, ri := range currentResources {
+		for version := range ri.Versions {
+			// clear the cache of this gv which in cluster
+			if resources[gr].Versions.Has(version) {
+				watchcomponents.GetInitEventCachePool().ClearCacheByGVR(schema.GroupVersionResource{
+					Group: gr.Group, Version: version, Resource: gr.Resource,
+				})
+			}
+		}
+	}
+}
+
+func (c *ClusterResourceController) updateClusterResources(cluster *clusterv1alpha2.PediaCluster) {
+	resources := c.convertCluster2Map(cluster)
 
 	currentResources := c.clusterresources[cluster.Name]
 	if reflect.DeepEqual(resources, currentResources) {
