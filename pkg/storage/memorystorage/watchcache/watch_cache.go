@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -303,7 +304,18 @@ func (w *WatchCache) WaitUntilFreshAndList(opts *internal.ListOptions) ([]*Store
 		}*/
 	var result []*StoreElement
 	accessor := meta.NewAccessor()
-	for _, store := range w.stores {
+	searchAllCluster := true
+	searchClusters := sets.NewString()
+	if opts != nil && len(opts.ClusterNames) != 0 {
+		for _, tmp := range opts.ClusterNames {
+			searchClusters.Insert(tmp)
+		}
+		searchAllCluster = false
+	}
+	for cluster, store := range w.stores {
+		if !searchAllCluster && !searchClusters.Has(cluster) {
+			continue
+		}
 		for _, obj := range store.List() {
 			se := obj.(*StoreElement)
 			ns, err := accessor.Namespace(se.Object)
