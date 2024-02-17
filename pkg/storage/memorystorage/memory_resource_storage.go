@@ -99,7 +99,7 @@ func (s *ResourceStorage) ConvertDeletedObject(obj interface{}) (runobj runtime.
 	if obj, ok := obj.(runtime.Object); ok {
 		return obj, nil
 	}
-	return nil, fmt.Errorf("Invalid Type(%T): couldn't convert deleted object", obj)
+	return nil, fmt.Errorf("invalid Type(%T): couldn't convert deleted object", obj)
 }
 
 func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtime.Object) error {
@@ -135,7 +135,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 	}
 
 	if obj != into {
-		return fmt.Errorf("Failed to decode resource, into is %T", into)
+		return fmt.Errorf("failed to decode resource, into is %T", into)
 	}
 	return nil
 }

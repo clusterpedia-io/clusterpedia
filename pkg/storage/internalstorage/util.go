@@ -218,7 +218,7 @@ func applyListOptionsToQuery(query *gorm.DB, opts *internal.ListOptions, applyFn
 		query,
 		opts.URLQuery,
 		utilfeature.DefaultMutableFeatureGate.Enabled(AllowRawSQLQuery),
-		utilfeature.DefaultMutableFeatureGate.Enabled((AllowParameterizedSQLQuery)),
+		utilfeature.DefaultMutableFeatureGate.Enabled(AllowParameterizedSQLQuery),
 	)
 	if err != nil {
 		return 0, nil, nil, err

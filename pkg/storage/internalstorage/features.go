@@ -17,7 +17,7 @@ const (
 	// for better defense against SQL injection.
 	//
 	// Use either single whereSQLStatement field, a pair of whereSQLStatement with whereSQLParam, or
-	// whereSQLStatement with whereSQLJSONParams to pass the SQL it self and parameters.
+	// whereSQLStatement with whereSQLJSONParams to pass the SQL itself and parameters.
 	//
 	// owner: @nekomeowww
 	// alpha: v0.8.0

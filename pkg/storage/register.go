@@ -21,7 +21,7 @@ func NewStorageFactory(name, configPath string) (StorageFactory, error) {
 
 	storagefactory, err := provider(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to init storage: %w", err)
+		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
 	return storagefactory, nil
 }
