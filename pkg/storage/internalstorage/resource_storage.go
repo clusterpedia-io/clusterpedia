@@ -127,7 +127,7 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 }
 
-func (c *ResourceStorage) ConvertDeletedObject(obj interface{}) (runtime.Object, error) {
+func (s *ResourceStorage) ConvertDeletedObject(obj interface{}) (runtime.Object, error) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return nil, err
@@ -188,7 +188,7 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 		return err
 	}
 	if obj != into {
-		return fmt.Errorf("Failed to decode resource, into is %T", into)
+		return fmt.Errorf("failed to decode resource, into is %T", into)
 	}
 	return nil
 }

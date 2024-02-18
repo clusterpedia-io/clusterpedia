@@ -39,9 +39,9 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 	return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
 }
 
-func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
+func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
 	var resources []Resource
-	result := f.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
+	result := s.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
 		Where(map[string]interface{}{"cluster": cluster}).
 		Find(&resources)
 	if result.Error != nil {
@@ -66,8 +66,8 @@ func (f *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 	return resourceversions, nil
 }
 
-func (f *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
-	result := f.db.WithContext(ctx).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
+func (s *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
+	result := s.db.WithContext(ctx).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
 	return InterpretDBError(cluster, result.Error)
 }
 
