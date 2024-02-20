@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterpedia-internalstorage
+  namespace: clusterpedia-system
+data:
+  internalstorage-config.yaml: |
+    type: "nebula"
+    host: "clusterpedia-internalstorage-nebula"
+    port: 9669
+    user: nebula
+    database: "clusterpedia"

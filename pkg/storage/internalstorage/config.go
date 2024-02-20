@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v4"
+	"github.com/zhihu/norm/v3/dialectors"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
 	"k8s.io/klog/v2"
@@ -45,6 +46,7 @@ type Config struct {
 
 	MySQL    *MySQLConfig    `yaml:"mysql"`
 	Postgres *PostgresConfig `yaml:"postgres"`
+	Nebula   *NebulaConfig   `yaml:"nebula"`
 
 	Params map[string]string `yaml:"params"`
 
@@ -86,6 +88,13 @@ type MySQLConfig struct {
 
 type PostgresConfig struct {
 	RecoverableErrCodes []string `yaml:"recoverableErrCodes"`
+}
+
+type NebulaConfig struct {
+	TimeOut         time.Duration `yaml:"timeOut"`
+	IdleTime        time.Duration `yaml:"idleTime"`
+	MaxConnPoolSize int           `yaml:"maxConnPoolSize"`
+	MinConnPoolSize int           `yaml:"minConnPoolSize"`
 }
 
 type ConnPoolConfig struct {
@@ -288,6 +297,21 @@ func (cfg *Config) genSQLiteDSN() (string, error) {
 		return "", errors.New("sqlite: dsn is required")
 	}
 	return cfg.DSN, nil
+}
+
+func (cfg *Config) genNebulaConfig() (*dialectors.DialectorConfig, error) {
+	if cfg.DSN == "" {
+		return nil, errors.New("nebula: dsn is required")
+	}
+	var nebulaConfig dialectors.DialectorConfig
+	nebulaConfig.IdleTime = cfg.Nebula.IdleTime
+	nebulaConfig.MaxConnPoolSize = cfg.Nebula.MaxConnPoolSize
+	nebulaConfig.MinConnPoolSize = cfg.Nebula.MinConnPoolSize
+	nebulaConfig.Timeout = cfg.Nebula.TimeOut
+	nebulaConfig.Username = cfg.User
+	nebulaConfig.Password = cfg.Password
+
+	return &nebulaConfig, nil
 }
 
 func (cfg *Config) addMysqlErrorNumbers() {

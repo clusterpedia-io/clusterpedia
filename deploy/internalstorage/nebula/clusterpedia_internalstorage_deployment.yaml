@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterpedia-internalstorage-nebula
+  namespace: clusterpedia-system
+spec:
+  ports:
+  - port: 9669
+  selector:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: nebula
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: internalstorage-nebula
+  namespace: clusterpedia-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: nebula
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterpedia-internalstorage-nebula
+  namespace: clusterpedia-system
+  labels:
+    app: clusterpedia-internalstorage
+    internalstorage.clusterpedia.io/type: nebula
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clusterpedia-internalstorage
+      internalstorage.clusterpedia.io/type: nebula
+  template:
+    metadata:
+      labels:
+        app: clusterpedia-internalstorage
+        internalstorage.clusterpedia.io/type: nebula
+    spec:
+      containers:
+      - name: nebula
+        image: nebula:12
+        env:
+        - name: nebula_DB
+          value: "clusterpedia"
+        - name: nebula_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: internalstorage-password
+              key: password
+        ports:
+        - name: nebula
+          containerPort: 9669
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/nebulaql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: internalstorage-nebula
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"

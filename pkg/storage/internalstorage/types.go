@@ -210,8 +210,10 @@ func (list *ResourceMetadataList) From(db *gorm.DB) error {
 		db = db.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata")
 	case "postgres":
 		db = db.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
+	case "nebula":
+		db = db.Select(`"group", version, resource, kind, object->>'metadata' as metadata`)
 	default:
-		panic("storage: only support sqlite3, mysql or postgres")
+		panic("storage: only support nebula,sqlite3, mysql or postgres")
 	}
 	metadatas := []ResourceMetadata{}
 	if result := db.Find(&metadatas); result.Error != nil {
