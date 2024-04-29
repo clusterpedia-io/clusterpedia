@@ -3,6 +3,7 @@ package scheme
 import (
 	// These imports are the API groups the API server will support.
 	apiextensionsinstall "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	apiregistrationinstall "k8s.io/kube-aggregator/pkg/apis/apiregistration/install"
 	_ "k8s.io/kubernetes/pkg/apis/admission/install"
 	_ "k8s.io/kubernetes/pkg/apis/admissionregistration/install"
@@ -16,6 +17,8 @@ import (
 	_ "k8s.io/kubernetes/pkg/apis/coordination/install"
 	_ "k8s.io/kubernetes/pkg/apis/core/install"
 	_ "k8s.io/kubernetes/pkg/apis/discovery/install"
+	v1 "k8s.io/kubernetes/pkg/apis/discovery/v1"
+	"k8s.io/kubernetes/pkg/apis/discovery/v1beta1"
 	_ "k8s.io/kubernetes/pkg/apis/events/install"
 	_ "k8s.io/kubernetes/pkg/apis/extensions/install"
 	_ "k8s.io/kubernetes/pkg/apis/flowcontrol/install"
@@ -32,4 +35,7 @@ import (
 func init() {
 	apiextensionsinstall.Install(LegacyResourceScheme)
 	apiregistrationinstall.Install(LegacyResourceScheme)
+
+	// Fix the version order of 'discovery.k8s.io' resources
+	utilruntime.Must(LegacyResourceScheme.SetVersionPriority(v1.SchemeGroupVersion, v1beta1.SchemeGroupVersion))
 }
