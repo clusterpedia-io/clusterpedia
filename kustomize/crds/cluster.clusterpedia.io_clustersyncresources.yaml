@@ -35,6 +35,10 @@ spec:
               syncResources:
                 items:
                   properties:
+                    excludeResources:
+                      items:
+                        type: string
+                      type: array
                     group:
                       type: string
                     resources:
