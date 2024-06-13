@@ -1,0 +1,17 @@
+name: Verify
+on:
+  push:
+    paths:
+      - 'vendor/k8s.io/client-go/tools/cache/reflector.go'
+      - 'vendor/k8s.io/client-go/tools/pager/pager.go'
+jobs:
+  verify-forked-code:
+    name: Verify Forked Code
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKSPACE }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - run: hack/verify-forked-code.sh
