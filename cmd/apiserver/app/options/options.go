@@ -128,6 +128,14 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	config.MaxRequestsInFlight = o.MaxRequestsInFlight
 	config.MaxMutatingRequestsInFlight = o.MaxMutatingRequestsInFlight
 
+	if err := o.CoreAPI.ApplyTo(config); err != nil {
+		return err
+	}
+	client, err := kubernetes.NewForConfig(config.ClientConfig)
+	if err != nil {
+		return err
+	}
+
 	if err := o.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return err
 	}
@@ -140,14 +148,7 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.Audit.ApplyTo(&config.Config); err != nil {
 		return err
 	}
-	if err := o.Features.ApplyTo(&config.Config); err != nil {
-		return err
-	}
-	if err := o.CoreAPI.ApplyTo(config); err != nil {
-		return err
-	}
-	client, err := kubernetes.NewForConfig(config.ClientConfig)
-	if err != nil {
+	if err := o.Features.ApplyTo(&config.Config, client, config.SharedInformerFactory); err != nil {
 		return err
 	}
 	dynamicClient := dynamic.NewForConfigOrDie(config.ClientConfig)
