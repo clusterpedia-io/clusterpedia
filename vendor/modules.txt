@@ -1552,6 +1552,8 @@ k8s.io/kubernetes/pkg/apis/storage/v1
 k8s.io/kubernetes/pkg/apis/storage/v1alpha1
 k8s.io/kubernetes/pkg/apis/storage/v1beta1
 k8s.io/kubernetes/pkg/apis/storagemigration
+k8s.io/kubernetes/pkg/apis/storagemigration/install
+k8s.io/kubernetes/pkg/apis/storagemigration/v1alpha1
 k8s.io/kubernetes/pkg/features
 k8s.io/kubernetes/pkg/printers
 k8s.io/kubernetes/pkg/printers/internalversion
