@@ -53,6 +53,9 @@ func NewServerOptions() *ClusterPediaServerOptions {
 	// into this server.  So allow many concurrent operations.
 	sso.HTTP2MaxStreamsPerConnection = 1000
 
+	featureOptions := genericoptions.NewFeatureOptions()
+	featureOptions.EnablePriorityAndFairness = false
+
 	return &ClusterPediaServerOptions{
 		MaxRequestsInFlight:         0,
 		MaxMutatingRequestsInFlight: 0,
@@ -62,7 +65,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
 		Audit:          genericoptions.NewAuditOptions(),
-		Features:       genericoptions.NewFeatureOptions(),
+		Features:       featureOptions,
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Admission:      genericoptions.NewAdmissionOptions(),
