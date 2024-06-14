@@ -7,13 +7,11 @@ import (
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
@@ -38,7 +36,6 @@ type ClusterPediaServerOptions struct {
 	Features       *genericoptions.FeatureOptions
 	CoreAPI        *genericoptions.CoreAPIOptions
 	FeatureGate    featuregate.FeatureGate
-	Admission      *genericoptions.AdmissionOptions
 	Traces         *genericoptions.TracingOptions
 
 	Storage *storageoptions.StorageOptions
@@ -68,7 +65,6 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Features:       featureOptions,
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
-		Admission:      genericoptions.NewAdmissionOptions(),
 		Traces:         genericoptions.NewTracingOptions(),
 
 		Storage: storageoptions.NewStorageOptions(),
@@ -96,10 +92,6 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error create self-signed certificates: %v", err)
 	}
-
-	// remove NamespaceLifecycle admission plugin explicitly
-	// current admission plugins:  mutatingwebhook, validatingwebhook
-	o.Admission.DisablePlugins = append(o.Admission.DisablePlugins, lifecycle.PluginName)
 
 	genericConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 
@@ -154,10 +146,6 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.Features.ApplyTo(&config.Config, client, config.SharedInformerFactory); err != nil {
 		return err
 	}
-	dynamicClient := dynamic.NewForConfigOrDie(config.ClientConfig)
-	if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, client, dynamicClient, o.FeatureGate); err != nil {
-		return err
-	}
 	if err := o.Traces.ApplyTo(nil, &config.Config); err != nil {
 		return err
 	}
@@ -181,8 +169,6 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	o.Audit.AddFlags(fss.FlagSet("auditing"))
 	o.Features.AddFlags(fss.FlagSet("features"))
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
-
-	// o.Admission.AddFlags(fss.FlagSet("admission"))
 	o.Traces.AddFlags(fss.FlagSet("traces"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
