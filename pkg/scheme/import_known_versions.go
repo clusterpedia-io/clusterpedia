@@ -30,6 +30,7 @@ import (
 	_ "k8s.io/kubernetes/pkg/apis/resource/install"
 	_ "k8s.io/kubernetes/pkg/apis/scheduling/install"
 	_ "k8s.io/kubernetes/pkg/apis/storage/install"
+	_ "k8s.io/kubernetes/pkg/apis/storagemigration/install"
 )
 
 func init() {
