@@ -53,6 +53,9 @@ func NewServerOptions() *ClusterPediaServerOptions {
 	// into this server.  So allow many concurrent operations.
 	sso.HTTP2MaxStreamsPerConnection = 1000
 
+	featureOptions := genericoptions.NewFeatureOptions()
+	featureOptions.EnablePriorityAndFairness = false
+
 	return &ClusterPediaServerOptions{
 		MaxRequestsInFlight:         0,
 		MaxMutatingRequestsInFlight: 0,
@@ -62,7 +65,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
 		Audit:          genericoptions.NewAuditOptions(),
-		Features:       genericoptions.NewFeatureOptions(),
+		Features:       featureOptions,
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Admission:      genericoptions.NewAdmissionOptions(),
@@ -128,6 +131,14 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	config.MaxRequestsInFlight = o.MaxRequestsInFlight
 	config.MaxMutatingRequestsInFlight = o.MaxMutatingRequestsInFlight
 
+	if err := o.CoreAPI.ApplyTo(config); err != nil {
+		return err
+	}
+	client, err := kubernetes.NewForConfig(config.ClientConfig)
+	if err != nil {
+		return err
+	}
+
 	if err := o.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return err
 	}
@@ -140,14 +151,7 @@ func (o *ClusterPediaServerOptions) genericOptionsApplyTo(config *genericapiserv
 	if err := o.Audit.ApplyTo(&config.Config); err != nil {
 		return err
 	}
-	if err := o.Features.ApplyTo(&config.Config); err != nil {
-		return err
-	}
-	if err := o.CoreAPI.ApplyTo(config); err != nil {
-		return err
-	}
-	client, err := kubernetes.NewForConfig(config.ClientConfig)
-	if err != nil {
+	if err := o.Features.ApplyTo(&config.Config, client, config.SharedInformerFactory); err != nil {
 		return err
 	}
 	dynamicClient := dynamic.NewForConfigOrDie(config.ClientConfig)
