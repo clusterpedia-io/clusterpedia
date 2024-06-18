@@ -7,6 +7,8 @@ set -o pipefail
 # Create an environment that manages an multiple clusters of different versions
 
 cases="${1}"
+control_plane_version="${2}"
+control_plane_name="control-${control_plane_version//./-}"
 
 source "$(dirname "${BASH_SOURCE[0]}")/../helper.sh"
 
@@ -33,11 +35,11 @@ function cleanup() {
     for release in "${releases[@]}"; do
         delete_data_plane "data-${release//./-}" >/dev/null 2>&1
     done
-    delete_control_plane control-v1-30 >/dev/null 2>&1
+    delete_control_plane ${control_plane_name} >/dev/null 2>&1
 }
 trap cleanup EXIT
 
-create_control_plane control-v1-30 v1.30.0 || {
+create_control_plane ${control_plane_name} ${control_plane_version} || {
     echo "Failed to create control plane"
     exit 1
 }
