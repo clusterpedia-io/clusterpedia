@@ -4,6 +4,24 @@ TEST_ROOT="$(dirname "${BASH_SOURCE[0]}")"
 
 source "$(dirname "${BASH_SOURCE[0]}")/helper.sh"
 
+single_versions=(
+    v1.30.0
+    v1.23.17
+
+#   Since ubuntu in github action uses cgroup v2 by default
+#   and can't install clusters below 1.19, skip them for now!
+#   v1.18.20
+#   v1.14.10
+)
+
+multiple_versions=(
+    v1.30.0
+
+#   Since ubuntu in github action uses cgroup v2 by default
+#   and can't install clusters below 1.19, skip them for now!
+#   v1.14.10
+)
+
 function main() {
     local name
     local env_name
@@ -17,18 +35,34 @@ function main() {
     build_image
     echo "::endgroup::"
 
-    for env in "${TEST_ROOT}"/environments/*.env.sh; do
-        [[ -e "${env}" ]] || continue
-        env_name="${env##*/}"
-        env_name="${env_name%.env.sh}"
+    for version in "${single_versions[@]}"; do
         for file in "${TEST_ROOT}"/cases/*.test.sh; do
             [[ -e "${file}" ]] || continue
             name="${file##*/}"
             name="${name%.test.sh}"
-            echo "::group::Running test ${name} on ${env_name}"
-            if ! "${env}" "${file}"; then
-                failed+=("'${name} on ${env_name}'")
-                mv "${TEST_ROOT}/logs" "${TEST_ROOT}/logs-${name}-${env_name}"
+
+            echo "::group::Running [single cluster] test ${name} on ${version}"
+            if ! "${TEST_ROOT}/environments/single.env.sh" "${file}" "${version}"; then
+                failed+=("'${name} on ${version}'")
+                mv "${TEST_ROOT}/logs" "${TEST_ROOT}/logs-${name}-single-cluster-${version}"
+            else
+                # Clean up logs
+                rm -rf "${TEST_ROOT}/logs"
+            fi
+            echo "::endgroup::"
+        done
+    done
+
+    for version in "${multi_versions[@]}"; do
+        for file in "${TEST_ROOT}"/cases/*.test.sh; do
+            [[ -e "${file}" ]] || continue
+            name="${file##*/}"
+            name="${name%.test.sh}"
+
+            echo "::group::Running [multiple clusters] test ${name} on ${version}"
+            if ! "${TEST_ROOT}/environments/multiple.env.sh" "${file}" "${version}"; then
+                failed+=("'${name} on ${version}'")
+                mv "${TEST_ROOT}/logs" "${TEST_ROOT}/logs-${name}-multiple-clusters-${version}"
             else
                 # Clean up logs
                 rm -rf "${TEST_ROOT}/logs"
