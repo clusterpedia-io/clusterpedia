@@ -75,6 +75,7 @@ func init() {
 	gates := utilfeature.DefaultMutableFeatureGate.GetAll()
 	gate := gates[genericfeatures.RemainingItemCount]
 	gate.Default = false
+	gate.LockToDefault = false
 	gates[genericfeatures.RemainingItemCount] = gate
 
 	utilfeature.DefaultMutableFeatureGate = featuregate.NewFeatureGate()
