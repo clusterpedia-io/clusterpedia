@@ -96,7 +96,7 @@ func (g *StorageConfigFactory) NewLegacyResourceConfig(gr schema.GroupResource, 
 	if err != nil {
 		return nil, err
 	}
-	memoryVersion, err := g.legacyResourceEncodingConfig.InMemoryEncodingFor(chosenStorageResource)
+	memoryVersion, err := g.legacyResourceEncodingConfig.InMemoryEncodingFor(gr)
 	if err != nil {
 		return nil, err
 	}
