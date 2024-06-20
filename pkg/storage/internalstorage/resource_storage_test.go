@@ -339,7 +339,7 @@ func TestResourceStorage_deleteObject(t *testing.T) {
 			postgreSQL := postgresDB.Session(&gorm.Session{SkipDefaultTransaction: true}).ToSQL(
 				func(tx *gorm.DB) *gorm.DB {
 					rs := newTestResourceStorage(tx, test.resource)
-					return rs.deleteObject(test.cluster, test.namespace, test.resourceName)
+					return rs.deleteObject(context.TODO(), test.cluster, test.namespace, test.resourceName)
 				})
 
 			if postgreSQL != test.expected.postgres {
@@ -354,7 +354,7 @@ func TestResourceStorage_deleteObject(t *testing.T) {
 				mysqlSQL := mysqlDBs[version].Session(&gorm.Session{SkipDefaultTransaction: true}).ToSQL(
 					func(tx *gorm.DB) *gorm.DB {
 						rs := newTestResourceStorage(tx, test.resource)
-						return rs.deleteObject(test.cluster, test.namespace, test.resourceName)
+						return rs.deleteObject(context.TODO(), test.cluster, test.namespace, test.resourceName)
 					})
 
 				if mysqlSQL != test.expected.mysql {
@@ -465,7 +465,7 @@ func TestResourceStorage_Update(t *testing.T) {
 
 func newTestResourceStorage(db *gorm.DB, storageGVK schema.GroupVersionResource) *ResourceStorage {
 	return &ResourceStorage{
-		db:                   db,
+		db:                   db.Table("resources").Model(&Resource{}),
 		storageGroupResource: storageGVK.GroupResource(),
 		storageVersion:       storageGVK.GroupVersion(),
 	}

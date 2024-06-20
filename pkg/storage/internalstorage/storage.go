@@ -3,6 +3,7 @@ package internalstorage
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -12,7 +13,13 @@ import (
 )
 
 type StorageFactory struct {
-	db *gorm.DB
+	db                *gorm.DB
+	SkipAutoMigration bool
+	DivisionPolicy    DivisionPolicy
+}
+
+func (s *StorageFactory) AutoMigrate() error {
+	return nil
 }
 
 func (s *StorageFactory) GetSupportedRequestVerbs() []string {
@@ -20,10 +27,37 @@ func (s *StorageFactory) GetSupportedRequestVerbs() []string {
 }
 
 func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
-	return &ResourceStorage{
-		db:    s.db,
-		codec: config.Codec,
+	gvr := schema.GroupVersionResource{
+		Group:    config.StorageGroupResource.Group,
+		Version:  config.StorageVersion.Version,
+		Resource: config.StorageGroupResource.Resource,
+	}
+	table := s.tableName(gvr)
 
+	var model interface{}
+	switch s.DivisionPolicy {
+	case DivisionPolicyGroupVersionResource:
+		model = &GroupVersionResource{}
+		if !s.SkipAutoMigration {
+			if exist := s.db.Migrator().HasTable(table); !exist {
+				if err := s.db.AutoMigrate(&GroupVersionResource{}); err != nil {
+					return nil, err
+				}
+
+				if err := s.db.Migrator().RenameTable("group_version_resources", table); err != nil {
+					if !s.db.Migrator().HasTable(table) {
+						return nil, err
+					}
+				}
+			}
+		}
+	default:
+		model = &Resource{}
+	}
+
+	return &ResourceStorage{
+		db:                   s.db.Table(table).Model(model),
+		codec:                config.Codec,
 		storageGroupResource: config.StorageGroupResource,
 		storageVersion:       config.StorageVersion,
 		memoryVersion:        config.MemoryVersion,
@@ -40,12 +74,21 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 }
 
 func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
+	tables, err := s.db.Migrator().GetTables()
+	if err != nil {
+		return nil, err
+	}
+
 	var resources []Resource
-	result := s.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
-		Where(map[string]interface{}{"cluster": cluster}).
-		Find(&resources)
-	if result.Error != nil {
-		return nil, InterpretDBError(cluster, result.Error)
+	for _, table := range tables {
+		result := s.db.WithContext(ctx).
+			Table(table).
+			Select("group", "version", "resource", "namespace", "name", "resource_version").
+			Where(map[string]interface{}{"cluster": cluster}).
+			Find(&resources)
+		if result.Error != nil {
+			return nil, InterpretDBError(cluster, result.Error)
+		}
 	}
 
 	resourceversions := make(map[schema.GroupVersionResource]map[string]interface{})
@@ -67,18 +110,41 @@ func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 }
 
 func (s *StorageFactory) CleanCluster(ctx context.Context, cluster string) error {
-	result := s.db.WithContext(ctx).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
-	return InterpretDBError(cluster, result.Error)
+	tables, err := s.db.Migrator().GetTables()
+	if err != nil {
+		return err
+	}
+
+	for _, table := range tables {
+		result := s.db.WithContext(ctx).Table(table).Where(map[string]interface{}{"cluster": cluster}).Delete(&Resource{})
+		if result.Error != nil {
+			return InterpretDBError(cluster, result.Error)
+		}
+	}
+
+	return nil
 }
 
 func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error {
-	result := s.db.WithContext(ctx).Where(map[string]interface{}{
-		"cluster":  cluster,
-		"group":    gvr.Group,
-		"version":  gvr.Version,
-		"resource": gvr.Resource,
-	}).Delete(&Resource{})
-	return InterpretDBError(fmt.Sprintf("%s/%s", cluster, gvr), result.Error)
+	err := s.db.Transaction(func(db *gorm.DB) error {
+		result := s.db.WithContext(ctx).
+			Table(s.tableName(gvr)).
+			Where(map[string]interface{}{
+				"cluster":  cluster,
+				"group":    gvr.Group,
+				"version":  gvr.Version,
+				"resource": gvr.Resource,
+			}).
+			Delete(&Resource{})
+
+		if result.Error != nil {
+			return result.Error
+		}
+
+		return nil
+	})
+
+	return InterpretDBError(fmt.Sprintf("%s/%s", cluster, gvr), err)
 }
 
 func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error) {
@@ -91,4 +157,23 @@ func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*interna
 
 func (s *StorageFactory) PrepareCluster(cluster string) error {
 	return nil
+}
+
+// GenerateTableFor return table name using gvr string
+func GenerateTableFor(gvr schema.GroupVersionResource) string {
+	if gvr.Group == "" {
+		return fmt.Sprintf("%s_%s", gvr.Version, gvr.Resource)
+	}
+
+	group := strings.ReplaceAll(gvr.Group, ".", "_")
+	return fmt.Sprintf("%s_%s_%s", group, gvr.Version, gvr.Resource)
+}
+
+func (s *StorageFactory) tableName(gvr schema.GroupVersionResource) string {
+	table := "resources"
+	if s.DivisionPolicy == DivisionPolicyGroupVersionResource {
+		table = GenerateTableFor(gvr)
+	}
+
+	return table
 }

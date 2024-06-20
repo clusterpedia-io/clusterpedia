@@ -24,6 +24,14 @@ const (
 	databasePasswordEnvName = "DB_PASSWORD"
 )
 
+type DivisionPolicy string
+
+const (
+	DivisionPolicyNone                 DivisionPolicy = "None"
+	DivisionPolicyGroupVersionResource DivisionPolicy = "GVR"
+	DivisionPolicyCustom               DivisionPolicy = "Custom"
+)
+
 type Config struct {
 	Type string `env:"DB_TYPE" required:"true"`
 	DSN  string `env:"DB_DSN"`
@@ -47,6 +55,9 @@ type Config struct {
 	Postgres *PostgresConfig `yaml:"postgres"`
 
 	Params map[string]string `yaml:"params"`
+
+	SkipAutoMigration bool           `yaml:"skipAutoMigration"` // If set to false, no tables will be created
+	DivisionPolicy    DivisionPolicy `yaml:"divisionPolicy"`
 
 	Log *LogConfig `yaml:"log"`
 }

@@ -27,9 +27,8 @@ import (
 )
 
 type ResourceStorage struct {
-	db    *gorm.DB
-	codec runtime.Codec
-
+	db                   *gorm.DB
+	codec                runtime.Codec
 	storageGroupResource schema.GroupResource
 	storageVersion       schema.GroupVersion
 	memoryVersion        schema.GroupVersion
@@ -116,14 +115,17 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		updatedResource["deleted_at"] = sql.NullTime{Time: deletedAt.Time, Valid: true}
 	}
 
-	result := s.db.WithContext(ctx).Model(&Resource{}).Where(map[string]interface{}{
-		"cluster":   cluster,
-		"group":     s.storageGroupResource.Group,
-		"version":   s.storageVersion.Version,
-		"resource":  s.storageGroupResource.Resource,
-		"namespace": metaobj.GetNamespace(),
-		"name":      metaobj.GetName(),
-	}).Updates(updatedResource)
+	result := s.db.WithContext(ctx).
+		Where(map[string]interface{}{
+			"cluster":   cluster,
+			"group":     s.storageGroupResource.Group,
+			"version":   s.storageVersion.Version,
+			"resource":  s.storageGroupResource.Resource,
+			"namespace": metaobj.GetNamespace(),
+			"name":      metaobj.GetName(),
+		}).
+		Updates(updatedResource)
+
 	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 }
 
@@ -143,8 +145,8 @@ func (s *ResourceStorage) ConvertDeletedObject(obj interface{}) (runtime.Object,
 	return &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}, nil
 }
 
-func (s *ResourceStorage) deleteObject(cluster, namespace, name string) *gorm.DB {
-	return s.db.Model(&Resource{}).Where(map[string]interface{}{
+func (s *ResourceStorage) deleteObject(ctx context.Context, cluster, namespace, name string) *gorm.DB {
+	return s.db.WithContext(ctx).Where(map[string]interface{}{
 		"cluster":   cluster,
 		"group":     s.storageGroupResource.Group,
 		"version":   s.storageVersion.Version,
@@ -160,21 +162,23 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 		return err
 	}
 
-	if result := s.deleteObject(cluster, metaobj.GetNamespace(), metaobj.GetName()); result.Error != nil {
+	if result := s.deleteObject(ctx, cluster, metaobj.GetNamespace(), metaobj.GetName()); result.Error != nil {
 		return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 	}
 	return nil
 }
 
 func (s *ResourceStorage) genGetObjectQuery(ctx context.Context, cluster, namespace, name string) *gorm.DB {
-	return s.db.WithContext(ctx).Model(&Resource{}).Select("object").Where(map[string]interface{}{
-		"cluster":   cluster,
-		"group":     s.storageGroupResource.Group,
-		"version":   s.storageVersion.Version,
-		"resource":  s.storageGroupResource.Resource,
-		"namespace": namespace,
-		"name":      name,
-	})
+	return s.db.WithContext(ctx).
+		Select("object").
+		Where(map[string]interface{}{
+			"cluster":   cluster,
+			"group":     s.storageGroupResource.Group,
+			"version":   s.storageVersion.Version,
+			"resource":  s.storageGroupResource.Resource,
+			"namespace": namespace,
+			"name":      name,
+		})
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
@@ -199,7 +203,7 @@ func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *interna
 		result = &ResourceMetadataList{}
 	}
 
-	query := s.db.WithContext(ctx).Model(&Resource{})
+	query := s.db.WithContext(ctx)
 	query = query.Where(map[string]interface{}{
 		"group":    s.storageGroupResource.Group,
 		"version":  s.storageVersion.Version,
