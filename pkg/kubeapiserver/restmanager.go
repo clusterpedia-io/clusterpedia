@@ -28,8 +28,8 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
-	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/scheme/unstructured"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
+	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme/unstructured"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )

@@ -29,7 +29,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/controller/pediaclusterlifecycle"
 	clientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version/verflag"
 )

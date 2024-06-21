@@ -16,7 +16,7 @@ import (
 	"k8s.io/klog/v2"
 
 	policyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer"
 )
 
 type DependentResourceManager struct {

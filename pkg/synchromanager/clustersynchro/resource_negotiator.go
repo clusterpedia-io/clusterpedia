@@ -13,8 +13,8 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	"github.com/clusterpedia-io/clusterpedia/pkg/discovery"
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/discovery"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"

@@ -4,7 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 
-	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/scheme/unstructured"
+	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme/unstructured"
 )
 
 var (

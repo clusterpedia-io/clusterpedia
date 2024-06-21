@@ -17,8 +17,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 )
 
 type CRDController struct {

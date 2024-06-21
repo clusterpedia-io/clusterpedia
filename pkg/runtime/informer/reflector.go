@@ -27,7 +27,7 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/trace"
 
-	clspager "github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/informer/pager"
+	clspager "github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer/pager"
 )
 
 const defaultExpectedTypeName = "<unspecified>"
