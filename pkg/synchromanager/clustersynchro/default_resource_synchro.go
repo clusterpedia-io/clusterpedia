@@ -19,34 +19,16 @@ import (
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro/queue"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro/queue"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
-type ResourceSynchroConfig struct {
-	schema.GroupVersionResource
-	Kind string
-
-	cache.ListerWatcher
-	runtime.ObjectConvertor
-	storage.ResourceStorage
-
-	*kubestatemetrics.MetricsStore
-
-	ResourceVersions    map[string]interface{}
-	PageSizeForInformer int64
-}
-
-func (c ResourceSynchroConfig) GroupVersionKind() schema.GroupVersionKind {
-	return c.GroupVersionResource.GroupVersion().WithKind(c.Kind)
-}
-
-type ResourceSynchro struct {
+type resourceSynchro struct {
 	cluster string
 
 	example         runtime.Object
@@ -88,9 +70,13 @@ type ResourceSynchro struct {
 	runningStage string
 }
 
-func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceSynchro {
+type DefaultResourceSynchroFactory struct{}
+
+var _ resourcesynchro.SynchroFactory = DefaultResourceSynchroFactory{}
+
+func (factory DefaultResourceSynchroFactory) NewResourceSynchro(cluster string, config resourcesynchro.Config) (resourcesynchro.Synchro, error) {
 	storageConfig := config.ResourceStorage.GetStorageConfig()
-	synchro := &ResourceSynchro{
+	synchro := &resourceSynchro{
 		cluster:         cluster,
 		syncResource:    config.GroupVersionResource,
 		storageResource: storageConfig.StorageResource,
@@ -127,10 +113,26 @@ func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceS
 	}
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
-	return synchro
+	return synchro, nil
 }
 
-func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
+func (synchro *resourceSynchro) Stage() string {
+	return synchro.runningStage
+}
+
+func (synchro *resourceSynchro) GroupVersionResource() schema.GroupVersionResource {
+	return synchro.syncResource
+}
+
+func (synchro *resourceSynchro) StoragedGroupVersionResource() schema.GroupVersionResource {
+	return synchro.storageResource
+}
+
+func (synchro *resourceSynchro) GetMetricsWriter() *metricsstore.MetricsWriter {
+	return synchro.metricsWriter
+}
+
+func (synchro *resourceSynchro) Run(shutdown <-chan struct{}) {
 	defer close(synchro.closed)
 	go func() {
 		select {
@@ -158,7 +160,7 @@ func (synchro *ResourceSynchro) Run(shutdown <-chan struct{}) {
 	synchro.runningStage = "shutdown"
 }
 
-func (synchro *ResourceSynchro) Close() <-chan struct{} {
+func (synchro *resourceSynchro) Close() <-chan struct{} {
 	synchro.closeOnce.Do(func() {
 		close(synchro.closer)
 		synchro.queue.Close()
@@ -167,7 +169,7 @@ func (synchro *ResourceSynchro) Close() <-chan struct{} {
 	return synchro.closed
 }
 
-func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
+func (synchro *resourceSynchro) Start(stopCh <-chan struct{}) {
 	synchro.startlock.Lock()
 	stopped := synchro.stopped // avoid race
 	synchro.startlock.Unlock()
@@ -288,7 +290,7 @@ func (synchro *ResourceSynchro) Start(stopCh <-chan struct{}) {
 
 const LastAppliedConfigurationAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
-func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
+func (synchro *resourceSynchro) pruneObject(obj *unstructured.Unstructured) {
 	if clusterpediafeature.FeatureGate.Enabled(features.PruneManagedFields) {
 		obj.SetManagedFields(nil)
 	}
@@ -305,7 +307,7 @@ func (synchro *ResourceSynchro) pruneObject(obj *unstructured.Unstructured) {
 	}
 }
 
-func (synchro *ResourceSynchro) OnAdd(obj interface{}, isInInitialList bool) {
+func (synchro *resourceSynchro) OnAdd(obj interface{}, isInInitialList bool) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
@@ -327,7 +329,7 @@ func (synchro *ResourceSynchro) OnAdd(obj interface{}, isInInitialList bool) {
 	_ = synchro.queue.Add(obj)
 }
 
-func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
+func (synchro *resourceSynchro) OnUpdate(_, obj interface{}) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
@@ -342,7 +344,7 @@ func (synchro *ResourceSynchro) OnUpdate(_, obj interface{}) {
 	_ = synchro.queue.Update(obj)
 }
 
-func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
+func (synchro *resourceSynchro) OnDelete(obj interface{}) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
@@ -357,9 +359,9 @@ func (synchro *ResourceSynchro) OnDelete(obj interface{}) {
 	_ = synchro.queue.Delete(obj)
 }
 
-func (synchro *ResourceSynchro) OnSync(obj interface{}) {}
+func (synchro *resourceSynchro) OnSync(obj interface{}) {}
 
-func (synchro *ResourceSynchro) processResources() {
+func (synchro *resourceSynchro) processResources() {
 	for {
 		select {
 		case <-synchro.closer:
@@ -381,7 +383,7 @@ func (synchro *ResourceSynchro) processResources() {
 	}
 }
 
-func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
+func (synchro *resourceSynchro) handleResourceEvent(event *queue.Event) {
 	defer func() { _ = synchro.queue.Done(event) }()
 
 	obj, ok := event.Object.(runtime.Object)
@@ -476,7 +478,7 @@ func (synchro *ResourceSynchro) handleResourceEvent(event *queue.Event) {
 	}
 }
 
-func (synchro *ResourceSynchro) setRunnableForStorage() {
+func (synchro *resourceSynchro) setRunnableForStorage() {
 	synchro.isRunnableForStorage.Store(true)
 
 	synchro.forStorageLock.Lock()
@@ -494,7 +496,7 @@ func (synchro *ResourceSynchro) setRunnableForStorage() {
 	}
 }
 
-func (synchro *ResourceSynchro) setStopForStorage() {
+func (synchro *resourceSynchro) setStopForStorage() {
 	synchro.isRunnableForStorage.Store(false)
 
 	synchro.forStorageLock.Lock()
@@ -512,7 +514,7 @@ func (synchro *ResourceSynchro) setStopForStorage() {
 	}
 }
 
-func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
+func (synchro *resourceSynchro) convertToStorageVersion(obj runtime.Object) (runtime.Object, error) {
 	if synchro.syncResource == synchro.storageResource || synchro.convertor == nil {
 		return obj, nil
 	}
@@ -535,7 +537,7 @@ func (synchro *ResourceSynchro) convertToStorageVersion(obj runtime.Object) (run
 	return obj, nil
 }
 
-func (synchro *ResourceSynchro) createOrUpdateResource(ctx context.Context, obj runtime.Object) error {
+func (synchro *resourceSynchro) createOrUpdateResource(ctx context.Context, obj runtime.Object) error {
 	err := synchro.storage.Create(ctx, synchro.cluster, obj)
 	if genericstorage.IsExist(err) {
 		return synchro.storage.Update(ctx, synchro.cluster, obj)
@@ -543,7 +545,7 @@ func (synchro *ResourceSynchro) createOrUpdateResource(ctx context.Context, obj 
 	return err
 }
 
-func (synchro *ResourceSynchro) updateOrCreateResource(ctx context.Context, obj runtime.Object) error {
+func (synchro *resourceSynchro) updateOrCreateResource(ctx context.Context, obj runtime.Object) error {
 	err := synchro.storage.Update(ctx, synchro.cluster, obj)
 	if genericstorage.IsNotFound(err) {
 		return synchro.storage.Create(ctx, synchro.cluster, obj)
@@ -551,11 +553,11 @@ func (synchro *ResourceSynchro) updateOrCreateResource(ctx context.Context, obj 
 	return err
 }
 
-func (synchro *ResourceSynchro) deleteResource(ctx context.Context, obj runtime.Object) error {
+func (synchro *resourceSynchro) deleteResource(ctx context.Context, obj runtime.Object) error {
 	return synchro.storage.Delete(ctx, synchro.cluster, obj)
 }
 
-func (synchro *ResourceSynchro) setStatus(status string, reason, message string) {
+func (synchro *resourceSynchro) setStatus(status string, reason, message string) {
 	synchro.status.Store(clusterv1alpha2.ClusterResourceSyncCondition{
 		Status:             status,
 		Reason:             reason,
@@ -564,11 +566,11 @@ func (synchro *ResourceSynchro) setStatus(status string, reason, message string)
 	})
 }
 
-func (synchro *ResourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
+func (synchro *resourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
 	return synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
 }
 
-func (synchro *ResourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
+func (synchro *resourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 	if err != nil {
 		// TODO(iceber): Use `k8s.io/apimachinery/pkg/api/errors` to resolve the error type and update it to `status.Reason`
 		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusError, "ResourceWatchFailed", err.Error())
