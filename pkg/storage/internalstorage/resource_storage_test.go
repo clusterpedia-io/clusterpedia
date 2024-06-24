@@ -16,7 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig"
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
+	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
 func testApplyListOptionsToResourceQuery(t *testing.T, name string, options *internal.ListOptions, expected expected) {
@@ -376,14 +378,14 @@ func TestResourceStorage_Update(t *testing.T) {
 
 	rs := newTestResourceStorage(db, appsv1.SchemeGroupVersion.WithResource("deployments"))
 
-	factory := storageconfig.NewStorageConfigFactory()
+	factory := resourceconfigfactory.New()
 	require.NotNil(factory)
 
 	config, err := factory.NewLegacyResourceConfig(schema.GroupResource{Group: appsv1.SchemeGroupVersion.Group, Resource: "deployments"}, true)
 	require.NoError(err)
 	require.NotNil(config)
 
-	rs.codec = config.Codec
+	rs.config = storage.ResourceStorageConfig{ResourceConfig: *config}
 	trueRef := true
 
 	obj := &appsv1.Deployment{
@@ -414,7 +416,7 @@ func TestResourceStorage_Update(t *testing.T) {
 	require.Len(ownerRef, 1)
 
 	var buffer bytes.Buffer
-	err = rs.codec.Encode(obj, &buffer)
+	err = rs.config.Codec.Encode(obj, &buffer)
 	require.NoError(err)
 
 	owner := metav1.GetControllerOfNoCopy(metaObj)
@@ -463,10 +465,13 @@ func TestResourceStorage_Update(t *testing.T) {
 	assert.NotEqual(resourcesAfterUpdates[0].Object, resourcesAfterCreation[0].Object)
 }
 
-func newTestResourceStorage(db *gorm.DB, storageGVK schema.GroupVersionResource) *ResourceStorage {
+func newTestResourceStorage(db *gorm.DB, storageResource schema.GroupVersionResource) *ResourceStorage {
 	return &ResourceStorage{
-		db:                   db,
-		storageGroupResource: storageGVK.GroupResource(),
-		storageVersion:       storageGVK.GroupVersion(),
+		db: db,
+		config: storage.ResourceStorageConfig{
+			ResourceConfig: resourceconfig.ResourceConfig{
+				StorageResource: storageResource,
+			},
+		},
 	}
 }

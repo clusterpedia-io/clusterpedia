@@ -22,12 +22,7 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 	storages.Lock()
 	defer storages.Unlock()
 
-	gvr := schema.GroupVersionResource{
-		Group:    config.GroupResource.Group,
-		Version:  config.StorageVersion.Version,
-		Resource: config.GroupResource.Resource,
-	}
-
+	gvr := config.StorageResource
 	resourceStorage, ok := storages.resourceStorages[gvr]
 	if ok {
 		watchCache := resourceStorage.watchCache
@@ -42,6 +37,7 @@ func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfi
 			Codec:         config.Codec,
 			watchCache:    watchCache,
 			storageConfig: config,
+			memoryVersion: config.MemoryResource.GroupVersion(),
 		}
 
 		storages.resourceStorages[gvr] = resourceStorage

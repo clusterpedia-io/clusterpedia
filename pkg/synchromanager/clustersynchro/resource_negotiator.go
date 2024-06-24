@@ -14,9 +14,9 @@ import (
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/discovery"
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
@@ -24,15 +24,15 @@ import (
 type ResourceNegotiator struct {
 	name                   string
 	dynamicDiscovery       discovery.DynamicDiscoveryInterface
-	resourceStorageConfig  *storageconfig.StorageConfigFactory
+	resourceConfigFactory  *resourceconfigfactory.ResourceConfigFactory
 	syncAllCustomResources bool
 }
 
 type syncConfig struct {
-	kind          string
-	syncResource  schema.GroupVersionResource
-	convertor     runtime.ObjectConvertor
-	storageConfig *storage.ResourceStorageConfig
+	kind                  string
+	syncResource          schema.GroupVersionResource
+	convertor             runtime.ObjectConvertor
+	resourceStorageConfig *storage.ResourceStorageConfig
 }
 
 func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
@@ -124,7 +124,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					Reason:  "SynchroCreating",
 				}
 
-				storageConfig, err := negotiator.resourceStorageConfig.NewConfig(syncGVR, apiResource.Namespaced)
+				resourceConfig, err := negotiator.resourceConfigFactory.NewConfig(syncGVR, apiResource.Namespaced)
 				if err != nil {
 					syncCondition.Reason = "SynchroCreateFailed"
 					syncCondition.Message = fmt.Sprintf("new resource storage config failed: %s", err)
@@ -132,10 +132,10 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					continue
 				}
 
-				storageGVR := storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version)
+				storageGVR := resourceConfig.StorageResource
 				syncCondition.StorageVersion = storageGVR.Version
-				if syncGR != storageConfig.StorageGroupResource {
-					syncCondition.StorageResource = storageConfig.StorageGroupResource.String()
+				if syncGR != storageGVR.GroupResource() {
+					syncCondition.StorageResource = storageGVR.GroupResource().String()
 				}
 				groupResourceStatus.addSyncCondition(syncGVR, syncCondition)
 
@@ -151,10 +151,10 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					convertor = scheme.UnstructuredScheme
 				}
 				storageResourceSyncConfigs[storageGVR] = syncConfig{
-					kind:          apiResource.Kind,
-					syncResource:  syncGVR,
-					storageConfig: storageConfig,
-					convertor:     convertor,
+					kind:                  apiResource.Kind,
+					syncResource:          syncGVR,
+					resourceStorageConfig: &storage.ResourceStorageConfig{ResourceConfig: *resourceConfig},
+					convertor:             convertor,
 				}
 			}
 		}

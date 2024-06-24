@@ -19,8 +19,8 @@ import (
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/informer"
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
@@ -135,7 +135,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 	synchro.resourceNegotiator = &ResourceNegotiator{
 		name:                  name,
-		resourceStorageConfig: storageconfig.NewStorageConfigFactory(),
+		resourceConfigFactory: resourceconfigfactory.New(),
 		dynamicDiscovery:      synchro.dynamicDiscovery,
 	}
 	synchro.groupResourceStatus.Store((*GroupResourceStatus)(nil))
@@ -342,7 +342,7 @@ func (s *ClusterSynchro) refreshSyncResources() {
 				continue
 			}
 
-			resourceStorage, err := s.storage.NewResourceStorage(config.storageConfig)
+			resourceStorage, err := s.storage.NewResourceStorage(config.resourceStorageConfig)
 			if err != nil {
 				klog.ErrorS(err, "Failed to create resource storage", "cluster", s.name, "storage resource", storageGVR)
 				updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource storage failed: %s", err))

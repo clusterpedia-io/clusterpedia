@@ -93,7 +93,7 @@ func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceS
 	synchro := &ResourceSynchro{
 		cluster:         cluster,
 		syncResource:    config.GroupVersionResource,
-		storageResource: storageConfig.StorageGroupResource.WithVersion(storageConfig.StorageVersion.Version),
+		storageResource: storageConfig.StorageResource,
 
 		pageSize:      config.PageSizeForInformer,
 		listerWatcher: config.ListerWatcher,
@@ -104,7 +104,7 @@ func newResourceSynchro(cluster string, config ResourceSynchroConfig) *ResourceS
 
 		storage:       config.ResourceStorage,
 		convertor:     config.ObjectConvertor,
-		memoryVersion: storageConfig.MemoryVersion,
+		memoryVersion: storageConfig.MemoryResource.GroupVersion(),
 
 		stopped:              make(chan struct{}),
 		isRunnableForStorage: atomic.NewBool(true),
