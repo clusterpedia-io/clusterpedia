@@ -20,8 +20,8 @@ import (
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/scheme"
 	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/negotiation"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
@@ -48,7 +48,7 @@ func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFac
 
 	list := &internal.CollectionResourceList{}
 	storages := make(map[string]storage.CollectionResourceStorage, len(crs))
-	configFactory := storageconfig.NewStorageConfigFactory()
+	configFactory := resourceconfigfactory.New()
 	for _, cr := range crs {
 		for irt := range cr.ResourceTypes {
 			rt := &cr.ResourceTypes[irt]
@@ -59,9 +59,9 @@ func NewREST(serializer runtime.NegotiatedSerializer, factory storage.StorageFac
 				}
 
 				*rt = internal.CollectionResourceType{
-					Group:    config.StorageGroupResource.Group,
-					Version:  config.StorageVersion.Version,
-					Resource: config.StorageGroupResource.Resource,
+					Group:    config.StorageResource.Group,
+					Version:  config.StorageResource.Version,
+					Resource: config.StorageResource.Resource,
 				}
 			}
 		}

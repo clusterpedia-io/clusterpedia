@@ -28,16 +28,16 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/printers"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme/unstructured"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )
 
 type RESTManager struct {
 	serializer                 runtime.NegotiatedSerializer
 	storageFactory             storage.StorageFactory
-	resourcetSorageConfig      *storageconfig.StorageConfigFactory
+	resourceConfigFactory      *resourceconfigfactory.ResourceConfigFactory
 	equivalentResourceRegistry runtime.EquivalentResourceMapper
 
 	lock      sync.Mutex
@@ -87,7 +87,7 @@ func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType st
 	manager := &RESTManager{
 		serializer:                 serializer,
 		storageFactory:             storageFactory,
-		resourcetSorageConfig:      storageconfig.NewStorageConfigFactory(),
+		resourceConfigFactory:      resourceconfigfactory.New(),
 		equivalentResourceRegistry: runtime.NewEquivalentResourceRegistry(),
 		requestVerbs:               requestVerbs,
 	}
@@ -270,12 +270,13 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 }
 
 func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.resourcetSorageConfig.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
+	resourceConfig, err := m.resourceConfigFactory.NewLegacyResourceConfig(gvr.GroupResource(), namespaced)
 	if err != nil {
 		return nil, err
 	}
 
-	resourceStorage, err := m.storageFactory.NewResourceStorage(storageConfig)
+	config := &storage.ResourceStorageConfig{ResourceConfig: *resourceConfig}
+	resourceStorage, err := m.storageFactory.NewResourceStorage(config)
 	if err != nil {
 		return nil, err
 	}
@@ -284,11 +285,11 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 		DefaultQualifiedResource: gvr.GroupResource(),
 
 		NewFunc: func() runtime.Object {
-			obj, _ := scheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind))
+			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.MemoryResource.GroupVersion().WithKind(kind))
 			return obj
 		},
 		NewListFunc: func() runtime.Object {
-			obj, _ := scheme.LegacyResourceScheme.New(storageConfig.MemoryVersion.WithKind(kind + "List"))
+			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.MemoryResource.GroupVersion().WithKind(kind + "List"))
 			return obj
 		},
 
@@ -297,12 +298,13 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 }
 
 func (m *RESTManager) genUnstructuredRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
-	storageConfig, err := m.resourcetSorageConfig.NewUnstructuredConfig(gvr, namespaced)
+	resourceConfig, err := m.resourceConfigFactory.NewUnstructuredConfig(gvr, namespaced)
 	if err != nil {
 		return nil, err
 	}
 
-	resourceStorage, err := m.storageFactory.NewResourceStorage(storageConfig)
+	config := &storage.ResourceStorageConfig{ResourceConfig: *resourceConfig}
+	resourceStorage, err := m.storageFactory.NewResourceStorage(config)
 	if err != nil {
 		return nil, err
 	}
@@ -310,12 +312,12 @@ func (m *RESTManager) genUnstructuredRESTStorage(gvr schema.GroupVersionResource
 	return &resourcerest.RESTStorage{
 		NewFunc: func() runtime.Object {
 			obj := &unstructured.Unstructured{}
-			obj.SetGroupVersionKind(storageConfig.MemoryVersion.WithKind(kind))
+			obj.SetGroupVersionKind(resourceConfig.MemoryResource.GroupVersion().WithKind(kind))
 			return obj
 		},
 		NewListFunc: func() runtime.Object {
 			obj := &unstructured.UnstructuredList{}
-			obj.SetGroupVersionKind(storageConfig.MemoryVersion.WithKind(kind + "List"))
+			obj.SetGroupVersionKind(resourceConfig.MemoryResource.GroupVersion().WithKind(kind + "List"))
 			return obj
 		},
 

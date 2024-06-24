@@ -50,6 +50,7 @@ type ResourceStorage struct {
 	CrvSynchro    *cache.ClusterResourceVersionSynchro
 	incoming      chan ClusterWatchEvent
 	storageConfig *storage.ResourceStorageConfig
+	memoryVersion schema.GroupVersion
 }
 
 func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
@@ -62,7 +63,7 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 		return err
 	}
 
-	err = s.watchCache.Add(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	err = s.watchCache.Add(obj, cluster, resourceVersion, s.storageConfig.Codec, s.memoryVersion)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
 	}
@@ -76,7 +77,7 @@ func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtim
 		return err
 	}
 
-	err = s.watchCache.Update(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	err = s.watchCache.Update(obj, cluster, resourceVersion, s.storageConfig.Codec, s.memoryVersion)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
 	}
@@ -108,7 +109,7 @@ func (s *ResourceStorage) Delete(ctx context.Context, cluster string, obj runtim
 		return err
 	}
 
-	err = s.watchCache.Delete(obj, cluster, resourceVersion, s.storageConfig.Codec, s.storageConfig.MemoryVersion)
+	err = s.watchCache.Delete(obj, cluster, resourceVersion, s.storageConfig.Codec, s.memoryVersion)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to add watch event object (%#v) to store: %v", obj, err))
 	}

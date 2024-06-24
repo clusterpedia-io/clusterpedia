@@ -21,12 +21,10 @@ func (s *StorageFactory) GetSupportedRequestVerbs() []string {
 
 func (s *StorageFactory) NewResourceStorage(config *storage.ResourceStorageConfig) (storage.ResourceStorage, error) {
 	return &ResourceStorage{
-		db:    s.db,
-		codec: config.Codec,
+		groupResource: config.StorageResource.GroupResource(),
 
-		storageGroupResource: config.StorageGroupResource,
-		storageVersion:       config.StorageVersion,
-		memoryVersion:        config.MemoryVersion,
+		db:     s.db,
+		config: *config,
 	}, nil
 }
 

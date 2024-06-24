@@ -16,22 +16,22 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/optin"
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 
+	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
-	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )
 
 var (
-	storageConfigFactory = storageconfig.NewStorageConfigFactory()
-	hubGVRs              = make(map[schema.GroupVersionResource]schema.GroupVersionResource)
+	resourceConfigFactory = resourceconfigfactory.New()
+	hubGVRs               = make(map[schema.GroupVersionResource]schema.GroupVersionResource)
 )
 
 func init() {
 	for gvr := range generators {
-		config, err := storageConfigFactory.NewLegacyResourceConfig(gvr.GroupResource(), false)
+		memory, err := resourceConfigFactory.MemoryResource(gvr)
 		if err != nil {
 			panic(err)
 		}
-		hubGVRs[config.StorageGroupResource.WithVersion(config.MemoryVersion.Version)] = gvr
+		hubGVRs[memory] = gvr
 	}
 }
 
@@ -101,11 +101,10 @@ func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource sche
 		return nil
 	}
 
-	config, err := storageConfigFactory.NewLegacyResourceConfig(resource.GroupResource(), false)
+	hub, err := resourceConfigFactory.MemoryResource(resource)
 	if err != nil {
 		return nil
 	}
-	hub := config.StorageGroupResource.WithVersion(config.MemoryVersion.Version)
 	metricsGVR, ok := hubGVRs[hub]
 	if !ok {
 		return nil
@@ -134,11 +133,11 @@ func (builder *MetricsStoreBuilder) GetMetricStore(cluster string, resource sche
 			return obj, nil
 		}
 
-		hobj, err := scheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), config.MemoryVersion)
+		hobj, err := scheme.LegacyResourceScheme.ConvertToVersion(obj.(runtime.Object), hub.GroupVersion())
 		if err != nil {
 			return nil, err
 		}
-		if metricsGVR.GroupVersion() == config.MemoryVersion {
+		if metricsGVR.GroupVersion() == hub.GroupVersion() {
 			return hobj, nil
 		}
 		return scheme.LegacyResourceScheme.ConvertToVersion(hobj, metricsGVR.GroupVersion())

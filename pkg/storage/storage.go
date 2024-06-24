@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig"
 )
 
 type StorageFactory interface {
@@ -46,15 +47,7 @@ type CollectionResourceStorage interface {
 }
 
 type ResourceStorageConfig struct {
-	Namespaced bool
-
-	GroupResource        schema.GroupResource
-	StorageGroupResource schema.GroupResource
-
-	MemoryVersion  schema.GroupVersion
-	StorageVersion schema.GroupVersion
-
-	Codec runtime.Codec
+	resourceconfig.ResourceConfig
 }
 
 type storageRecoverableExceptionError struct {
