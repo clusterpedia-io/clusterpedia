@@ -22,6 +22,7 @@ import (
 	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
@@ -36,11 +37,12 @@ type ClusterSynchro struct {
 	RESTConfig           *rest.Config
 	ClusterStatusUpdater ClusterStatusUpdater
 
-	storage              storage.StorageFactory
-	syncConfig           ClusterSyncConfig
-	healthChecker        *healthChecker
-	dynamicDiscovery     discovery.DynamicDiscoveryInterface
-	listerWatcherFactory informer.DynamicListerWatcherFactory
+	storage                storage.StorageFactory
+	resourceSynchroFactory resourcesynchro.SynchroFactory
+	syncConfig             ClusterSyncConfig
+	healthChecker          *healthChecker
+	dynamicDiscovery       discovery.DynamicDiscoveryInterface
+	listerWatcherFactory   informer.DynamicListerWatcherFactory
 
 	closeOnce sync.Once
 	closer    chan struct{}
@@ -123,6 +125,12 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
 	}
 
+	if factory, ok := storage.(resourcesynchro.SynchroFactory); ok {
+		synchro.resourceSynchroFactory = factory
+	} else {
+		synchro.resourceSynchroFactory = DefaultResourceSynchroFactory{}
+	}
+
 	var refresherOnce sync.Once
 	synchro.dynamicDiscovery.Prepare(discovery.PrepareConfig{
 		ResourceMutationHandler: synchro.resetSyncResources,
@@ -167,8 +175,9 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 
 func (s *ClusterSynchro) GetMetricsWriterList() (writers metricsstore.MetricsWriterList) {
 	s.storageResourceSynchros.Range(func(_, value interface{}) bool {
-		if synchro := value.(*ResourceSynchro); synchro.metricsWriter != nil {
-			writers = append(writers, synchro.metricsWriter)
+		synchro := value.(resourcesynchro.Synchro)
+		if writer := synchro.GetMetricsWriter(); writer != nil {
+			writers = append(writers, writer)
 		}
 		return true
 	})
@@ -237,7 +246,7 @@ func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 				shutdownCount := 0
 				statuses := make(map[string][]string)
 				s.storageResourceSynchros.Range(func(key, value interface{}) bool {
-					synchro := value.(*ResourceSynchro)
+					synchro := value.(resourcesynchro.Synchro)
 					status := synchro.Status()
 					if status.Status == clusterv1alpha2.ResourceSyncStatusStop && status.Reason == "" {
 						shutdownCount++
@@ -245,7 +254,7 @@ func (s *ClusterSynchro) Shutdown(updateStatus bool) {
 					}
 
 					gvr := key.(schema.GroupVersionResource)
-					sr := fmt.Sprintf("%s,%s,%s", status.Status, status.Reason, synchro.runningStage)
+					sr := fmt.Sprintf("%s,%s,%s", status.Status, status.Reason, synchro.Stage())
 					msg := fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
 					statuses[sr] = append(statuses[sr], msg)
 					return true
@@ -359,18 +368,23 @@ func (s *ClusterSynchro) refreshSyncResources() {
 			if s.syncConfig.MetricsStoreBuilder != nil {
 				metricsStore = s.syncConfig.MetricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
 			}
-			synchro := newResourceSynchro(s.name,
-				ResourceSynchroConfig{
+			synchro, err := s.resourceSynchroFactory.NewResourceSynchro(s.name,
+				resourcesynchro.Config{
 					GroupVersionResource: config.syncResource,
 					Kind:                 config.kind,
 					ListerWatcher:        s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
 					ObjectConvertor:      config.convertor,
-					ResourceStorage:      resourceStorage,
 					MetricsStore:         metricsStore,
 					ResourceVersions:     rvs,
 					PageSizeForInformer:  s.syncConfig.PageSizeForResourceSync,
+					ResourceStorage:      resourceStorage,
 				},
 			)
+			if err != nil {
+				klog.ErrorS(err, "Failed to create resource synchro", "cluster", s.name, "storage resource", storageGVR)
+				updateSyncConditions(storageGVR, clusterv1alpha2.ResourceSyncStatusPending, "SynchroCreateFailed", fmt.Sprintf("new resource synchro failed: %s", err))
+				continue
+			}
 			s.waitGroup.StartWithChannel(s.closer, synchro.Run)
 			s.storageResourceSynchros.Store(storageGVR, synchro)
 
@@ -400,7 +414,7 @@ func (s *ClusterSynchro) refreshSyncResources() {
 	for storageGVR := range removedStorageGVRs {
 		if synchro, ok := s.storageResourceSynchros.Load(storageGVR); ok {
 			select {
-			case <-synchro.(*ResourceSynchro).Close():
+			case <-synchro.(resourcesynchro.Synchro).Close():
 			case <-s.closer:
 				return
 			}
@@ -475,7 +489,7 @@ func (s *ClusterSynchro) runner() {
 			go s.dynamicDiscovery.Start(s.handlerStopCh)
 
 			s.storageResourceSynchros.Range(func(_, value interface{}) bool {
-				go value.(*ResourceSynchro).Start(s.handlerStopCh)
+				go value.(resourcesynchro.Synchro).Start(s.handlerStopCh)
 				return true
 			})
 		}()
@@ -542,12 +556,13 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 				gr := schema.GroupResource{Group: status.Group, Resource: resource.Name}
 				storageGVR := cond.StorageGVR(gr)
 				if value, ok := s.storageResourceSynchros.Load(storageGVR); ok {
-					synchro := value.(*ResourceSynchro)
-					if gr != synchro.syncResource.GroupResource() {
-						cond.SyncResource = synchro.syncResource.GroupResource().String()
+					synchro := value.(resourcesynchro.Synchro)
+					syncedGVR := synchro.GroupVersionResource()
+					if gr != syncedGVR.GroupResource() {
+						cond.SyncResource = syncedGVR.GroupResource().String()
 					}
-					if cond.Version != synchro.syncResource.Version {
-						cond.SyncVersion = synchro.syncResource.Version
+					if cond.Version != syncedGVR.Version {
+						cond.SyncVersion = syncedGVR.Version
 					}
 
 					status := synchro.Status()
