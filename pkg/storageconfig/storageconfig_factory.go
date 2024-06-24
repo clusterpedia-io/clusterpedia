@@ -8,7 +8,7 @@ import (
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	apisstorage "k8s.io/kubernetes/pkg/apis/storage"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 

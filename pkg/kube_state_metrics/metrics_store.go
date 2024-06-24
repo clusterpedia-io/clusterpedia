@@ -16,7 +16,7 @@ import (
 	"k8s.io/kube-state-metrics/v2/pkg/optin"
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storageconfig"
 )
 

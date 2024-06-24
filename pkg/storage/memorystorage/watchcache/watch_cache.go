@@ -20,7 +20,7 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
-	"github.com/clusterpedia-io/clusterpedia/pkg/scheme"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	utilwatch "github.com/clusterpedia-io/clusterpedia/pkg/utils/watch"
 )
 
