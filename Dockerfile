@@ -6,7 +6,7 @@ ARG BIN_NAME
 ARG TARGETARCH
 RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
 
-FROM alpine:3.18.5
+FROM alpine:3.20.2
 RUN apk add --no-cache gcompat
 
 # https://pkg.go.dev/net#hdr-Name_Resolution
