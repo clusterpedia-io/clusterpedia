@@ -4,8 +4,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -23,30 +23,10 @@ type ClusterSyncResourcesLister interface {
 
 // clusterSyncResourcesLister implements the ClusterSyncResourcesLister interface.
 type clusterSyncResourcesLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.ClusterSyncResources]
 }
 
 // NewClusterSyncResourcesLister returns a new ClusterSyncResourcesLister.
 func NewClusterSyncResourcesLister(indexer cache.Indexer) ClusterSyncResourcesLister {
-	return &clusterSyncResourcesLister{indexer: indexer}
-}
-
-// List lists all ClusterSyncResources in the indexer.
-func (s *clusterSyncResourcesLister) List(selector labels.Selector) (ret []*v1alpha2.ClusterSyncResources, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ClusterSyncResources))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterSyncResources from the index for a given name.
-func (s *clusterSyncResourcesLister) Get(name string) (*v1alpha2.ClusterSyncResources, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("clustersyncresources"), name)
-	}
-	return obj.(*v1alpha2.ClusterSyncResources), nil
+	return &clusterSyncResourcesLister{listers.New[*v1alpha2.ClusterSyncResources](indexer, v1alpha2.Resource("clustersyncresources"))}
 }
