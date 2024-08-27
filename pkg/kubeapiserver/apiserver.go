@@ -16,6 +16,7 @@ import (
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/component-base/tracing"
 
@@ -23,7 +24,6 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
-	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
 
 var (
@@ -76,15 +76,15 @@ type Config struct {
 }
 
 func (c *Config) Complete() CompletedConfig {
+	if c.GenericConfig.EffectiveVersion == nil {
+		c.GenericConfig.EffectiveVersion = version.DefaultKubeEffectiveVersion()
+	}
+
 	completed := &completedConfig{
 		GenericConfig: c.GenericConfig.Complete(),
 		ExtraConfig:   &c.ExtraConfig,
 	}
 
-	if c.GenericConfig.Version == nil {
-		version := version.GetKubeVersion()
-		c.GenericConfig.Version = &version
-	}
 	c.GenericConfig.RequestInfoResolver = wrapRequestInfoResolverForNamespace{
 		c.GenericConfig.RequestInfoResolver,
 	}
