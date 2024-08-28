@@ -578,8 +578,8 @@ k8s.io/kube-state-metrics/v2 v2.13.0 h1:g5OV0cwrDKvyrQApYxI7Ny+vFUgU3X6MYrnIzdCA
 k8s.io/kube-state-metrics/v2 v2.13.0/go.mod h1:sGt/NFkZkA4hqb4cVd/xG2G17dzZ72TQXqSpHn8rF/U=
 k8s.io/kubernetes v1.31.0 h1:sYAB12TTWexXKp4RxqJMm/7EC+P0mNOgn4Xdj5eu7HM=
 k8s.io/kubernetes v1.31.0/go.mod h1:UTpGn7nxrUrPWw5hNIYTAjodcWIvLakgHpLtfrr6GC8=
-k8s.io/sample-controller v0.31.0 h1:dkeo/KFMMlEPwfCoXH8SBdOSMPXNGT0NTjYja/bU7gA=
-k8s.io/sample-controller v0.31.0/go.mod h1:bWyBkTeQ1mv/bmlF9gthWNPUSZNzZE90Y2uLgy7pT0A=
+k8s.io/sample-controller v0.30.3 h1:oZTxERF8U3gANT2H5VxpkW32asgmW0IYGyUv9Opspvs=
+k8s.io/sample-controller v0.30.3/go.mod h1:yhy/cWCzevQLa2+7Gvj0J9+xzmNExypunffSNANBy7o=
 k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 h1:pUdcCO1Lk/tbT5ztQWOBi5HBgbBP1J8+AsQnQCKsi8A=
 k8s.io/utils v0.0.0-20240711033017-18e509b52bc8/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 h1:2770sDpzrjjsAtVhSeUFseziht227YAWYHLGNM8QPwY=
