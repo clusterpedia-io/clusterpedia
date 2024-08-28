@@ -10,10 +10,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/discovery"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
@@ -84,17 +84,13 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (cfg *Config) Complete() CompletedConfig {
+	cfg.GenericConfig.EffectiveVersion = version.DefaultBuildEffectiveVersion()
+
 	c := completedConfig{
 		cfg.GenericConfig.Complete(),
 		cfg.GenericConfig.ClientConfig,
 		cfg.StorageFactory,
 	}
-
-	c.GenericConfig.Version = &version.Info{
-		Major: "1",
-		Minor: "0",
-	}
-
 	return CompletedConfig{&c}
 }
 
@@ -159,8 +155,8 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	}
 
 	genericServer.AddPostStartHookOrDie("start-clusterpedia-informers", func(context genericapiserver.PostStartHookContext) error {
-		clusterpediaInformerFactory.Start(context.StopCh)
-		clusterpediaInformerFactory.WaitForCacheSync(context.StopCh)
+		clusterpediaInformerFactory.Start(context.Done())
+		clusterpediaInformerFactory.WaitForCacheSync(context.Done())
 
 		return nil
 	})
@@ -171,7 +167,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 }
 
 func (server *ClusterPediaServer) Run(ctx context.Context) error {
-	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
+	return server.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 type hooksDelegate struct {

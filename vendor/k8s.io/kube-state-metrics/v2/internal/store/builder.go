@@ -38,10 +38,6 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/discovery"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -223,32 +219,43 @@ func (b *Builder) WithCustomResourceStoreFactories(fs ...customresource.Registry
 	}
 }
 
-// WithAllowAnnotations configures which annotations can be returned for metrics
-func (b *Builder) WithAllowAnnotations(annotations map[string][]string) {
-	if len(annotations) > 0 {
-		b.allowAnnotationsList = annotations
+// allowList validates the given map and checks if the resources exists.
+// If there is a '*' as key, return new map with all enabled resources.
+func (b *Builder) allowList(list map[string][]string) (map[string][]string, error) {
+	if len(list) == 0 {
+		return nil, nil
 	}
+
+	for l := range list {
+		if !resourceExists(l) && l != "*" {
+			return nil, fmt.Errorf("resource %s does not exist. Available resources: %s", l, strings.Join(availableResources(), ","))
+		}
+	}
+
+	// "*" takes precedence over other specifications
+	allowedList, ok := list["*"]
+	if !ok {
+		return list, nil
+	}
+	m := make(map[string][]string)
+	for _, resource := range b.enabledResources {
+		m[resource] = allowedList
+	}
+	return m, nil
+}
+
+// WithAllowAnnotations configures which annotations can be returned for metrics
+func (b *Builder) WithAllowAnnotations(annotations map[string][]string) error {
+	var err error
+	b.allowAnnotationsList, err = b.allowList(annotations)
+	return err
 }
 
 // WithAllowLabels configures which labels can be returned for metrics
 func (b *Builder) WithAllowLabels(labels map[string][]string) error {
-	if len(labels) > 0 {
-		for label := range labels {
-			if !resourceExists(label) && label != "*" {
-				return fmt.Errorf("resource %s does not exist. Available resources: %s", label, strings.Join(availableResources(), ","))
-			}
-		}
-		b.allowLabelsList = labels
-		// "*" takes precedence over other specifications
-		if allowedLabels, ok := labels["*"]; ok {
-			m := make(map[string][]string)
-			for _, resource := range b.enabledResources {
-				m[resource] = allowedLabels
-			}
-			b.allowLabelsList = m
-		}
-	}
-	return nil
+	var err error
+	b.allowLabelsList, err = b.allowList(labels)
+	return err
 }
 
 // Build initializes and registers all enabled stores.
@@ -431,7 +438,7 @@ func (b *Builder) buildReplicationControllerStores() []cache.Store {
 }
 
 func (b *Builder) buildResourceQuotaStores() []cache.Store {
-	return b.buildStoresFunc(resourceQuotaMetricFamilies, &v1.ResourceQuota{}, createResourceQuotaListWatch, b.useAPIServerCache)
+	return b.buildStoresFunc(resourceQuotaMetricFamilies(b.allowAnnotationsList["resourcequotas"], b.allowLabelsList["resourcequotas"]), &v1.ResourceQuota{}, createResourceQuotaListWatch, b.useAPIServerCache)
 }
 
 func (b *Builder) buildSecretStores() []cache.Store {
@@ -544,10 +551,7 @@ func (b *Builder) buildCustomResourceStores(resourceName string,
 	metricFamilies = generator.FilterFamilyGenerators(b.familyGeneratorFilter, metricFamilies)
 	composedMetricGenFuncs := generator.ComposeMetricGenFuncs(metricFamilies)
 
-	var familyHeaders []string
-	if b.hasResources(resourceName, expectedType) {
-		familyHeaders = generator.ExtractMetricFamilyHeaders(metricFamilies)
-	}
+	familyHeaders := generator.ExtractMetricFamilyHeaders(metricFamilies)
 
 	gvr := util.GVRFromType(resourceName, expectedType)
 	var gvrString string
@@ -588,65 +592,6 @@ func (b *Builder) buildCustomResourceStores(resourceName string,
 	}
 
 	return stores
-}
-
-func (b *Builder) hasResources(resourceName string, expectedType interface{}) bool {
-	gvr := util.GVRFromType(resourceName, expectedType)
-	if gvr == nil {
-		return true
-	}
-	discoveryClient, err := util.CreateDiscoveryClient(b.utilOptions.Apiserver, b.utilOptions.Kubeconfig)
-	if err != nil {
-		klog.ErrorS(err, "Failed to create discovery client")
-		return false
-	}
-	g := gvr.Group
-	v := gvr.Version
-	r := gvr.Resource
-	isCRDInstalled, err := discovery.IsResourceEnabled(discoveryClient, schema.GroupVersionResource{
-		Group:    g,
-		Version:  v,
-		Resource: r,
-	})
-	if err != nil {
-		klog.ErrorS(err, "Failed to check if CRD is enabled", "group", g, "version", v, "resource", r)
-		return false
-	}
-	if !isCRDInstalled {
-		klog.InfoS("CRD is not installed", "group", g, "version", v, "resource", r)
-		return false
-	}
-	// Wait for the resource to come up.
-	timer := time.NewTimer(ResourceDiscoveryTimeout)
-	ticker := time.NewTicker(ResourceDiscoveryInterval)
-	dynamicClient, err := util.CreateDynamicClient(b.utilOptions.Apiserver, b.utilOptions.Kubeconfig)
-	if err != nil {
-		klog.ErrorS(err, "Failed to create dynamic client")
-		return false
-	}
-	var list *unstructured.UnstructuredList
-	for range ticker.C {
-		select {
-		case <-timer.C:
-			klog.InfoS("No CRs found for GVR", "group", g, "version", v, "resource", r)
-			return false
-		default:
-			list, err = dynamicClient.Resource(schema.GroupVersionResource{
-				Group:    g,
-				Version:  v,
-				Resource: r,
-			}).List(b.ctx, metav1.ListOptions{})
-			if err != nil {
-				klog.ErrorS(err, "Failed to list objects", "group", g, "version", v, "resource", r)
-				return false
-			}
-		}
-		if len(list.Items) > 0 {
-			break
-		}
-	}
-
-	return true
 }
 
 // startReflector starts a Kubernetes client-go reflector with the given

@@ -24,20 +24,22 @@ var clustersyncresourcesKind = v1alpha2.SchemeGroupVersion.WithKind("ClusterSync
 
 // Get takes name of the clusterSyncResources, and returns the corresponding clusterSyncResources object, and an error if there is any.
 func (c *FakeClusterSyncResources) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterSyncResources, err error) {
+	emptyResult := &v1alpha2.ClusterSyncResources{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(clustersyncresourcesResource, name), &v1alpha2.ClusterSyncResources{})
+		Invokes(testing.NewRootGetActionWithOptions(clustersyncresourcesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ClusterSyncResources), err
 }
 
 // List takes label and field selectors, and returns the list of ClusterSyncResources that match those selectors.
 func (c *FakeClusterSyncResources) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ClusterSyncResourcesList, err error) {
+	emptyResult := &v1alpha2.ClusterSyncResourcesList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(clustersyncresourcesResource, clustersyncresourcesKind, opts), &v1alpha2.ClusterSyncResourcesList{})
+		Invokes(testing.NewRootListActionWithOptions(clustersyncresourcesResource, clustersyncresourcesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -56,25 +58,27 @@ func (c *FakeClusterSyncResources) List(ctx context.Context, opts v1.ListOptions
 // Watch returns a watch.Interface that watches the requested clusterSyncResources.
 func (c *FakeClusterSyncResources) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(clustersyncresourcesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(clustersyncresourcesResource, opts))
 }
 
 // Create takes the representation of a clusterSyncResources and creates it.  Returns the server's representation of the clusterSyncResources, and an error, if there is any.
 func (c *FakeClusterSyncResources) Create(ctx context.Context, clusterSyncResources *v1alpha2.ClusterSyncResources, opts v1.CreateOptions) (result *v1alpha2.ClusterSyncResources, err error) {
+	emptyResult := &v1alpha2.ClusterSyncResources{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(clustersyncresourcesResource, clusterSyncResources), &v1alpha2.ClusterSyncResources{})
+		Invokes(testing.NewRootCreateActionWithOptions(clustersyncresourcesResource, clusterSyncResources, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ClusterSyncResources), err
 }
 
 // Update takes the representation of a clusterSyncResources and updates it. Returns the server's representation of the clusterSyncResources, and an error, if there is any.
 func (c *FakeClusterSyncResources) Update(ctx context.Context, clusterSyncResources *v1alpha2.ClusterSyncResources, opts v1.UpdateOptions) (result *v1alpha2.ClusterSyncResources, err error) {
+	emptyResult := &v1alpha2.ClusterSyncResources{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(clustersyncresourcesResource, clusterSyncResources), &v1alpha2.ClusterSyncResources{})
+		Invokes(testing.NewRootUpdateActionWithOptions(clustersyncresourcesResource, clusterSyncResources, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ClusterSyncResources), err
 }
@@ -88,7 +92,7 @@ func (c *FakeClusterSyncResources) Delete(ctx context.Context, name string, opts
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeClusterSyncResources) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(clustersyncresourcesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(clustersyncresourcesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha2.ClusterSyncResourcesList{})
 	return err
@@ -96,10 +100,11 @@ func (c *FakeClusterSyncResources) DeleteCollection(ctx context.Context, opts v1
 
 // Patch applies the patch and returns the patched clusterSyncResources.
 func (c *FakeClusterSyncResources) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ClusterSyncResources, err error) {
+	emptyResult := &v1alpha2.ClusterSyncResources{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(clustersyncresourcesResource, name, pt, data, subresources...), &v1alpha2.ClusterSyncResources{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(clustersyncresourcesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ClusterSyncResources), err
 }

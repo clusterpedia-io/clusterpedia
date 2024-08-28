@@ -4,14 +4,13 @@ package v1alpha2
 
 import (
 	"context"
-	"time"
 
 	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	scheme "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // ClusterSyncResourcesGetter has a method to return a ClusterSyncResourcesInterface.
@@ -35,118 +34,18 @@ type ClusterSyncResourcesInterface interface {
 
 // clusterSyncResources implements ClusterSyncResourcesInterface
 type clusterSyncResources struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha2.ClusterSyncResources, *v1alpha2.ClusterSyncResourcesList]
 }
 
 // newClusterSyncResources returns a ClusterSyncResources
 func newClusterSyncResources(c *ClusterV1alpha2Client) *clusterSyncResources {
 	return &clusterSyncResources{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha2.ClusterSyncResources, *v1alpha2.ClusterSyncResourcesList](
+			"clustersyncresources",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha2.ClusterSyncResources { return &v1alpha2.ClusterSyncResources{} },
+			func() *v1alpha2.ClusterSyncResourcesList { return &v1alpha2.ClusterSyncResourcesList{} }),
 	}
-}
-
-// Get takes name of the clusterSyncResources, and returns the corresponding clusterSyncResources object, and an error if there is any.
-func (c *clusterSyncResources) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterSyncResources, err error) {
-	result = &v1alpha2.ClusterSyncResources{}
-	err = c.client.Get().
-		Resource("clustersyncresources").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of ClusterSyncResources that match those selectors.
-func (c *clusterSyncResources) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ClusterSyncResourcesList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha2.ClusterSyncResourcesList{}
-	err = c.client.Get().
-		Resource("clustersyncresources").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested clusterSyncResources.
-func (c *clusterSyncResources) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("clustersyncresources").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a clusterSyncResources and creates it.  Returns the server's representation of the clusterSyncResources, and an error, if there is any.
-func (c *clusterSyncResources) Create(ctx context.Context, clusterSyncResources *v1alpha2.ClusterSyncResources, opts v1.CreateOptions) (result *v1alpha2.ClusterSyncResources, err error) {
-	result = &v1alpha2.ClusterSyncResources{}
-	err = c.client.Post().
-		Resource("clustersyncresources").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterSyncResources).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a clusterSyncResources and updates it. Returns the server's representation of the clusterSyncResources, and an error, if there is any.
-func (c *clusterSyncResources) Update(ctx context.Context, clusterSyncResources *v1alpha2.ClusterSyncResources, opts v1.UpdateOptions) (result *v1alpha2.ClusterSyncResources, err error) {
-	result = &v1alpha2.ClusterSyncResources{}
-	err = c.client.Put().
-		Resource("clustersyncresources").
-		Name(clusterSyncResources.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterSyncResources).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the clusterSyncResources and deletes it. Returns an error if one occurs.
-func (c *clusterSyncResources) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("clustersyncresources").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *clusterSyncResources) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("clustersyncresources").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched clusterSyncResources.
-func (c *clusterSyncResources) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ClusterSyncResources, err error) {
-	result = &v1alpha2.ClusterSyncResources{}
-	err = c.client.Patch(pt).
-		Resource("clustersyncresources").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }
