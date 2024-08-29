@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
@@ -26,7 +27,7 @@ type ServerConfig struct {
 }
 
 func RunServer(config ServerConfig, getter ClusterMetricsWriterListGetter) {
-	durationVec := promauto.With(metrics.DefaultRegistry()).NewHistogramVec(
+	durationVec := promauto.With(legacyregistry.Registerer()).NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:        "http_request_duration_seconds",
 			Help:        "A histogram of requests for clusterpedia's kube-state-metrics metrics handler.",
