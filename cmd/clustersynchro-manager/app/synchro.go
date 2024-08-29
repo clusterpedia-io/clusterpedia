@@ -21,7 +21,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/options"
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
-	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
+	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
@@ -88,7 +88,7 @@ func Run(ctx context.Context, c *config.Config) error {
 	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory, c.ClusterSyncConfig, c.ShardingName)
 
 	go func() {
-		metrics.RunServer(c.MetricsServerConfig)
+		metricsserver.Run(c.MetricsServerConfig)
 	}()
 
 	if c.KubeMetricsServerConfig != nil {

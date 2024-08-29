@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/kube-state-metrics/v2/pkg/options"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
+	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 )
 
 var defaultResources = options.ResourceSet{
@@ -87,7 +87,7 @@ func (o *Options) MetricsStoreBuilderConfig() *MetricsStoreBuilderConfig {
 	}
 }
 
-func (o *Options) ServerConfig(config metrics.Config) *ServerConfig {
+func (o *Options) ServerConfig(config metricsserver.Config) *ServerConfig {
 	if !o.EnableKubeStateMetrics {
 		return nil
 	}

@@ -16,7 +16,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
-	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
+	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
 
@@ -49,7 +49,7 @@ func RunServer(config ServerConfig, getter ClusterMetricsWriterListGetter) {
 
 	klog.Info("Kube State Metrics Server is running...")
 	// TODO(iceber): handle error
-	_ = web.ListenAndServe(server, flags, metrics.Logger)
+	_ = web.ListenAndServe(server, flags, metricsserver.Logger)
 }
 
 func buildMetricsServer(config ServerConfig, getter ClusterMetricsWriterListGetter, durationObserver prometheus.ObserverVec) *mux.Router {
