@@ -7,7 +7,7 @@ import (
 
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
-	metrics "github.com/clusterpedia-io/clusterpedia/pkg/metrics"
+	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 )
@@ -19,7 +19,7 @@ type Config struct {
 
 	WorkerNumber            int
 	ShardingName            string
-	MetricsServerConfig     metrics.Config
+	MetricsServerConfig     metricsserver.Config
 	KubeMetricsServerConfig *kubestatemetrics.ServerConfig
 	StorageFactory          storage.StorageFactory
 	ClusterSyncConfig       clustersynchro.ClusterSyncConfig

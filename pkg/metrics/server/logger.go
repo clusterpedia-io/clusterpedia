@@ -1,4 +1,4 @@
-package metrics
+package server
 
 import "k8s.io/klog/v2"
 

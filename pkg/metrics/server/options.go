@@ -1,4 +1,4 @@
-package metrics
+package server
 
 import (
 	"net"
@@ -15,7 +15,7 @@ type Options struct {
 	DisableGZIPEncoding bool
 }
 
-func NewMetricsServerOptions() *Options {
+func NewOptions() *Options {
 	return &Options{
 		Host:                "::",
 		Port:                8081,

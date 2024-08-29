@@ -23,7 +23,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
-	"github.com/clusterpedia-io/clusterpedia/pkg/metrics"
+	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
@@ -42,7 +42,7 @@ type Options struct {
 
 	Logs             *logs.Options
 	Storage          *storageoptions.StorageOptions
-	Metrics          *metrics.Options
+	Metrics          *metricsserver.Options
 	KubeStateMetrics *kubestatemetrics.Options
 
 	WorkerNumber            int // WorkerNumber is the number of worker goroutines
@@ -76,7 +76,7 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 
 	options.Logs = logs.NewOptions()
 	options.Storage = storageoptions.NewStorageOptions()
-	options.Metrics = metrics.NewMetricsServerOptions()
+	options.Metrics = metricsserver.NewOptions()
 	options.KubeStateMetrics = kubestatemetrics.NewOptions()
 
 	options.WorkerNumber = 5

@@ -1,4 +1,4 @@
-package metrics
+package server
 
 import (
 	"net/http"
@@ -9,6 +9,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
+	_ "github.com/clusterpedia-io/clusterpedia/pkg/metrics"
 	"github.com/clusterpedia-io/clusterpedia/pkg/pprof"
 	"github.com/clusterpedia-io/clusterpedia/pkg/version"
 )
@@ -20,7 +21,7 @@ type Config struct {
 	DisableGZIPEncoding bool
 }
 
-func RunServer(config Config) {
+func Run(config Config) {
 	server := &http.Server{
 		Handler:           buildMetricsServer(config),
 		ReadHeaderTimeout: 6 * time.Second,
