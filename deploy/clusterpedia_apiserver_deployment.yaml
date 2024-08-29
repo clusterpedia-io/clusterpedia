@@ -41,7 +41,6 @@ spec:
         - /usr/local/bin/apiserver
         - --secure-port=443
         - --storage-config=/etc/clusterpedia/storage/internalstorage-config.yaml
-        - --tracing-config-file=/etc/clusterpedia/trace/tracing-config.yaml
         - -v=3
         env:
         - name: DB_PASSWORD
@@ -61,19 +60,3 @@ spec:
       - name: internalstorage-config
         configMap:
           name: clusterpedia-internalstorage
-      - name: tracing-config
-        configMap:
-          name: clusterpedia-tracing-config
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: clusterpedia-tracing-config
-  namespace: clusterpedia-system
-data:
-  tracing-config.yaml: |
-    apiVersion: apiserver.config.k8s.io/v1beta1
-    kind: TracingConfiguration
-    # default
-    # endpoint: localhost:4317
-    samplingRatePerMillion: 1000000
