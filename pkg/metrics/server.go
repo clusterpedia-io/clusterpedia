@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
+	"k8s.io/component-base/metrics"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/pprof"
@@ -37,10 +38,13 @@ func RunServer(config Config) {
 
 func buildMetricsServer(config Config) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{
-		ErrorLog:           Logger,
-		DisableCompression: config.DisableGZIPEncoding,
-	}))
+	mux.Handle("/metrics", metrics.HandlerWithReset(
+		legacyregistry.DefaultGatherer.(metrics.KubeRegistry),
+		metrics.HandlerOpts{
+			ErrorLog:           Logger,
+			DisableCompression: config.DisableGZIPEncoding,
+		}),
+	)
 	// add profiler
 	pprof.RegisterProfileHandler(mux)
 	// Add index

@@ -1,16 +1,12 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	versionCollector "github.com/prometheus/client_golang/prometheus/collectors/version"
+	"k8s.io/component-base/metrics/legacyregistry"
 )
 
-var registry = prometheus.NewRegistry()
-
-func DefaultRegistry() prometheus.Registerer {
-	return registry
-}
-
 func init() {
-	registry.MustRegister(versionCollector.NewCollector("clusterpedia_kube_state_metrics"))
+	legacyregistry.RawMustRegister(
+		versionCollector.NewCollector("clusterpedia_kube_state_metrics"),
+	)
 }
