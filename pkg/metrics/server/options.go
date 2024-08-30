@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/spf13/pflag"
+	"k8s.io/component-base/metrics"
 )
 
 type Options struct {
@@ -13,6 +14,8 @@ type Options struct {
 
 	TLSConfig           string
 	DisableGZIPEncoding bool
+
+	Metrics *metrics.Options
 }
 
 func NewOptions() *Options {
@@ -20,11 +23,13 @@ func NewOptions() *Options {
 		Host:                "::",
 		Port:                8081,
 		DisableGZIPEncoding: false,
+
+		Metrics: metrics.NewOptions(),
 	}
 }
 
 func (o *Options) Validate() []error {
-	return nil
+	return o.Metrics.Validate()
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -33,9 +38,12 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&o.DisableGZIPEncoding, "metrics-disable-gzip-encoding", o.DisableGZIPEncoding, "Gzip responses when requested by clients via 'Accept-Encoding: gzip' header.")
 	fs.StringVar(&o.TLSConfig, "metrics-tls-config", o.TLSConfig, "Path to the TLS configuration file of metrics")
+	o.Metrics.AddFlags(fs)
 }
 
 func (o *Options) Config() (config Config) {
+	o.Metrics.Apply()
+
 	return Config{
 		Endpoint:            net.JoinHostPort(o.Host, strconv.Itoa(o.Port)),
 		TLSConfig:           o.TLSConfig,

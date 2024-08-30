@@ -17,6 +17,7 @@ import (
 	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
+	"k8s.io/component-base/metrics"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
 	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
@@ -37,6 +38,7 @@ type ClusterPediaServerOptions struct {
 	CoreAPI        *genericoptions.CoreAPIOptions
 	FeatureGate    featuregate.FeatureGate
 	Traces         *genericoptions.TracingOptions
+	Metrics        *metrics.Options
 
 	Storage *storageoptions.StorageOptions
 }
@@ -66,6 +68,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		CoreAPI:        genericoptions.NewCoreAPIOptions(),
 		FeatureGate:    feature.DefaultFeatureGate,
 		Traces:         genericoptions.NewTracingOptions(),
+		Metrics:        metrics.NewOptions(),
 
 		Storage: storageoptions.NewStorageOptions(),
 	}
@@ -75,6 +78,7 @@ func (o *ClusterPediaServerOptions) Validate() error {
 	errors := []error{}
 	errors = append(errors, o.validateGenericOptions()...)
 	errors = append(errors, o.Storage.Validate()...)
+	errors = append(errors, o.Metrics.Validate()...)
 
 	return utilerrors.NewAggregate(errors)
 }
@@ -83,6 +87,7 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err
 	}
+	o.Metrics.Apply()
 
 	storage, err := storage.NewStorageFactory(o.Storage.Name, o.Storage.ConfigPath)
 	if err != nil {
@@ -170,6 +175,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	o.Features.AddFlags(fss.FlagSet("features"))
 	logsapi.AddFlags(o.Logs, fss.FlagSet("logs"))
 	o.Traces.AddFlags(fss.FlagSet("traces"))
+	o.Metrics.AddFlags(fss.FlagSet("metrics"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
 	return fss
