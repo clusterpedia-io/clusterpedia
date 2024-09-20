@@ -23,6 +23,11 @@ func (in *ClusterGroupResources) DeepCopyInto(out *ClusterGroupResources) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ExcludeResources != nil {
+		in, out := &in.ExcludeResources, &out.ExcludeResources
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
