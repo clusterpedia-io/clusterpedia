@@ -109,6 +109,9 @@ type ClusterGroupResources struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	Resources []string `json:"resources"`
+
+	// +optional
+	ExcludeResources []string `json:"excludeResources"`
 }
 
 type ClusterStatus struct {
