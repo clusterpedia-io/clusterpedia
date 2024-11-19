@@ -162,3 +162,15 @@ function delete_data_plane() {
     kwokctl export logs --name "${name}" "${ROOT}/test/logs/kwok/${name}"
     kwokctl delete cluster --name "${name}"
 }
+
+# check if the apiserver in the control plane is ready
+function check_clusterpedia_apiserver() {
+    for i in {1..3}
+    do
+        if kubectl get --raw="/apis/clusterpedia.io/v1beta1/">/dev/null; then # only print error messages of the kubectl
+            return 0
+        fi
+        sleep 10
+    done
+    return 1
+}

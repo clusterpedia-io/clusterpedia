@@ -52,4 +52,9 @@ done
 
 "${ROOT}/hack/gen-clusterconfigs.sh"
 
+if ! check_clusterpedia_apiserver; then
+    echo "clusterpedia apiserver is not ready"
+    exit 1
+fi
+
 "${cases}"
