@@ -94,7 +94,6 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 	if rs, ok := storages.resourceStorages[gvr]; ok {
 		rs.CrvSynchro.RemoveCluster(cluster)
 		rs.watchCache.CleanCluster(cluster)
-		delete(s.clusters, cluster)
 	}
 
 	return nil
