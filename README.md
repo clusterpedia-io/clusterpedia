@@ -24,7 +24,7 @@ Clusterpedia can synchronize resources with multiple clusters and provide more p
 > If you want to join the clusterpedia channel on CNCF slack, please **[get invite to CNCF slack](https://slack.cncf.io/)** and then join the [#clusterpedia](https://cloud-native.slack.com/messages/clusterpedia) channel.
 
 ## Why Clusterpedia
-Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet) and other multi-cloud platforms
+Clusterpedia can be deployed as a standalone platform or integrated with [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Karmada](https://github.com/karmada-io/karmada), [Clusternet](https://github.com/clusternet/clusternet), [vCluster](https://github.com/loft-sh/vcluster), [KubeVela](https://github.com/kubevela/kubevela) and other multi-cloud platforms
 
 ### Automatic synchronization of clusters managed by multi-cloud platforms
 The clusterpedia can automatically synchronize the resources within the cluster managed by the multi-cloud platform.
