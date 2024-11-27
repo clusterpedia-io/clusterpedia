@@ -35,3 +35,8 @@ linters-settings:
       - "-SA1019" # disable the rule SA1019(Using a deprecated function, variable, constant or field)
 output:
   sort-results: true
+
+issues:
+  exclude-rules:
+    - path: pkg/storage/memorystorage/v2/
+      linters: unused # memory v2 is in alpha and tolerates unused functions or fields
