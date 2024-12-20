@@ -23,38 +23,29 @@ var (
 )
 
 const (
-	defaultRefreshInterval = 15 // the prometheus default pull metrics every 15 seconds
+	defaultRefreshInterval = 15 * time.Second // the prometheus default pull metrics every 15 seconds
 )
 
+// Prometheus implements the gorm.Plugin and provides db metrics.
+// The `Prometheus` structure name is preserved, and this file may be moved to a separate package
+// in the future to be made available to other gorm-based storage layers.
 type Prometheus struct {
 	*gorm.DB
 	*DBStats
 
-	refreshInterval uint32
+	refreshInterval time.Duration
 	refreshOnce     sync.Once
 	Labels          map[string]string
 }
 
-type MetricsConfig struct {
-	DBName          string            // use DBName as metrics label
-	RefreshInterval uint32            // refresh metrics interval.
-	Labels          map[string]string // metrics labels
-}
-
-func NewGormMetrics(config MetricsConfig) *Prometheus {
-	if config.RefreshInterval == 0 {
-		config.RefreshInterval = defaultRefreshInterval
+func NewGormMetrics(dbName string, refreshInterval time.Duration) *Prometheus {
+	// TODO(iceber): Use real-time mode to get DBStats when the refresh time is below a certain threshold
+	if refreshInterval == 0 {
+		refreshInterval = defaultRefreshInterval
 	}
 
-	labels := make(map[string]string)
-	if config.Labels != nil {
-		labels = config.Labels
-	}
-	if config.DBName != "" {
-		labels["db_name"] = config.DBName
-	}
-
-	return &Prometheus{refreshInterval: config.RefreshInterval, Labels: labels}
+	labels := map[string]string{"db_name": dbName}
+	return &Prometheus{refreshInterval: refreshInterval, Labels: labels}
 }
 
 func (p *Prometheus) Name() string {
@@ -67,7 +58,7 @@ func (p *Prometheus) Initialize(db *gorm.DB) error { // can be called repeatedly
 
 	p.refreshOnce.Do(func() {
 		go func() {
-			for range time.Tick(time.Duration(p.refreshInterval) * time.Second) {
+			for range time.Tick(p.refreshInterval) {
 				p.refresh()
 			}
 		}()

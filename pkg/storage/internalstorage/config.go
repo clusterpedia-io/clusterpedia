@@ -48,7 +48,8 @@ type Config struct {
 
 	Params map[string]string `yaml:"params"`
 
-	Log *LogConfig `yaml:"log"`
+	Log     *LogConfig    `yaml:"log"`
+	Metrics MetricsConfig `yaml:"metrics"`
 }
 
 type LogConfig struct {
@@ -58,6 +59,11 @@ type LogConfig struct {
 	SlowThreshold             time.Duration      `yaml:"slowThreshold" default:"200ms"`
 	IgnoreRecordNotFoundError bool               `yaml:"ignoreRecordNotFoundError"`
 	Logger                    *lumberjack.Logger `yaml:"logger"`
+}
+
+type MetricsConfig struct {
+	Disable                bool          `yaml:"disable"`
+	DBStatsRefreshInterval time.Duration `yaml:"dbStatsRefreshInterval" default:"15s"`
 }
 
 type MySQLConfig struct {

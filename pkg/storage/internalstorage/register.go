@@ -82,8 +82,10 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		return nil, err
 	}
 
-	if err := db.Use(NewGormMetrics(MetricsConfig{DBName: cfg.Database})); err != nil {
-		return nil, err
+	if !cfg.Metrics.Disable {
+		if err := db.Use(NewGormMetrics(cfg.Database, cfg.Metrics.DBStatsRefreshInterval)); err != nil {
+			return nil, err
+		}
 	}
 
 	sqlDB, err := db.DB()
