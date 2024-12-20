@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/component-base/tracing"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -172,11 +175,17 @@ func (s *ResourceStorage) genGetObjectQuery(ctx context.Context, cluster, namesp
 }
 
 func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name string, into runtime.Object) error {
+	ctx, span := tracing.Start(ctx, "Get from internalstorage",
+		attribute.String("storage resource", s.config.StorageResource.String()),
+		attribute.String("target type", fmt.Sprintf("%T", into)),
+	)
+
 	var objects [][]byte
 	if result := s.genGetObjectQuery(ctx, cluster, namespace, name).First(&objects); result.Error != nil {
 		return InterpretResourceDBError(cluster, namespace+"/"+name, result.Error)
 	}
 
+	span.AddEvent("About to decode object")
 	obj, _, err := s.config.Codec.Decode(objects[0], nil, into)
 	if err != nil {
 		return err
@@ -193,12 +202,19 @@ func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *interna
 		result = &ResourceMetadataList{}
 	}
 
-	query := s.db.WithContext(ctx).Model(&Resource{}).Where(s.gvrKeyMap())
-	offset, amount, query, err := applyListOptionsToResourceQuery(s.db, query, opts)
+	db := s.db.WithContext(ctx)
+	query := db.Model(&Resource{}).Where(s.gvrKeyMap())
+	offset, amount, query, err := applyListOptionsToResourceQuery(db, query, opts)
 	return offset, amount, query, result, err
 }
 
 func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, opts *internal.ListOptions) error {
+	ctx, span := tracing.Start(ctx, "List from internalstorage",
+		attribute.String("storage resource", s.config.StorageResource.String()),
+		attribute.String("target type", fmt.Sprintf("%T", listObject)),
+	)
+	defer span.End(500 * time.Millisecond)
+
 	offset, amount, query, result, err := s.genListObjectsQuery(ctx, opts)
 	if err != nil {
 		return err
@@ -230,6 +246,8 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 	if len(objects) == 0 {
 		return nil
 	}
+
+	span.AddEvent("About to convert objects", attribute.Int("count", len(objects)))
 
 	if unstructuredList, ok := listObject.(*unstructured.UnstructuredList); ok {
 		unstructuredList.Items = make([]unstructured.Unstructured, 0, len(objects))

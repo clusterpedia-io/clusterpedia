@@ -6,11 +6,14 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/component-base/tracing"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
@@ -98,6 +101,9 @@ func (s *CollectionResourceStorage) query(ctx context.Context, opts *internal.Li
 }
 
 func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.ListOptions) (*internal.CollectionResource, error) {
+	ctx, span := tracing.Start(ctx, "GetCollectionResource from internalstorage")
+	defer span.End(500 * time.Millisecond)
+
 	query, list, err := s.query(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -117,6 +123,7 @@ func (s *CollectionResourceStorage) Get(ctx context.Context, opts *internal.List
 		Items:      make([]runtime.Object, 0, len(items)),
 	}
 
+	span.AddEvent("About to convert objects", attribute.Int("count", len(items)))
 	gvrs := make(map[schema.GroupVersionResource]struct{})
 	for _, resource := range items {
 		obj, err := resource.ConvertToUnstructured()

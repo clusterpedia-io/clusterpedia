@@ -88,6 +88,10 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		}
 	}
 
+	if err := db.Use(NewGormTrace(false)); err != nil {
+		return nil, err
+	}
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, err
