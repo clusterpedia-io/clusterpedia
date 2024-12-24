@@ -44,7 +44,9 @@ type RESTManager struct {
 	groups    atomic.Value // map[string]metav1.APIGroup
 	resources atomic.Value // map[schema.GroupResource]metav1.APIResource
 
-	restResourceInfos atomic.Value // map[schema.GroupVersionResource]RESTResourceInfo
+	subresources map[schema.GroupResource]map[string]resourceRESTInfo
+
+	resourceRESTInfos atomic.Value // map[schema.GroupVersionResource]resourceRESTInfo
 
 	requestVerbs metav1.Verbs
 }
@@ -90,31 +92,98 @@ func NewRESTManager(serializer runtime.NegotiatedSerializer, storageMediaType st
 		resourceConfigFactory:      resourceconfigfactory.New(),
 		equivalentResourceRegistry: runtime.NewEquivalentResourceRegistry(),
 		requestVerbs:               requestVerbs,
+		subresources:               make(map[schema.GroupResource]map[string]resourceRESTInfo),
 	}
 
 	manager.resources.Store(apiresources)
 	manager.groups.Store(map[string]metav1.APIGroup{})
-	manager.restResourceInfos.Store(make(map[schema.GroupVersionResource]RESTResourceInfo))
+	manager.resourceRESTInfos.Store(make(map[schema.GroupVersionResource]resourceRESTInfo))
 	return manager
+}
+
+type subresource struct {
+	name string
+
+	// parent resource info
+	gr         schema.GroupResource
+	kind       string
+	namespaced bool
+
+	connecter interface {
+		rest.Connecter
+		rest.Storage
+	}
+}
+
+// preRegisterSubresource is non-concurrently safe and only called at initialization time
+func (m *RESTManager) preRegisterSubresource(subresource subresource) {
+	objGVK := subresource.connecter.(rest.Storage).New().GetObjectKind().GroupVersionKind()
+	apiResource := metav1.APIResource{
+		Name:       subresource.gr.Resource + "/" + subresource.name,
+		Namespaced: subresource.namespaced,
+		Verbs:      subresource.connecter.ConnectMethods(),
+		Kind:       objGVK.Kind,
+	}
+
+	namer := handlers.ContextBasedNaming{
+		Namer:         runtime.Namer(meta.NewAccessor()),
+		ClusterScoped: !subresource.namespaced,
+	}
+
+	requestScope := m.genLegacyResourceRequestScope(namer, subresource.gr.WithVersion(""), subresource.kind)
+	requestScope.Subresource = subresource.name
+
+	infos := m.subresources[subresource.gr]
+	if infos == nil {
+		infos = make(map[string]resourceRESTInfo)
+		m.subresources[subresource.gr] = infos
+	}
+	infos[subresource.name] = resourceRESTInfo{
+		APIResource:  apiResource,
+		RequestScope: requestScope,
+		Storage:      subresource.connecter,
+	}
 }
 
 func (m *RESTManager) GetAPIGroups() map[string]metav1.APIGroup {
 	return m.groups.Load().(map[string]metav1.APIGroup)
 }
 
-func (m *RESTManager) GetRESTResourceInfo(gvr schema.GroupVersionResource) RESTResourceInfo {
-	infos := m.restResourceInfos.Load().(map[schema.GroupVersionResource]RESTResourceInfo)
-	return infos[gvr]
+func (m *RESTManager) GetResourceREST(gvr schema.GroupVersionResource, subresource string) (metav1.APIResource, *handlers.RequestScope, rest.Storage, bool) {
+	if subresource != "" {
+		infos, exited := m.subresources[gvr.GroupResource()]
+		if !exited {
+			return metav1.APIResource{}, nil, nil, false
+		}
+		info, exited := infos[subresource]
+		if !exited {
+			return metav1.APIResource{}, nil, nil, false
+		}
+
+		info.RequestScope.Resource = gvr
+		info.RequestScope.Kind = info.RequestScope.Kind.GroupKind().WithVersion(gvr.Version)
+		return info.APIResource, info.RequestScope, info.Storage, true
+	}
+
+	infos := m.resourceRESTInfos.Load().(map[schema.GroupVersionResource]resourceRESTInfo)
+	info, exited := infos[gvr]
+	if !exited {
+		return metav1.APIResource{}, nil, nil, false
+	}
+	if info.Empty() {
+		return metav1.APIResource{}, nil, nil, false
+	}
+	return info.APIResource, info.RequestScope, info.Storage, true
 }
 
 func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResource]discovery.ResourceDiscoveryAPI {
 	apigroups := m.groups.Load().(map[string]metav1.APIGroup)
 	apiresources := m.resources.Load().(map[schema.GroupResource]metav1.APIResource)
-	restinfos := m.restResourceInfos.Load().(map[schema.GroupVersionResource]RESTResourceInfo)
+	restinfos := m.resourceRESTInfos.Load().(map[schema.GroupVersionResource]resourceRESTInfo)
 
 	addedAPIGroups := make(map[string]metav1.APIGroup)
 	addedAPIResources := make(map[schema.GroupResource]metav1.APIResource)
-	addedInfos := make(map[schema.GroupVersionResource]RESTResourceInfo)
+	addedInfos := make(map[schema.GroupVersionResource]resourceRESTInfo)
 
 	apis := make(map[schema.GroupResource]discovery.ResourceDiscoveryAPI)
 	for gr, info := range infos {
@@ -161,13 +230,20 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 
 			gvr := gr.WithVersion(version.Version)
 			if _, ok := restinfos[gvr]; !ok {
-				addedInfos[gvr] = RESTResourceInfo{APIResource: resource}
+				addedInfos[gvr] = resourceRESTInfo{APIResource: resource}
+			}
+		}
+		if infos, ok := m.subresources[gr]; ok {
+			for sub, info := range infos {
+				subapi := api
+				subapi.Resource = info.APIResource
+				apis[schema.GroupResource{Group: gr.Group, Resource: gr.Resource + "/" + sub}] = subapi
 			}
 		}
 		apis[gr] = api
 	}
 
-	//  no new APIGroups or APIResources or RESTResourceInfo
+	//  no new APIGroups or APIResources or resourceRESTInfo
 	if len(addedAPIGroups) == 0 && len(addedAPIResources) == 0 && len(addedInfos) == 0 {
 		return apis
 	}
@@ -181,7 +257,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		m.addAPIResourcesLocked(addedAPIResources)
 	}
 	if len(addedInfos) != 0 {
-		m.addRESTResourceInfosLocked(addedInfos)
+		m.addresourceRESTInfosLocked(addedInfos)
 	}
 	return apis
 }
@@ -214,10 +290,10 @@ func (m *RESTManager) addAPIResourcesLocked(addedResources map[schema.GroupResou
 	m.resources.Store(resources)
 }
 
-func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVersionResource]RESTResourceInfo) {
-	restinfos := m.restResourceInfos.Load().(map[schema.GroupVersionResource]RESTResourceInfo)
+func (m *RESTManager) addresourceRESTInfosLocked(addedInfos map[schema.GroupVersionResource]resourceRESTInfo) {
+	restinfos := m.resourceRESTInfos.Load().(map[schema.GroupVersionResource]resourceRESTInfo)
 
-	infos := make(map[schema.GroupVersionResource]RESTResourceInfo, len(restinfos)+len(addedInfos))
+	infos := make(map[schema.GroupVersionResource]resourceRESTInfo, len(restinfos)+len(addedInfos))
 	for gvr, info := range restinfos {
 		infos[gvr] = info
 	}
@@ -225,6 +301,22 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 	for gvr, info := range addedInfos {
 		if _, ok := infos[gvr]; ok {
 			continue
+		}
+
+		if info.RequestScope == nil {
+			namer := handlers.ContextBasedNaming{
+				Namer:         runtime.Namer(meta.NewAccessor()),
+				ClusterScoped: !info.APIResource.Namespaced,
+			}
+
+			var requestScope *handlers.RequestScope
+			if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
+				requestScope = m.genLegacyResourceRequestScope(namer, gvr, info.APIResource.Kind)
+			} else {
+				requestScope = m.genUnstructuredRequestScope(namer, gvr, info.APIResource.Kind)
+			}
+
+			info.RequestScope = requestScope
 		}
 
 		if info.Storage == nil {
@@ -244,29 +336,13 @@ func (m *RESTManager) addRESTResourceInfosLocked(addedInfos map[schema.GroupVers
 			storage.TableConvertor = GetTableConvertor(gvr.GroupResource())
 			storage.Serializer = m.serializer
 			info.Storage = storage
-		}
-
-		if info.RequestScope == nil {
-			namer := handlers.ContextBasedNaming{
-				Namer:         runtime.Namer(meta.NewAccessor()),
-				ClusterScoped: !info.APIResource.Namespaced,
-			}
-
-			var requestScope *handlers.RequestScope
-			if scheme.LegacyResourceScheme.IsGroupRegistered(gvr.Group) {
-				requestScope = m.genLegacyResourceRequestScope(namer, gvr, info.APIResource.Kind)
-			} else {
-				requestScope = m.genUnstructuredRequestScope(namer, gvr, info.APIResource.Kind)
-			}
-
-			requestScope.TableConvertor = info.Storage
-			info.RequestScope = requestScope
+			info.RequestScope.TableConvertor = storage.TableConvertor
 		}
 
 		infos[gvr] = info
 	}
 
-	m.restResourceInfos.Store(infos)
+	m.resourceRESTInfos.Store(infos)
 }
 
 func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResource, kind string, namespaced bool) (*resourcerest.RESTStorage, error) {
@@ -456,13 +532,13 @@ func (t unstructuredObjectTyper) Recognizes(gvk schema.GroupVersionKind) bool {
 	return t.Delegate.Recognizes(gvk) || t.UnstructuredTyper.Recognizes(gvk)
 }
 
-type RESTResourceInfo struct {
+type resourceRESTInfo struct {
 	APIResource  metav1.APIResource
 	RequestScope *handlers.RequestScope
-	Storage      *resourcerest.RESTStorage
+	Storage      rest.Storage
 }
 
-func (info RESTResourceInfo) Empty() bool {
+func (info resourceRESTInfo) Empty() bool {
 	return info.APIResource.Name == "" || info.RequestScope == nil || info.Storage == nil
 }
 

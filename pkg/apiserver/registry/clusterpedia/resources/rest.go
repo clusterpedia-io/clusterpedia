@@ -54,7 +54,7 @@ func (s *REST) GetSingularName() string {
 
 // ConnectMethods returns the list of HTTP methods handled by Connect
 func (r *REST) ConnectMethods() []string {
-	return []string{"GET"}
+	return []string{"GET", "POST"}
 }
 
 // NewConnectOptions returns an empty options object that will be used to pass options to the Connect method.

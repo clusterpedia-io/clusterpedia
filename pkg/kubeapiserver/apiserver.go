@@ -22,6 +22,7 @@ import (
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
+	podrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/pod"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 )
@@ -137,7 +138,18 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
 
-	_ = NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
+	controller := NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
+
+	for _, rest := range podrest.GetPodSubresourceRESTs(controller) {
+		restManager.preRegisterSubresource(subresource{
+			gr:         schema.GroupResource{Group: "", Resource: "pods"},
+			kind:       "Pod",
+			namespaced: true,
+
+			name:      rest.Subresource(),
+			connecter: rest,
+		})
+	}
 	return genericserver, nil
 }
 
