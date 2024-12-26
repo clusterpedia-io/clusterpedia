@@ -37,6 +37,7 @@ type RESTStorage struct {
 	TableConvertor rest.TableConvertor
 }
 
+var _ rest.Storage = &RESTStorage{}
 var _ rest.Lister = &RESTStorage{}
 var _ rest.Getter = &RESTStorage{}
 var _ rest.Watcher = &RESTStorage{}
@@ -44,6 +45,8 @@ var _ rest.Watcher = &RESTStorage{}
 func (s *RESTStorage) New() runtime.Object {
 	return s.NewFunc()
 }
+
+func (s *RESTStorage) Destroy() {}
 
 func (s *RESTStorage) NewList() runtime.Object {
 	return s.NewListFunc()

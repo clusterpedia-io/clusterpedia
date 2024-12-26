@@ -1,6 +1,7 @@
 package kubeapiserver
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -12,12 +13,14 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/handlers"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
+	registryrest "k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
@@ -76,8 +79,9 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	info := r.rest.GetRESTResourceInfo(gvr)
-	if info.Empty() {
+	resource, reqScope, storage, existed := r.rest.GetResourceREST(gvr, requestInfo.Subresource)
+	if !existed {
+		// TODO(iceber): Add the specialized error for subresources
 		err := fmt.Errorf("not found request scope or resource storage")
 		klog.ErrorS(err, "Failed to handle resource request", "resource", gvr)
 		responsewriters.ErrorNegotiated(
@@ -87,58 +91,79 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resource, reqScope, storage := info.APIResource, info.RequestScope, info.Storage
 	if requestInfo.Namespace != "" && !resource.Namespaced {
 		r.delegate.ServeHTTP(w, req)
 		return
 	}
 
 	// Check the health of the cluster
-	if cluster != nil {
-		var msg string
-		healthyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterHealthyCondition)
-		switch {
-		case healthyCondition == nil:
-			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", clusterName)
-		case healthyCondition.Status != metav1.ConditionTrue:
-			msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate, reason: %s", clusterName, healthyCondition.Reason)
-		}
-		/*
-			TODO(scyda): Determine the synchronization status of a specific resource
+	checkClusterAndWarning(req.Context(), cluster)
 
-			for _, resource := range c.Status.Resources {
+	switch storage := storage.(type) {
+	case *resourcerest.RESTStorage:
+		var handler http.Handler
+		switch requestInfo.Verb {
+		case "get":
+			if clusterName == "" {
+				responsewriters.ErrorNegotiated(
+					apierrors.NewBadRequest("please specify the cluster name when using the resource name to get a specific resource."),
+					Codecs, gvr.GroupVersion(), w, req,
+				)
+				return
 			}
-		*/
-
-		if msg != "" {
-			warning.AddWarning(req.Context(), "", msg)
-		}
-	}
-
-	var handler http.Handler
-	switch requestInfo.Verb {
-	case "get":
-		if clusterName == "" {
+			handler = handlers.GetResource(storage, reqScope)
+		case "list":
+			handler = handlers.ListResource(storage, nil, reqScope, false, r.minRequestTimeout)
+		case "watch":
+			handler = handlers.ListResource(storage, storage, reqScope, true, r.minRequestTimeout)
+		default:
 			responsewriters.ErrorNegotiated(
-				apierrors.NewBadRequest("please specify the cluster name when using the resource name to get a specific resource."),
+				apierrors.NewMethodNotSupported(gvr.GroupResource(), requestInfo.Verb),
+				Codecs, gvr.GroupVersion(), w, req,
+			)
+			return
+		}
+		handler.ServeHTTP(w, req)
+
+	case registryrest.Connecter:
+		var supported bool
+		for _, method := range storage.ConnectMethods() {
+			if req.Method == method {
+				supported = true
+			}
+		}
+		if !supported {
+			responsewriters.ErrorNegotiated(
+				apierrors.NewMethodNotSupported(gvr.GroupResource(), requestInfo.Verb),
 				Codecs, gvr.GroupVersion(), w, req,
 			)
 			return
 		}
 
-		handler = handlers.GetResource(storage, reqScope)
-	case "list":
-		handler = handlers.ListResource(storage, nil, reqScope, false, r.minRequestTimeout)
-	case "watch":
-		handler = handlers.ListResource(storage, storage, reqScope, true, r.minRequestTimeout)
-	default:
-		responsewriters.ErrorNegotiated(
-			apierrors.NewMethodNotSupported(gvr.GroupResource(), requestInfo.Verb),
-			Codecs, gvr.GroupVersion(), w, req,
-		)
+		handlers.ConnectResource(storage, reqScope, nil, "", true).ServeHTTP(w, req)
 	}
+}
 
-	if handler != nil {
-		handler.ServeHTTP(w, req)
+func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaCluster) {
+	if cluster == nil {
+		return
+	}
+	var msg string
+	healthyCondition := meta.FindStatusCondition(cluster.Status.Conditions, clusterv1alpha2.ClusterHealthyCondition)
+	switch {
+	case healthyCondition == nil:
+		msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate.", cluster.Name)
+	case healthyCondition.Status != metav1.ConditionTrue:
+		msg = fmt.Sprintf("%s is not ready and the resources obtained may be inaccurate, reason: %s", cluster.Name, healthyCondition.Reason)
+	}
+	/*
+		TODO(scyda): Determine the synchronization status of a specific resource
+
+		for _, resource := range c.Status.Resources {
+		}
+	*/
+
+	if msg != "" {
+		warning.AddWarning(ctx, "", msg)
 	}
 }
