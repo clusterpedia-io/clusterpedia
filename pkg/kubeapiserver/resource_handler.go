@@ -27,6 +27,7 @@ import (
 type ResourceHandler struct {
 	minRequestTimeout time.Duration
 	delegate          http.Handler
+	proxy             http.Handler
 
 	rest          *RESTManager
 	discovery     *discovery.DiscoveryManager

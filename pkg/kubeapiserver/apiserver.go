@@ -22,7 +22,7 @@ import (
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
-	podrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/pod"
+	proxyrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/proxy"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 )
@@ -140,16 +140,17 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 	controller := NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
 
-	for _, rest := range podrest.GetPodSubresourceRESTs(controller) {
+	for _, rest := range proxyrest.GetSubresourceRESTs(controller) {
 		restManager.preRegisterSubresource(subresource{
-			gr:         schema.GroupResource{Group: "", Resource: "pods"},
-			kind:       "Pod",
-			namespaced: true,
+			gr:         rest.ParentGroupResource(),
+			kind:       rest.ParentKind(),
+			namespaced: rest.Namespaced(),
 
 			name:      rest.Subresource(),
 			connecter: rest,
 		})
 	}
+	resourceHandler.proxy = proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, controller)
 	return genericserver, nil
 }
 
