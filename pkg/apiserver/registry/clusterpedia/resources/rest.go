@@ -18,7 +18,8 @@ import (
 
 // REST implements RESTStorage for Resources API
 type REST struct {
-	server http.Handler
+	methods []string
+	server  http.Handler
 }
 
 var _ genericrest.Scoper = &REST{}
@@ -27,9 +28,13 @@ var _ genericrest.Connecter = &REST{}
 var _ genericrest.SingularNameProvider = &REST{}
 
 // NewREST returns a RESTStorage object that will work against API services
-func NewREST(resourceHandler http.Handler) *REST {
+func NewREST(resourceHandler http.Handler, methods []string) *REST {
+	if len(methods) == 0 {
+		methods = []string{"Get"}
+	}
 	return &REST{
-		server: resourceHandler,
+		methods: methods,
+		server:  resourceHandler,
 	}
 }
 
@@ -54,7 +59,7 @@ func (s *REST) GetSingularName() string {
 
 // ConnectMethods returns the list of HTTP methods handled by Connect
 func (r *REST) ConnectMethods() []string {
-	return []string{"GET", "POST"}
+	return r.methods
 }
 
 // NewConnectOptions returns an empty options object that will be used to pass options to the Connect method.

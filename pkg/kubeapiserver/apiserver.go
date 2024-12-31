@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/sets"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericfeatures "k8s.io/apiserver/pkg/features"
@@ -102,17 +103,19 @@ type CompletedConfig struct {
 	*completedConfig
 }
 
-func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*genericapiserver.GenericAPIServer, error) {
+var sortedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
+func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*genericapiserver.GenericAPIServer, []string, error) {
 	if c.ExtraConfig.StorageFactory == nil {
-		return nil, errors.New("kubeapiserver.New() called with config.StorageFactory == nil")
+		return nil, nil, errors.New("kubeapiserver.New() called with config.StorageFactory == nil")
 	}
 	if c.ExtraConfig.InformerFactory == nil {
-		return nil, errors.New("kubeapiserver.New() called with config.InformerFactory == nil")
+		return nil, nil, errors.New("kubeapiserver.New() called with config.InformerFactory == nil")
 	}
 
 	genericserver, err := c.GenericConfig.New("clusterpedia-kube-apiserver", delegationTarget)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	delegate := delegationTarget.UnprotectedHandler()
@@ -140,6 +143,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 	controller := NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
 
+	methodSet := sets.Set[string]{}
 	for _, rest := range proxyrest.GetSubresourceRESTs(controller) {
 		restManager.preRegisterSubresource(subresource{
 			gr:         rest.ParentGroupResource(),
@@ -149,9 +153,18 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 			name:      rest.Subresource(),
 			connecter: rest,
 		})
+		methodSet.Insert(rest.ConnectMethods()...)
 	}
+
+	var methods []string
+	for _, m := range sortedMethods {
+		if methodSet.Has(m) {
+			methods = append(methods, m)
+		}
+	}
+
 	resourceHandler.proxy = proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, controller)
-	return genericserver, nil
+	return genericserver, methods, nil
 }
 
 func BuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config) http.Handler {
