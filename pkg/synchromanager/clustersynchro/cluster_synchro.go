@@ -129,6 +129,7 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		synchro.resourceSynchroFactory = factory
 	} else {
 		synchro.resourceSynchroFactory = DefaultResourceSynchroFactory{}
+		registerResourceSynchroMetrics()
 	}
 
 	var refresherOnce sync.Once

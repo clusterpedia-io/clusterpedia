@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
+	compbasemetrics "k8s.io/component-base/metrics"
 	"k8s.io/klog/v2"
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
@@ -39,6 +40,7 @@ type resourceSynchro struct {
 	listerWatcher     cache.ListerWatcher
 	metricsExtraStore informer.ExtraStore
 	metricsWriter     *metricsstore.MetricsWriter
+	metricsWrapper    resourcesynchro.MetricsWrapper
 
 	queue   queue.EventQueue
 	cache   *informer.ResourceVersionStorage
@@ -68,6 +70,8 @@ type resourceSynchro struct {
 
 	// for debug
 	runningStage string
+
+	storageMaxRetry int
 }
 
 type DefaultResourceSynchroFactory struct{}
@@ -88,9 +92,10 @@ func (factory DefaultResourceSynchroFactory) NewResourceSynchro(cluster string, 
 		// all resources saved to the queue are `runtime.Object`
 		queue: queue.NewPressureQueue(cache.MetaNamespaceKeyFunc),
 
-		storage:       config.ResourceStorage,
-		convertor:     config.ObjectConvertor,
-		memoryVersion: storageConfig.MemoryResource.GroupVersion(),
+		storage:        config.ResourceStorage,
+		convertor:      config.ObjectConvertor,
+		memoryVersion:  storageConfig.MemoryResource.GroupVersion(),
+		metricsWrapper: resourcesynchro.DefaultMetricsWrapperFactory.NewWrapper(cluster, config.GroupVersionResource),
 
 		stopped:              make(chan struct{}),
 		isRunnableForStorage: atomic.NewBool(true),
@@ -158,6 +163,10 @@ func (synchro *resourceSynchro) Run(shutdown <-chan struct{}) {
 
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "", "")
 	synchro.runningStage = "shutdown"
+
+	for _, m := range resourceSynchroMetrics {
+		synchro.metricsWrapper.Delete(m.(resourcesynchro.DeletableVecMetrics))
+	}
 }
 
 func (synchro *resourceSynchro) Close() <-chan struct{} {
@@ -256,6 +265,7 @@ func (synchro *resourceSynchro) Start(stopCh <-chan struct{}) {
 			for r, v := range synchro.rvs {
 				rvs[r] = v
 			}
+			synchro.metricsWrapper.Sum(storagedResourcesTotal, float64(len(rvs)))
 			synchro.cache = informer.NewResourceVersionStorage()
 			synchro.rvsLock.Unlock()
 
@@ -403,45 +413,63 @@ func (synchro *resourceSynchro) handleResourceEvent(event *queue.Event) {
 		}
 		utils.InjectClusterName(obj, synchro.cluster)
 
+		var metric compbasemetrics.CounterMetric
 		switch event.Action {
 		case queue.Added:
 			handler = synchro.createOrUpdateResource
+			metric = synchro.metricsWrapper.Counter(resourceAddedCounter)
 		case queue.Updated:
 			handler = synchro.updateOrCreateResource
+			metric = synchro.metricsWrapper.Counter(resourceUpdatedCounter)
 		}
 		callback = func(obj runtime.Object) {
+			metric.Inc()
 			metaobj, _ := meta.Accessor(obj)
 			synchro.rvsLock.Lock()
 			synchro.rvs[key] = metaobj.GetResourceVersion()
+
+			synchro.metricsWrapper.Sum(storagedResourcesTotal, float64(len(synchro.rvs)))
 			synchro.rvsLock.Unlock()
 		}
 	} else {
 		handler, callback = synchro.deleteResource, func(_ runtime.Object) {
 			synchro.rvsLock.Lock()
 			delete(synchro.rvs, key)
+			synchro.metricsWrapper.Sum(storagedResourcesTotal, float64(len(synchro.rvs)))
 			synchro.rvsLock.Unlock()
+			synchro.metricsWrapper.Counter(resourceDeletedCounter).Inc()
 		}
 	}
 
 	// TODO(Iceber): put the event back into the queue to retry?
 	for i := 0; ; i++ {
+		now := time.Now()
 		ctx, cancel := context.WithTimeout(synchro.ctx, 30*time.Second)
 		err := handler(ctx, obj)
 		cancel()
 		if err == nil {
 			callback(obj)
 
+			if i != 0 && i > synchro.storageMaxRetry {
+				synchro.storageMaxRetry = i
+				synchro.metricsWrapper.Max(resourceMaxRetryGauge, float64(i))
+			}
+
 			if !synchro.isRunnableForStorage.Load() && synchro.queue.Len() == 0 {
 				// Start the informer after processing the data in the queue to ensure that storage is up and running for a period of time.
 				synchro.setRunnableForStorage()
 			}
+			synchro.metricsWrapper.Historgram(resourceStorageDuration).Observe(time.Since(now).Seconds())
 			return
 		}
 
 		if errors.Is(err, context.Canceled) {
 			return
 		}
+
+		synchro.metricsWrapper.Counter(resourceFailedCounter).Inc()
 		if !storage.IsRecoverableException(err) {
+			synchro.metricsWrapper.Counter(resourceDroppedCounter).Inc()
 			klog.ErrorS(err, "Failed to storage resource", "cluster", synchro.cluster,
 				"action", event.Action, "resource", synchro.storageResource, "key", key)
 

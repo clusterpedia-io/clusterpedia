@@ -23,10 +23,10 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/cmd/clustersynchro-manager/app/config"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	kubestatemetrics "github.com/clusterpedia-io/clusterpedia/pkg/kube_state_metrics"
-	metricsserver "github.com/clusterpedia-io/clusterpedia/pkg/metrics/server"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro"
 )
 
 const (
@@ -42,7 +42,7 @@ type Options struct {
 
 	Logs             *logs.Options
 	Storage          *storageoptions.StorageOptions
-	Metrics          *metricsserver.Options
+	Metrics          *MetricsOptions
 	KubeStateMetrics *kubestatemetrics.Options
 
 	WorkerNumber            int // WorkerNumber is the number of worker goroutines
@@ -76,7 +76,7 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 
 	options.Logs = logs.NewOptions()
 	options.Storage = storageoptions.NewStorageOptions()
-	options.Metrics = metricsserver.NewOptions()
+	options.Metrics = NewMetricsOptions()
 	options.KubeStateMetrics = kubestatemetrics.NewOptions()
 
 	options.WorkerNumber = 5
@@ -155,12 +155,16 @@ func (o *Options) Config() (*config.Config, error) {
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: ClusterSynchroManagerUserAgent})
 
-	metricsConfig := o.Metrics.Config()
+	metricsConfig := o.Metrics.ServerConfig()
 	metricsStoreBuilder, err := o.KubeStateMetrics.MetricsStoreBuilderConfig().New()
 	if err != nil {
 		return nil, err
 	}
 	kubeStateMetricsServerConfig := o.KubeStateMetrics.ServerConfig(metricsConfig)
+
+	if config := o.Metrics.ResourceSynchroConfig(); config != resourcesynchro.DefaultMetricsWrapperFactory.Config() {
+		resourcesynchro.DefaultMetricsWrapperFactory = resourcesynchro.NewMetricsWrapperFactory(config)
+	}
 
 	if o.ShardingName != "" {
 		o.LeaderElection.ResourceName = fmt.Sprintf("%s-%s", o.LeaderElection.ResourceName, o.ShardingName)
