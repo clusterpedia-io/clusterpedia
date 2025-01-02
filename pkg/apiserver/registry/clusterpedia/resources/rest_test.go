@@ -122,7 +122,7 @@ func TestConnect(t *testing.T) {
 		},
 	}
 
-	rest := NewREST(&testHandler{})
+	rest := NewREST(&testHandler{}, []string{"GET"})
 	resolver := newTestRequestInfoResolver()
 
 	for _, test := range tests {

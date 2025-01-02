@@ -126,7 +126,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 		StorageFactory:           config.StorageFactory,
 		InitialAPIGroupResources: initialAPIGroupResources,
 	}
-	kubeResourceAPIServer, err := resourceServerConfig.Complete().New(genericapiserver.NewEmptyDelegate())
+	kubeResourceAPIServer, methods, err := resourceServerConfig.Complete().New(genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	}
 
 	v1beta1storage := map[string]rest.Storage{}
-	v1beta1storage["resources"] = resources.NewREST(kubeResourceAPIServer.Handler)
+	v1beta1storage["resources"] = resources.NewREST(kubeResourceAPIServer.Handler, methods)
 	v1beta1storage["collectionresources"] = collectionresources.NewREST(config.GenericConfig.Serializer, config.StorageFactory)
 
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(internal.GroupName, Scheme, ParameterCodec, Codecs)

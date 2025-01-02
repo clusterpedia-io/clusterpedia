@@ -14,44 +14,79 @@ import (
 
 func GetSubresourceRESTs(connGetter ClusterConnectionGetter) []*PodSubresourceRemoteProxyREST {
 	return []*PodSubresourceRemoteProxyREST{
+		// Pod
 		{
+			subresource:     "attach",
 			parent:          schema.GroupResource{Group: "", Resource: "pods"},
 			parentKind:      "Pod",
 			namespaced:      true,
-			subresource:     "attach",
 			methods:         []string{"GET", "POST"},
 			upgradeRequired: true,
 			options:         &api.PodAttachOptions{},
 			connGetter:      connGetter,
 		},
 		{
+			subresource:     "exec",
 			parent:          schema.GroupResource{Group: "", Resource: "pods"},
 			parentKind:      "Pod",
 			namespaced:      true,
-			subresource:     "exec",
 			methods:         []string{"GET", "POST"},
 			upgradeRequired: true,
 			options:         &api.PodExecOptions{},
 			connGetter:      connGetter,
 		},
 		{
+			subresource:     "portforward",
 			parent:          schema.GroupResource{Group: "", Resource: "pods"},
 			parentKind:      "Pod",
 			namespaced:      true,
-			subresource:     "portforward",
 			methods:         []string{"GET", "POST"},
 			upgradeRequired: true,
 			options:         &api.PodPortForwardOptions{},
 			connGetter:      connGetter,
 		},
 		{
+			subresource:     "log",
 			parent:          schema.GroupResource{Group: "", Resource: "pods"},
 			parentKind:      "Pod",
 			namespaced:      true,
-			subresource:     "log",
 			methods:         []string{"GET"},
 			upgradeRequired: false,
 			options:         &api.PodLogOptions{},
+			connGetter:      connGetter,
+		},
+		{
+			subresource:     "proxy",
+			parent:          schema.GroupResource{Group: "", Resource: "pods"},
+			parentKind:      "Pod",
+			namespaced:      true,
+			methods:         []string{"GET"},
+			upgradeRequired: false,
+			options:         &api.PodProxyOptions{},
+			connGetter:      connGetter,
+		},
+
+		// Service
+		{
+			subresource:     "proxy",
+			parent:          schema.GroupResource{Group: "", Resource: "services"},
+			parentKind:      "Service",
+			namespaced:      true,
+			methods:         []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			upgradeRequired: false,
+			options:         &api.ServiceProxyOptions{},
+			connGetter:      connGetter,
+		},
+
+		// Node
+		{
+			subresource:     "proxy",
+			parent:          schema.GroupResource{Group: "", Resource: "nodes"},
+			parentKind:      "Node",
+			namespaced:      false,
+			methods:         []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			upgradeRequired: false,
+			options:         &api.NodeProxyOptions{},
 			connGetter:      connGetter,
 		},
 	}
