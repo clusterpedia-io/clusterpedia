@@ -60,7 +60,7 @@ func GetSubresourceRESTs(connGetter ClusterConnectionGetter) []*PodSubresourceRe
 			parent:          schema.GroupResource{Group: "", Resource: "pods"},
 			parentKind:      "Pod",
 			namespaced:      true,
-			methods:         []string{"GET"},
+			methods:         []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 			upgradeRequired: false,
 			options:         &api.PodProxyOptions{},
 			connGetter:      connGetter,

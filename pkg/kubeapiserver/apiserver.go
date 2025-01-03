@@ -143,16 +143,18 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 	controller := NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
 
-	methodSet := sets.Set[string]{}
+	methodSet := sets.New("GET")
 	for _, rest := range proxyrest.GetSubresourceRESTs(controller) {
-		restManager.preRegisterSubresource(subresource{
+		if err := restManager.preRegisterSubresource(subresource{
 			gr:         rest.ParentGroupResource(),
 			kind:       rest.ParentKind(),
 			namespaced: rest.Namespaced(),
 
 			name:      rest.Subresource(),
 			connecter: rest,
-		})
+		}); err != nil {
+			return nil, nil, err
+		}
 		methodSet.Insert(rest.ConnectMethods()...)
 	}
 

@@ -30,7 +30,7 @@ var _ genericrest.SingularNameProvider = &REST{}
 // NewREST returns a RESTStorage object that will work against API services
 func NewREST(resourceHandler http.Handler, methods []string) *REST {
 	if len(methods) == 0 {
-		methods = []string{"Get"}
+		methods = []string{"GET"}
 	}
 	return &REST{
 		methods: methods,

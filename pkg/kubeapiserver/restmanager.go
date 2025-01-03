@@ -1,6 +1,7 @@
 package kubeapiserver
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,21 @@ import (
 	unstructuredscheme "github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme/unstructured"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
+
+// toDiscoveryKubeVerb maps an action.Verb to the logical kube verb, used for discovery
+var toDiscoveryKubeVerb = map[string]string{
+	"CONNECT":          "", // do not list in discovery.
+	"DELETE":           "delete",
+	"DELETECOLLECTION": "deletecollection",
+	"GET":              "get",
+	"LIST":             "list",
+	"PATCH":            "patch",
+	"POST":             "create",
+	"PROXY":            "proxy",
+	"PUT":              "update",
+	"WATCH":            "watch",
+	"WATCHLIST":        "watch",
+}
 
 type RESTManager struct {
 	serializer                 runtime.NegotiatedSerializer
@@ -116,12 +132,22 @@ type subresource struct {
 }
 
 // preRegisterSubresource is non-concurrently safe and only called at initialization time
-func (m *RESTManager) preRegisterSubresource(subresource subresource) {
+func (m *RESTManager) preRegisterSubresource(subresource subresource) error {
+	var verbs []string
+	for _, method := range subresource.connecter.ConnectMethods() {
+		if verb := toDiscoveryKubeVerb[method]; verb != "" {
+			verbs = append(verbs, verb)
+		}
+	}
+	if len(verbs) == 0 {
+		return fmt.Errorf("resource['%s/%s'] available verbs are empty", subresource.gr.String(), subresource.name)
+	}
+
 	objGVK := subresource.connecter.(rest.Storage).New().GetObjectKind().GroupVersionKind()
 	apiResource := metav1.APIResource{
 		Name:       subresource.gr.Resource + "/" + subresource.name,
 		Namespaced: subresource.namespaced,
-		Verbs:      subresource.connecter.ConnectMethods(),
+		Verbs:      verbs,
 		Kind:       objGVK.Kind,
 	}
 
@@ -143,6 +169,7 @@ func (m *RESTManager) preRegisterSubresource(subresource subresource) {
 		RequestScope: requestScope,
 		Storage:      subresource.connecter,
 	}
+	return nil
 }
 
 func (m *RESTManager) GetAPIGroups() map[string]metav1.APIGroup {
