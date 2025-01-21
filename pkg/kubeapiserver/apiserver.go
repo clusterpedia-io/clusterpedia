@@ -66,15 +66,17 @@ func NewDefaultConfig() *Config {
 }
 
 type ExtraConfig struct {
-	StorageFactory           storage.StorageFactory
-	InformerFactory          informers.SharedInformerFactory
-	InitialAPIGroupResources []*restmapper.APIGroupResources
+	AllowedProxySubresources map[schema.GroupResource]sets.Set[string]
 }
 
 type Config struct {
 	GenericConfig *genericapiserver.RecommendedConfig
 
-	ExtraConfig ExtraConfig
+	StorageFactory           storage.StorageFactory
+	InformerFactory          informers.SharedInformerFactory
+	InitialAPIGroupResources []*restmapper.APIGroupResources
+
+	ExtraConfig *ExtraConfig
 }
 
 func (c *Config) Complete() CompletedConfig {
@@ -83,8 +85,11 @@ func (c *Config) Complete() CompletedConfig {
 	}
 
 	completed := &completedConfig{
-		GenericConfig: c.GenericConfig.Complete(),
-		ExtraConfig:   &c.ExtraConfig,
+		GenericConfig:            c.GenericConfig.Complete(),
+		StorageFactory:           c.StorageFactory,
+		InformerFactory:          c.InformerFactory,
+		InitialAPIGroupResources: c.InitialAPIGroupResources,
+		ExtraConfig:              c.ExtraConfig,
 	}
 
 	c.GenericConfig.RequestInfoResolver = wrapRequestInfoResolverForNamespace{
@@ -96,7 +101,10 @@ func (c *Config) Complete() CompletedConfig {
 type completedConfig struct {
 	GenericConfig genericapiserver.CompletedConfig
 
-	ExtraConfig *ExtraConfig
+	StorageFactory           storage.StorageFactory
+	InformerFactory          informers.SharedInformerFactory
+	InitialAPIGroupResources []*restmapper.APIGroupResources
+	ExtraConfig              *ExtraConfig
 }
 
 type CompletedConfig struct {
@@ -106,10 +114,10 @@ type CompletedConfig struct {
 var sortedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 
 func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*genericapiserver.GenericAPIServer, []string, error) {
-	if c.ExtraConfig.StorageFactory == nil {
+	if c.StorageFactory == nil {
 		return nil, nil, errors.New("kubeapiserver.New() called with config.StorageFactory == nil")
 	}
-	if c.ExtraConfig.InformerFactory == nil {
+	if c.InformerFactory == nil {
 		return nil, nil, errors.New("kubeapiserver.New() called with config.InformerFactory == nil")
 	}
 
@@ -123,7 +131,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		delegate = http.NotFoundHandler()
 	}
 
-	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.ExtraConfig.StorageFactory, c.ExtraConfig.InitialAPIGroupResources)
+	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.StorageFactory, c.InitialAPIGroupResources)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
 	// handle root discovery request
@@ -136,15 +144,20 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		delegate:      delegate,
 		rest:          restManager,
 		discovery:     discoveryManager,
-		clusterLister: c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters().Lister(),
+		clusterLister: c.InformerFactory.Cluster().V1alpha2().PediaClusters().Lister(),
 	}
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
 
-	controller := NewClusterResourceController(restManager, discoveryManager, c.ExtraConfig.InformerFactory.Cluster().V1alpha2().PediaClusters())
+	controller := NewClusterResourceController(restManager, discoveryManager, c.InformerFactory.Cluster().V1alpha2().PediaClusters())
 
 	methodSet := sets.New("GET")
 	for _, rest := range proxyrest.GetSubresourceRESTs(controller) {
+		allows := c.ExtraConfig.AllowedProxySubresources[rest.ParentGroupResource()]
+		if allows == nil || !allows.Has(rest.Subresource()) {
+			continue
+		}
+
 		if err := restManager.preRegisterSubresource(subresource{
 			gr:         rest.ParentGroupResource(),
 			kind:       rest.ParentKind(),

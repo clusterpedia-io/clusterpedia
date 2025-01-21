@@ -64,6 +64,7 @@ type Config struct {
 	GenericConfig *genericapiserver.RecommendedConfig
 
 	StorageFactory storage.StorageFactory
+	ExtraConfig    *kubeapiserver.ExtraConfig
 }
 
 type ClusterPediaServer struct {
@@ -75,6 +76,7 @@ type completedConfig struct {
 
 	ClientConfig   *clientrest.Config
 	StorageFactory storage.StorageFactory
+	ExtraConfig    *kubeapiserver.ExtraConfig
 }
 
 // CompletedConfig embeds a private pointer that cannot be instantiated outside of this package.
@@ -90,6 +92,7 @@ func (cfg *Config) Complete() CompletedConfig {
 		cfg.GenericConfig.Complete(),
 		cfg.GenericConfig.ClientConfig,
 		cfg.StorageFactory,
+		cfg.ExtraConfig,
 	}
 	return CompletedConfig{&c}
 }
@@ -121,11 +124,10 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	resourceServerConfig.GenericConfig.ExternalAddress = config.GenericConfig.ExternalAddress
 	resourceServerConfig.GenericConfig.LoopbackClientConfig = config.GenericConfig.LoopbackClientConfig
 	resourceServerConfig.GenericConfig.TracerProvider = config.GenericConfig.TracerProvider
-	resourceServerConfig.ExtraConfig = kubeapiserver.ExtraConfig{
-		InformerFactory:          clusterpediaInformerFactory,
-		StorageFactory:           config.StorageFactory,
-		InitialAPIGroupResources: initialAPIGroupResources,
-	}
+	resourceServerConfig.InformerFactory = clusterpediaInformerFactory
+	resourceServerConfig.StorageFactory = config.StorageFactory
+	resourceServerConfig.InitialAPIGroupResources = initialAPIGroupResources
+	resourceServerConfig.ExtraConfig = config.ExtraConfig
 	kubeResourceAPIServer, methods, err := resourceServerConfig.Complete().New(genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err

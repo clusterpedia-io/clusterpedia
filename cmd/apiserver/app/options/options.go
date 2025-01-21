@@ -21,6 +21,7 @@ import (
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver"
 	generatedopenapi "github.com/clusterpedia-io/clusterpedia/pkg/generated/openapi"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
@@ -40,7 +41,8 @@ type ClusterPediaServerOptions struct {
 	Traces         *genericoptions.TracingOptions
 	Metrics        *metrics.Options
 
-	Storage *storageoptions.StorageOptions
+	Storage        *storageoptions.StorageOptions
+	ResourceServer *kubeapiserver.Options
 }
 
 func NewServerOptions() *ClusterPediaServerOptions {
@@ -70,7 +72,8 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Traces:         genericoptions.NewTracingOptions(),
 		Metrics:        metrics.NewOptions(),
 
-		Storage: storageoptions.NewStorageOptions(),
+		Storage:        storageoptions.NewStorageOptions(),
+		ResourceServer: kubeapiserver.NewOptions(),
 	}
 }
 
@@ -90,6 +93,11 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	o.Metrics.Apply()
 
 	storage, err := storage.NewStorageFactory(o.Storage.Name, o.Storage.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceServerConfig, err := o.ResourceServer.Config()
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +129,7 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	return &apiserver.Config{
 		GenericConfig:  genericConfig,
 		StorageFactory: storage,
+		ExtraConfig:    resourceServerConfig,
 	}, nil
 }
 
@@ -178,6 +187,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	o.Metrics.AddFlags(fss.FlagSet("metrics"))
 
 	o.Storage.AddFlags(fss.FlagSet("storage"))
+	o.ResourceServer.AddFlags(fss.FlagSet("resource server"))
 	return fss
 }
 
