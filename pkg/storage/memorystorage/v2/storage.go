@@ -42,3 +42,7 @@ func (s *StorageFactory) CleanClusterResource(ctx context.Context, cluster strin
 func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error) {
 	return nil, nil
 }
+
+func (s *StorageFactory) Shutdown() error {
+	return nil
+}

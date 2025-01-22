@@ -26,6 +26,8 @@ type StorageFactory interface {
 
 	CleanCluster(ctx context.Context, cluster string) error
 	CleanClusterResource(ctx context.Context, cluster string, gvr schema.GroupVersionResource) error
+
+	Shutdown() error
 }
 
 type ResourceStorage interface {

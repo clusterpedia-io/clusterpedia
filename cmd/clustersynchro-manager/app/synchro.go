@@ -91,6 +91,14 @@ func Run(ctx context.Context, c *config.Config) error {
 		metricsserver.Run(c.MetricsServerConfig)
 	}()
 
+	go func() {
+		<-ctx.Done()
+		err := c.StorageFactory.Shutdown()
+		if err != nil {
+			klog.ErrorS(err, "Failed to shutdown storage factory")
+		}
+	}()
+
 	if c.KubeMetricsServerConfig != nil {
 		go func() {
 			kubestatemetrics.RunServer(*c.KubeMetricsServerConfig, synchromanager)

@@ -14,6 +14,7 @@ import (
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
+	"k8s.io/klog/v2"
 
 	"github.com/clusterpedia-io/clusterpedia/cmd/apiserver/app/options"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
@@ -43,6 +44,13 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			defer func() {
+				err := config.StorageFactory.Shutdown()
+				if err != nil {
+					klog.ErrorS(err, "Failed to shutdown storage factory")
+				}
+			}()
 
 			completedConfig := config.Complete()
 			if completedConfig.ClientConfig == nil {

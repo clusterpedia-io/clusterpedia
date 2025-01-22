@@ -90,3 +90,11 @@ func (s *StorageFactory) GetCollectionResources(ctx context.Context) ([]*interna
 func (s *StorageFactory) PrepareCluster(cluster string) error {
 	return nil
 }
+
+func (s *StorageFactory) Shutdown() error {
+	db, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return db.Close()
+}
