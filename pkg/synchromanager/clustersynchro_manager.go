@@ -2,7 +2,6 @@ package synchromanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -16,9 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -34,6 +31,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
 
@@ -330,7 +328,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	synchro := manager.synchros[cluster.Name]
 	manager.synchrolock.RUnlock()
 
-	config, err := buildClusterConfig(cluster)
+	config, err := utils.BuildClusterRestConfig(cluster)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
 		manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, cluster.Spec.APIServer, synchro, clusterv1alpha2.InvalidConfigReason,
@@ -592,45 +590,6 @@ func (manager *Manager) UpdateClusterShardingStatus(ctx context.Context, name st
 	return manager.updateClusterStatus(ctx, name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
 		clusterStatus.ShardingName = shardingName
 	})
-}
-
-func buildClusterConfig(cluster *clusterv1alpha2.PediaCluster) (*rest.Config, error) {
-	if len(cluster.Spec.Kubeconfig) != 0 {
-		clientconfig, err := clientcmd.NewClientConfigFromBytes(cluster.Spec.Kubeconfig)
-		if err != nil {
-			return nil, err
-		}
-		return clientconfig.ClientConfig()
-	}
-
-	if cluster.Spec.APIServer == "" {
-		return nil, errors.New("Cluster APIServer Endpoint is required")
-	}
-
-	if len(cluster.Spec.TokenData) == 0 &&
-		(len(cluster.Spec.CertData) == 0 || len(cluster.Spec.KeyData) == 0) {
-		return nil, errors.New("Cluster APIServer's Token or Cert is required")
-	}
-
-	config := &rest.Config{
-		Host: cluster.Spec.APIServer,
-	}
-
-	if len(cluster.Spec.CAData) != 0 {
-		config.TLSClientConfig.CAData = cluster.Spec.CAData
-	} else {
-		config.TLSClientConfig.Insecure = true
-	}
-
-	if len(cluster.Spec.CertData) != 0 && len(cluster.Spec.KeyData) != 0 {
-		config.TLSClientConfig.CertData = cluster.Spec.CertData
-		config.TLSClientConfig.KeyData = cluster.Spec.KeyData
-	}
-
-	if len(cluster.Spec.TokenData) != 0 {
-		config.BearerToken = string(cluster.Spec.TokenData)
-	}
-	return config, nil
 }
 
 type ItemExponentialFailureAndJitterSlowRateLimter struct {
