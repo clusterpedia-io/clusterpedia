@@ -19,8 +19,7 @@ import (
 )
 
 type ClusterConnectionGetter interface {
-	GetClusterDefaultConnection(ctx context.Context, cluster string) (string, http.RoundTripper, error)
-	GetClusterConnectionWithTLSConfig(ctx context.Context, cluster string) (string, http.RoundTripper, error)
+	GetClusterConnection(ctx context.Context, cluster string, req *http.Request) (string, http.RoundTripper, error)
 }
 
 type RemoteProxyREST struct {
@@ -55,26 +54,28 @@ func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeR
 		return nil, errors.New("missing RequestInfo")
 	}
 
-	// TODO(iceber): need disconnect when the cluster authentication information changes
-	endpoint, transport, err := connGetter.GetClusterDefaultConnection(ctx, clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	target, err := url.ParseRequestURI(endpoint + requestInfo.Path)
-	if err != nil {
-		return nil, err
-	}
-	target.RawQuery = request.RequestQueryFrom(ctx).Encode()
-
-	proxy := proxy.NewUpgradeAwareHandler(target, transport, false, upgradeRequired, responder)
-	proxy.UseLocationHost = true
-
-	var handler http.Handler = proxy
-	if wrapProxy != nil {
-		handler = wrapProxy(proxy)
-	}
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// TODO(iceber): need disconnect when the cluster authentication information changes
+		endpoint, transport, err := connGetter.GetClusterConnection(ctx, clusterName, req)
+		if err != nil {
+			responder.Error(rw, req, err)
+			return
+		}
+
+		target, err := url.ParseRequestURI(endpoint + requestInfo.Path)
+		if err != nil {
+			responder.Error(rw, req, err)
+			return
+		}
+		target.RawQuery = request.RequestQueryFrom(ctx).Encode()
+
+		proxy := proxy.NewUpgradeAwareHandler(target, transport, false, upgradeRequired, responder)
+		proxy.UseLocationHost = true
+
+		var handler http.Handler = proxy
+		if wrapProxy != nil {
+			handler = wrapProxy(proxy)
+		}
 		r := req.WithContext(req.Context())
 		r.Header = utilnet.CloneHeader(req.Header)
 		if auditID, _ := audit.AuditIDFrom(ctx); auditID != "" {

@@ -66,7 +66,9 @@ func NewDefaultConfig() *Config {
 }
 
 type ExtraConfig struct {
-	AllowedProxySubresources map[schema.GroupResource]sets.Set[string]
+	AllowPediaClusterConfigReuse    bool
+	ExtraProxyRequestHeaderPrefixes []string
+	AllowedProxySubresources        map[schema.GroupResource]sets.Set[string]
 }
 
 type Config struct {
@@ -149,15 +151,17 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
 	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
 
-	controller := NewClusterResourceController(restManager, discoveryManager, c.InformerFactory.Cluster().V1alpha2().PediaClusters())
+	clusterInformer := c.InformerFactory.Cluster().V1alpha2().PediaClusters()
+	_ = NewClusterResourceController(restManager, discoveryManager, clusterInformer)
+
+	connector := proxyrest.NewProxyConnector(clusterInformer.Lister(), c.ExtraConfig.AllowPediaClusterConfigReuse, c.ExtraConfig.ExtraProxyRequestHeaderPrefixes)
 
 	methodSet := sets.New("GET")
-	for _, rest := range proxyrest.GetSubresourceRESTs(controller) {
+	for _, rest := range proxyrest.GetSubresourceRESTs(connector) {
 		allows := c.ExtraConfig.AllowedProxySubresources[rest.ParentGroupResource()]
 		if allows == nil || !allows.Has(rest.Subresource()) {
 			continue
 		}
-
 		if err := restManager.preRegisterSubresource(subresource{
 			gr:         rest.ParentGroupResource(),
 			kind:       rest.ParentKind(),
@@ -178,7 +182,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		}
 	}
 
-	resourceHandler.proxy = proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, controller)
+	resourceHandler.proxy = proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, connector)
 	return genericserver, methods, nil
 }
 

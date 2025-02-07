@@ -7,14 +7,23 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	proxyrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/proxy"
 )
 
 type Options struct {
-	AllowedProxySubresources []string
+	// AllowPediaClusterConfigForProxyRequest controls all proxy requests.
+	// TODO(iceber): Perhaps we could add a separate setting specifically for subresource proxy request.
+	AllowPediaClusterConfigForProxyRequest bool
+
+	AllowedProxySubresources        []string
+	ExtraProxyRequestHeaderPrefixes []string
 }
 
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		ExtraProxyRequestHeaderPrefixes: []string{proxyrest.DefaultProxyRequestHeaderPrefix},
+	}
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -32,6 +41,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&o.AllowedProxySubresources, "allowed-proxy-subresources", o.AllowedProxySubresources, ""+
 		"List of subresources that support proxying requests to the specified cluster, formatted as '[resource/subresource],[subresource],...'. "+
 		fmt.Sprintf("Supported proxy subresources include %q", strings.Join(resources, ",")),
+	)
+
+	fs.BoolVar(&o.AllowPediaClusterConfigForProxyRequest, "allow-pediacluster-config-for-proxy-request", o.AllowPediaClusterConfigForProxyRequest, ""+
+		"Allow proxy requests to use the cluster configuration from PediaCluster when authentication information cannot be got from the header.",
 	)
 }
 
@@ -75,5 +88,8 @@ func (o *Options) Config() (*ExtraConfig, error) {
 			return nil, fmt.Errorf("--allowed-proxy-subresources: unsupported subresources or invalid format %q", subresource)
 		}
 	}
-	return &ExtraConfig{AllowedProxySubresources: subresources}, nil
+	return &ExtraConfig{
+		AllowPediaClusterConfigReuse: o.AllowPediaClusterConfigForProxyRequest,
+		AllowedProxySubresources:     subresources,
+	}, nil
 }
