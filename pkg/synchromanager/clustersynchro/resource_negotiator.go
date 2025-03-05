@@ -42,6 +42,7 @@ func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
 func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clusterv1alpha2.ClusterGroupResources) (*GroupResourceStatus, map[schema.GroupVersionResource]syncConfig) {
 	var syncAllResources bool
 	var watchKubeVersion, watchAggregatorResourceTypes bool
+	originSyncResources := syncResources
 	for i, syncResource := range syncResources {
 		if syncResource.Group == "*" {
 			syncAllResources = true
@@ -62,6 +63,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					klog.InfoS("Skip resource sync", "cluster", negotiator.name, "group", syncResource.Group, "reason", "not match group")
 				} else {
 					syncResourcesByGroup.Versions = syncResource.Versions
+					syncResourcesByGroup.ExcludeResources = syncResource.ExcludeResources
 					syncResources[i] = *syncResourcesByGroup
 					if groupType == discovery.KubeResource {
 						watchKubeVersion = true
@@ -74,6 +76,18 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 
 	if syncAllResources {
 		syncResources = negotiator.dynamicDiscovery.GetAllResourcesAsSyncResources()
+		allExcludeResources := make([]string, 0)
+		for _, gr := range originSyncResources {
+			if len(gr.ExcludeResources) > 0 {
+				allExcludeResources = append(allExcludeResources, gr.ExcludeResources...)
+			}
+		}
+		allExcludeResourcesSet := sets.New(allExcludeResources...)
+		for k, groupResources := range syncResources {
+			if allExcludeResourcesSet.Has(groupResources.Resources[0]) {
+				syncResources[k].ExcludeResources = groupResources.Resources
+			}
+		}
 	} else if negotiator.syncAllCustomResources && clusterpediafeature.FeatureGate.Enabled(features.AllowSyncAllCustomResources) {
 		syncResources = negotiator.dynamicDiscovery.AttachAllCustomResourcesToSyncResources(syncResources)
 	}
@@ -85,7 +99,11 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
 	for _, groupResources := range syncResources {
+		excludedResourcesSet := sets.New(groupResources.ExcludeResources...)
 		for _, resource := range groupResources.Resources {
+			if excludedResourcesSet.Has(resource) {
+				continue
+			}
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
 
 			if clusterpediafeature.FeatureGate.Enabled(features.IgnoreSyncLease) {
