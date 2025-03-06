@@ -130,30 +130,15 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 	delegate := delegationTarget.UnprotectedHandler()
 	if delegate == nil {
+		// To prevent anomalous requests from being sent to member clusters due to improper usage,
+		// we do not allow proxying requests with unmatched prefixes to member clusters.
 		delegate = http.NotFoundHandler()
 	}
 
 	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.StorageFactory, c.InitialAPIGroupResources)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
-	// handle root discovery request
-	genericserver.Handler.NonGoRestfulMux.Handle("/api", discoveryManager)
-	genericserver.Handler.NonGoRestfulMux.Handle("/apis", discoveryManager)
-
-	resourceHandler := &ResourceHandler{
-		minRequestTimeout: time.Duration(c.GenericConfig.MinRequestTimeout) * time.Second,
-
-		delegate:      delegate,
-		rest:          restManager,
-		discovery:     discoveryManager,
-		clusterLister: c.InformerFactory.Cluster().V1alpha2().PediaClusters().Lister(),
-	}
-	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
-	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
-
 	clusterInformer := c.InformerFactory.Cluster().V1alpha2().PediaClusters()
-	_ = NewClusterResourceController(restManager, discoveryManager, clusterInformer)
-
 	connector := proxyrest.NewProxyConnector(clusterInformer.Lister(), c.ExtraConfig.AllowPediaClusterConfigReuse, c.ExtraConfig.ExtraProxyRequestHeaderPrefixes)
 
 	methodSet := sets.New("GET")
@@ -181,8 +166,30 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 			methods = append(methods, m)
 		}
 	}
+	proxy := proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, connector)
 
-	resourceHandler.proxy = proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, connector)
+	// forward request
+	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/proxy/", http.StripPrefix("/proxy", proxy))
+
+	// handle root discovery request
+	discoveryHandler := WrapForwardRequestHandler(discoveryManager, proxy)
+	genericserver.Handler.NonGoRestfulMux.Handle("/api", discoveryHandler)
+	genericserver.Handler.NonGoRestfulMux.Handle("/apis", discoveryHandler)
+
+	resourceHandler := &ResourceHandler{
+		minRequestTimeout: time.Duration(c.GenericConfig.MinRequestTimeout) * time.Second,
+
+		delegate:      delegate,
+		proxy:         proxy,
+		rest:          restManager,
+		discovery:     discoveryManager,
+		clusterLister: c.InformerFactory.Cluster().V1alpha2().PediaClusters().Lister(),
+	}
+
+	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/api/", resourceHandler)
+	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/apis/", resourceHandler)
+
+	_ = NewClusterResourceController(restManager, discoveryManager, clusterInformer)
 	return genericserver, methods, nil
 }
 
@@ -227,4 +234,14 @@ func (r wrapRequestInfoResolverForNamespace) NewRequestInfo(req *http.Request) (
 		info.Namespace = ""
 	}
 	return info, nil
+}
+
+func WrapForwardRequestHandler(handler http.Handler, proxy http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if HasForwardRequestHeader(req) {
+			proxy.ServeHTTP(rw, req)
+			return
+		}
+		handler.ServeHTTP(rw, req)
+	})
 }

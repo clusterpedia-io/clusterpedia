@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,8 +45,13 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	shouldForwardRequest := HasForwardRequestHeader(req)
 	// handle discovery request
 	if !requestInfo.IsResourceRequest {
+		if shouldForwardRequest {
+			r.proxy.ServeHTTP(w, req)
+			return
+		}
 		r.discovery.ServeHTTP(w, req)
 		return
 	}
@@ -80,11 +86,16 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if shouldForwardRequest {
+		r.proxy.ServeHTTP(w, req)
+		return
+	}
+
 	resource, reqScope, storage, existed := r.rest.GetResourceREST(gvr, requestInfo.Subresource)
 	if !existed {
 		// TODO(iceber): Add the specialized error for subresources
 		err := fmt.Errorf("not found request scope or resource storage")
-		klog.ErrorS(err, "Failed to handle resource request", "resource", gvr)
+		klog.ErrorS(err, "Failed to handle resource request", "resource", gvr, "subresource", requestInfo.Subresource)
 		responsewriters.ErrorNegotiated(
 			apierrors.NewInternalError(err),
 			Codecs, gvr.GroupVersion(), w, req,
@@ -167,4 +178,9 @@ func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaC
 	if msg != "" {
 		warning.AddWarning(ctx, "", msg)
 	}
+}
+
+func HasForwardRequestHeader(req *http.Request) bool {
+	value := req.Header.Get("x-clusterpedia-forward")
+	return strings.ToLower(value) == "true"
 }

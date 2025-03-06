@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/url"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
@@ -13,7 +13,6 @@ import (
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
-	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
@@ -46,12 +45,7 @@ func (r *RemoteProxyREST) Error(w http.ResponseWriter, req *http.Request, err er
 func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeRequired bool, responder proxy.ErrorResponder, wrapProxy func(*proxy.UpgradeAwareHandler) http.Handler) (http.Handler, error) {
 	clusterName := request.ClusterNameValue(ctx)
 	if clusterName == "" {
-		return nil, errors.New("missing cluster")
-	}
-
-	requestInfo, ok := genericrequest.RequestInfoFrom(ctx)
-	if !ok {
-		return nil, errors.New("missing RequestInfo")
+		return nil, apierrors.NewBadRequest("please specify the cluster name when using proxy model.")
 	}
 
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -62,12 +56,18 @@ func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeR
 			return
 		}
 
-		target, err := url.ParseRequestURI(endpoint + requestInfo.Path)
+		target, err := url.ParseRequestURI(endpoint + req.URL.Path)
 		if err != nil {
 			responder.Error(rw, req, err)
 			return
 		}
-		target.RawQuery = request.RequestQueryFrom(ctx).Encode()
+
+		// First get URL Query from context.Context
+		if query := request.RequestQueryFrom(ctx); query != nil {
+			target.RawQuery = query.Encode()
+		} else {
+			target.RawQuery = req.URL.RawQuery
+		}
 
 		proxy := proxy.NewUpgradeAwareHandler(target, transport, false, upgradeRequired, responder)
 		proxy.UseLocationHost = true
