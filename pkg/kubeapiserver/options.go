@@ -12,6 +12,8 @@ import (
 )
 
 type Options struct {
+	ClusterCertificationSecretNamespace string
+
 	// AllowPediaClusterConfigForProxyRequest controls all proxy requests.
 	// TODO(iceber): Perhaps we could add a separate setting specifically for subresource proxy request.
 	AllowPediaClusterConfigForProxyRequest bool
