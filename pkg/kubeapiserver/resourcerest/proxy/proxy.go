@@ -51,13 +51,13 @@ func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeR
 		// TODO(iceber): need disconnect when the cluster authentication information changes
 		endpoint, transport, err := connGetter.GetClusterConnection(ctx, clusterName, req)
 		if err != nil {
-			responder.Error(rw, req, err)
+			responder.Error(rw, req, apierrors.NewBadRequest(err.Error()))
 			return
 		}
 
 		target, err := url.ParseRequestURI(endpoint + req.URL.Path)
 		if err != nil {
-			responder.Error(rw, req, err)
+			responder.Error(rw, req, apierrors.NewBadRequest(err.Error()))
 			return
 		}
 

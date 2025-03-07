@@ -92,7 +92,7 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 }
 
 func Run(ctx context.Context, c *config.Config) error {
-	synchromanager := synchromanager.NewManager(c.CRDClient, c.StorageFactory, c.ClusterSyncConfig, c.ShardingName)
+	synchromanager := synchromanager.NewManager(c.Client, c.CRDClient, c.StorageFactory, c.ClusterSyncConfig, c.ShardingName, c.Namespace)
 
 	go func() {
 		metricsserver.Run(c.MetricsServerConfig)

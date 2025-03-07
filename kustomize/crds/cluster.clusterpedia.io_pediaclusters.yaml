@@ -65,6 +65,64 @@ spec:
             properties:
               apiserver:
                 type: string
+              authenticationFrom:
+                properties:
+                  ca:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  cert:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  key:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  kubeconfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  token:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
               caData:
                 format: byte
                 type: string

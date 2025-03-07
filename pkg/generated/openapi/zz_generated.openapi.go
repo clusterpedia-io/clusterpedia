@@ -13,6 +13,8 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthentication":          schema_clusterpedia_io_api_cluster_v1alpha2_ClusterAuthentication(ref),
+		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource":    schema_clusterpedia_io_api_cluster_v1alpha2_ClusterAuthenticationSource(ref),
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterGroupResources":          schema_clusterpedia_io_api_cluster_v1alpha2_ClusterGroupResources(ref),
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterGroupResourcesStatus":    schema_clusterpedia_io_api_cluster_v1alpha2_ClusterGroupResourcesStatus(ref),
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterResourceStatus":          schema_clusterpedia_io_api_cluster_v1alpha2_ClusterResourceStatus(ref),
@@ -24,6 +26,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterSyncResourcesSpec":       schema_clusterpedia_io_api_cluster_v1alpha2_ClusterSyncResourcesSpec(ref),
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.PediaCluster":                   schema_clusterpedia_io_api_cluster_v1alpha2_PediaCluster(ref),
 		"github.com/clusterpedia-io/api/cluster/v1alpha2.PediaClusterList":               schema_clusterpedia_io_api_cluster_v1alpha2_PediaClusterList(ref),
+		"github.com/clusterpedia-io/api/cluster/v1alpha2.SecretKeySelector":              schema_clusterpedia_io_api_cluster_v1alpha2_SecretKeySelector(ref),
 		"github.com/clusterpedia-io/api/clusterpedia/v1beta1.CollectionResource":         schema_clusterpedia_io_api_clusterpedia_v1beta1_CollectionResource(ref),
 		"github.com/clusterpedia-io/api/clusterpedia/v1beta1.CollectionResourceList":     schema_clusterpedia_io_api_clusterpedia_v1beta1_CollectionResourceList(ref),
 		"github.com/clusterpedia-io/api/clusterpedia/v1beta1.CollectionResourceType":     schema_clusterpedia_io_api_clusterpedia_v1beta1_CollectionResourceType(ref),
@@ -96,6 +99,73 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                       schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		"k8s.io/apimachinery/pkg/runtime.Unknown":                                        schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		"k8s.io/apimachinery/pkg/version.Info":                                           schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterAuthentication(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kubeconfig": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"),
+						},
+					},
+					"ca": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"),
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"),
+						},
+					},
+					"cert": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"),
+						},
+					},
+					"token": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthenticationSource"},
+	}
+}
+
+func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterAuthenticationSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace string `json:\"namespace\"`",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"name", "key"},
+			},
+		},
 	}
 }
 
@@ -349,6 +419,11 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterSpec(ref common.Referenc
 							Format: "byte",
 						},
 					},
+					"authenticationFrom": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthentication"),
+						},
+					},
 					"syncResources": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -385,7 +460,7 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterGroupResources"},
+			"github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterAuthentication", "github.com/clusterpedia-io/api/cluster/v1alpha2.ClusterGroupResources"},
 	}
 }
 
@@ -654,6 +729,34 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_PediaClusterList(ref common.Ref
 		},
 		Dependencies: []string{
 			"github.com/clusterpedia-io/api/cluster/v1alpha2.PediaCluster", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_clusterpedia_io_api_cluster_v1alpha2_SecretKeySelector(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace string `json:\"namespace\"`",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"name", "key"},
+			},
+		},
 	}
 }
 

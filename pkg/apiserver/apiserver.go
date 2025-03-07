@@ -124,6 +124,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 	resourceServerConfig.GenericConfig.ExternalAddress = config.GenericConfig.ExternalAddress
 	resourceServerConfig.GenericConfig.LoopbackClientConfig = config.GenericConfig.LoopbackClientConfig
 	resourceServerConfig.GenericConfig.TracerProvider = config.GenericConfig.TracerProvider
+	resourceServerConfig.GenericConfig.SharedInformerFactory = config.GenericConfig.SharedInformerFactory
 	resourceServerConfig.InformerFactory = clusterpediaInformerFactory
 	resourceServerConfig.StorageFactory = config.StorageFactory
 	resourceServerConfig.InitialAPIGroupResources = initialAPIGroupResources

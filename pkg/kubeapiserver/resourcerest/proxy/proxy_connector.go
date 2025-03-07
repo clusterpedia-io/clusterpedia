@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
@@ -20,9 +21,10 @@ type Connector struct {
 	allowConfigReuse    bool
 	extraHeaderPrefixes []string
 	clusterLister       clusterlister.PediaClusterLister
+	secretLister        corev1listers.SecretNamespaceLister
 }
 
-func NewProxyConnector(clusterLister clusterlister.PediaClusterLister, allowPediaClusterConfigReuse bool, extraHeaderPrefixes []string) ClusterConnectionGetter {
+func NewProxyConnector(clusterLister clusterlister.PediaClusterLister, secretLister corev1listers.SecretNamespaceLister, allowPediaClusterConfigReuse bool, extraHeaderPrefixes []string) ClusterConnectionGetter {
 	if len(extraHeaderPrefixes) == 0 {
 		extraHeaderPrefixes = []string{DefaultProxyRequestHeaderPrefix}
 	}
@@ -30,6 +32,7 @@ func NewProxyConnector(clusterLister clusterlister.PediaClusterLister, allowPedi
 		allowConfigReuse:    allowPediaClusterConfigReuse,
 		extraHeaderPrefixes: extraHeaderPrefixes,
 		clusterLister:       clusterLister,
+		secretLister:        secretLister,
 	}
 }
 
@@ -100,7 +103,7 @@ func (c *Connector) GetClusterConnection(ctx context.Context, name string, req *
 	}
 
 	if !authInHeader && c.allowConfigReuse {
-		config, err = utils.BuildClusterRestConfig(cluster)
+		config, err = utils.BuildClusterRestConfig(cluster, c.secretLister)
 		if err != nil {
 			return "", nil, err
 		}

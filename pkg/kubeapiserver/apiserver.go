@@ -66,6 +66,7 @@ func NewDefaultConfig() *Config {
 }
 
 type ExtraConfig struct {
+	SecretNamespace                 string
 	AllowPediaClusterConfigReuse    bool
 	ExtraProxyRequestHeaderPrefixes []string
 	AllowedProxySubresources        map[schema.GroupResource]sets.Set[string]
@@ -103,6 +104,7 @@ func (c *Config) Complete() CompletedConfig {
 type completedConfig struct {
 	GenericConfig genericapiserver.CompletedConfig
 
+	SecretNamespace          string
 	StorageFactory           storage.StorageFactory
 	InformerFactory          informers.SharedInformerFactory
 	InitialAPIGroupResources []*restmapper.APIGroupResources
@@ -138,8 +140,9 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.StorageFactory, c.InitialAPIGroupResources)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
+	secretLister := c.GenericConfig.SharedInformerFactory.Core().V1().Secrets().Lister().Secrets(c.ExtraConfig.SecretNamespace)
 	clusterInformer := c.InformerFactory.Cluster().V1alpha2().PediaClusters()
-	connector := proxyrest.NewProxyConnector(clusterInformer.Lister(), c.ExtraConfig.AllowPediaClusterConfigReuse, c.ExtraConfig.ExtraProxyRequestHeaderPrefixes)
+	connector := proxyrest.NewProxyConnector(clusterInformer.Lister(), secretLister, c.ExtraConfig.AllowPediaClusterConfigReuse, c.ExtraConfig.ExtraProxyRequestHeaderPrefixes)
 
 	methodSet := sets.New("GET")
 	for _, rest := range proxyrest.GetSubresourceRESTs(connector) {

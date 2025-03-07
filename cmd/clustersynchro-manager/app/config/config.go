@@ -1,6 +1,7 @@
 package config
 
 import (
+	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	componentbaseconfig "k8s.io/component-base/config"
@@ -14,6 +15,8 @@ import (
 
 type Config struct {
 	Kubeconfig    *restclient.Config
+	Namespace     string
+	Client        kubernetes.Interface
 	CRDClient     *crdclientset.Clientset
 	EventRecorder record.EventRecorder
 
