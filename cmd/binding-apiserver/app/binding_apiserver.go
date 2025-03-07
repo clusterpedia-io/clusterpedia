@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	genericfeatures "k8s.io/apiserver/pkg/features"
+	clientset "k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/featuregate"
@@ -60,12 +61,16 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("CompletedConfig.New() called with config.StorageFactory == nil")
 			}
 
+			client, err := clientset.NewForConfig(completedConfig.ClientConfig)
+			if err != nil {
+				return err
+			}
 			crdclient, err := versioned.NewForConfig(completedConfig.ClientConfig)
 			if err != nil {
 				return err
 			}
 
-			synchromanager := synchromanager.NewManager(crdclient, config.StorageFactory, clustersynchro.ClusterSyncConfig{}, "")
+			synchromanager := synchromanager.NewManager(client, crdclient, config.StorageFactory, clustersynchro.ClusterSyncConfig{}, "", config.ExtraConfig.SecretNamespace)
 			go synchromanager.Run(1, ctx.Done())
 
 			server, err := completedConfig.New()

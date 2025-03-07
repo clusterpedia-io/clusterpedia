@@ -71,6 +71,64 @@ spec:
               certData:
                 format: byte
                 type: string
+              certificationFrom:
+                properties:
+                  ca:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  cert:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  key:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  kubeconfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  token:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        description: Namespace string `json:"namespace"`
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
               keyData:
                 format: byte
                 type: string
