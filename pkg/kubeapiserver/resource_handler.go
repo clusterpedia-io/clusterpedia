@@ -19,6 +19,7 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	clusterpedia "github.com/clusterpedia-io/api/clusterpedia"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
@@ -26,9 +27,10 @@ import (
 )
 
 type ResourceHandler struct {
-	minRequestTimeout time.Duration
-	delegate          http.Handler
-	proxy             http.Handler
+	couldForwardAnyRequest bool
+	minRequestTimeout      time.Duration
+	delegate               http.Handler
+	proxy                  http.Handler
 
 	rest          *RESTManager
 	discovery     *discovery.DiscoveryManager
@@ -45,7 +47,26 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	shouldForwardRequest := HasForwardRequestHeader(req)
+	var shouldForwardRequest bool
+	switch requestInfo.Verb {
+	case "list", "watch":
+		query := request.RequestQueryFrom(req.Context())
+		if labelSelector := query.Get("labelSelector"); labelSelector != "" {
+			if newLabelSelector, trimed := trimForwardLabelForLabelSelectorQuery(labelSelector); trimed {
+				query.Set("labelSelector", newLabelSelector)
+				shouldForwardRequest = true
+			}
+		}
+	}
+	if !shouldForwardRequest && HasForwardRequestHeader(req) {
+		shouldForwardRequest = true
+	}
+
+	if shouldForwardRequest && r.couldForwardAnyRequest {
+		r.proxy.ServeHTTP(w, req)
+		return
+	}
+
 	// handle discovery request
 	if !requestInfo.IsResourceRequest {
 		if shouldForwardRequest {
@@ -178,6 +199,19 @@ func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaC
 	if msg != "" {
 		warning.AddWarning(ctx, "", msg)
 	}
+}
+
+var forwardLabelLength = len(clusterpedia.SearchLabelForwardRequest)
+
+func trimForwardLabelForLabelSelectorQuery(selector string) (string, bool) {
+	if i := strings.Index(selector, clusterpedia.SearchLabelForwardRequest); i != -1 {
+		l, other := selector[:i], selector[i+forwardLabelLength:]
+		if i := strings.Index(other, ","); i != -1 {
+			l += other[i:]
+		}
+		return strings.TrimPrefix(strings.TrimSuffix(l, ","), ","), true
+	}
+	return selector, false
 }
 
 func HasForwardRequestHeader(req *http.Request) bool {
