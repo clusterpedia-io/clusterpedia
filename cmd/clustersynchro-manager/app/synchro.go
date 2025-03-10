@@ -62,6 +62,13 @@ func NewClusterSynchroManagerCommand(ctx context.Context) *cobra.Command {
 				return err
 			}
 
+			defer func() {
+				err := config.StorageFactory.Shutdown()
+				if err != nil {
+					klog.ErrorS(err, "Failed to shutdown storage factory")
+				}
+			}()
+
 			if err := Run(ctx, config); err != nil {
 				return err
 			}
@@ -89,14 +96,6 @@ func Run(ctx context.Context, c *config.Config) error {
 
 	go func() {
 		metricsserver.Run(c.MetricsServerConfig)
-	}()
-
-	go func() {
-		<-ctx.Done()
-		err := c.StorageFactory.Shutdown()
-		if err != nil {
-			klog.ErrorS(err, "Failed to shutdown storage factory")
-		}
 	}()
 
 	if c.KubeMetricsServerConfig != nil {
