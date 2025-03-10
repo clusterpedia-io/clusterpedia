@@ -32,6 +32,8 @@ const (
 	SearchLabelSince  = "search.clusterpedia.io/since"
 	SearchLabelBefore = "search.clusterpedia.io/before"
 
+	SearchLabelForwardRequest = "search.clusterpedia.io/forward"
+
 	ShadowAnnotationClusterName          = "shadow.clusterpedia.io/cluster-name"
 	ShadowAnnotationGroupVersionResource = "shadow.clusterpedia.io/gvr"
 )
