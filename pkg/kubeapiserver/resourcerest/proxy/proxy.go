@@ -8,7 +8,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/proxy"
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
@@ -62,13 +61,6 @@ func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeR
 			return
 		}
 
-		// First get URL Query from context.Context
-		if query := request.RequestQueryFrom(ctx); query != nil {
-			target.RawQuery = query.Encode()
-		} else {
-			target.RawQuery = req.URL.RawQuery
-		}
-
 		proxy := proxy.NewUpgradeAwareHandler(target, transport, false, upgradeRequired, responder)
 		proxy.UseLocationHost = true
 
@@ -76,13 +68,17 @@ func proxyConn(ctx context.Context, connGetter ClusterConnectionGetter, upgradeR
 		if wrapProxy != nil {
 			handler = wrapProxy(proxy)
 		}
-		r := req.WithContext(req.Context())
-		r.Header = utilnet.CloneHeader(req.Header)
+
+		r := req.Clone(req.Context())
 		if auditID, _ := audit.AuditIDFrom(ctx); auditID != "" {
-			req.Header.Set(auditinternal.HeaderAuditID, string(auditID))
+			r.Header.Set(auditinternal.HeaderAuditID, string(auditID))
+		}
+		// get URL Query from context.Context
+		if query := request.RequestQueryFrom(ctx); query != nil {
+			r.URL.RawQuery = query.Encode()
 		}
 
-		handler.ServeHTTP(rw, req)
+		handler.ServeHTTP(rw, r)
 
 		// merge headers
 		for _, header := range []string{"Cache-Control", auditinternal.HeaderAuditID} {
