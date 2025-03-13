@@ -86,6 +86,8 @@ type ClusterSpec struct {
 	// +optional
 	KeyData []byte `json:"keyData,omitempty"`
 
+	AuthenticationFrom *ClusterAuthentication `json:"authenticationFrom,omitempty"`
+
 	// +required
 	SyncResources []ClusterGroupResources `json:"syncResources"`
 
@@ -97,6 +99,33 @@ type ClusterSpec struct {
 
 	// +optional
 	ShardingName string `json:"shardingName,omitempty"`
+}
+
+type ClusterAuthentication struct {
+	// +optional
+	KubeConfig *ClusterAuthenticationSource `json:"kubeconfig,omitempty"`
+
+	// +optional
+	CA *ClusterAuthenticationSource `json:"ca,omitempty"`
+
+	// +optional
+	Key *ClusterAuthenticationSource `json:"key,omitempty"`
+
+	// +optional
+	Cert *ClusterAuthenticationSource `json:"cert,omitempty"`
+
+	// +optional
+	Token *ClusterAuthenticationSource `json:"token,omitempty"`
+}
+
+type ClusterAuthenticationSource struct {
+	SecretKeySelector `json:",inline"`
+}
+
+type SecretKeySelector struct {
+	// Namespace string `json:"namespace"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
 }
 
 type ClusterGroupResources struct {

@@ -9,12 +9,16 @@ import (
 	"sync"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
+	corev1informers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -22,6 +26,7 @@ import (
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"github.com/clusterpedia-io/api/cluster/v1alpha2"
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/controller"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
@@ -45,6 +50,8 @@ type Manager struct {
 
 	clusterpediaclient crdclientset.Interface
 	informerFactory    externalversions.SharedInformerFactory
+	secretLister       corev1listers.SecretNamespaceLister
+	secretInformer     cache.SharedIndexInformer
 
 	shardingName               string
 	queue                      workqueue.RateLimitingInterface
@@ -57,18 +64,20 @@ type Manager struct {
 	synchrolock       sync.RWMutex
 	synchros          map[string]*clustersynchro.ClusterSynchro
 	synchroWaitGroup  wait.Group
+
+	clusterSecretsMap sync.Map
 }
 
 var _ kubestatemetrics.ClusterMetricsWriterListGetter = &Manager{}
 
-func NewManager(client crdclientset.Interface, storage storage.StorageFactory, syncConfig clustersynchro.ClusterSyncConfig, shardingName string) *Manager {
-	factory := externalversions.NewSharedInformerFactory(client, 0)
+func NewManager(client kubernetes.Interface, clusterpediaClient crdclientset.Interface, storage storage.StorageFactory, syncConfig clustersynchro.ClusterSyncConfig, shardingName string, secretNamespace string) *Manager {
+	factory := externalversions.NewSharedInformerFactory(clusterpediaClient, 0)
 	clusterinformer := factory.Cluster().V1alpha2().PediaClusters()
 	clusterSyncResourcesInformer := factory.Cluster().V1alpha2().ClusterSyncResources()
 
 	manager := &Manager{
 		informerFactory:    factory,
-		clusterpediaclient: client,
+		clusterpediaclient: clusterpediaClient,
 		shardingName:       shardingName,
 
 		storage:                    storage,
@@ -82,6 +91,25 @@ func NewManager(client crdclientset.Interface, storage storage.StorageFactory, s
 		clusterSyncConfig: syncConfig,
 		synchros:          make(map[string]*clustersynchro.ClusterSynchro),
 	}
+
+	secretInformer := corev1informers.NewSecretInformer(client, secretNamespace, 0, nil)
+	if _, err := secretInformer.AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(obj any) { manager.handleSecret(nil, obj.(*v1.Secret)) },
+			UpdateFunc: func(older, newer any) { manager.handleSecret(older.(*v1.Secret), newer.(*v1.Secret)) },
+			DeleteFunc: func(obj any) {
+				objName, err := cache.DeletionHandlingObjectToName(obj)
+				if err != nil {
+					return
+				}
+				manager.handleDeletedSecret(objName.Name)
+			},
+		},
+	); err != nil {
+		klog.ErrorS(err, "error when adding event handler to informer")
+	}
+	manager.secretInformer = secretInformer
+	manager.secretLister = corev1listers.NewSecretLister(secretInformer.GetIndexer()).Secrets(secretNamespace)
 
 	if _, err := clusterinformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -130,6 +158,21 @@ func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
 
 	// informerFactory should not be controlled by stopCh
 	stopInformer := make(chan struct{})
+
+	// Start the secret informer first
+	go manager.secretInformer.Run(stopInformer)
+	timeout := make(chan struct{})
+	go func() {
+		select {
+		case <-stopCh:
+		case <-time.After(60 * time.Second):
+		}
+		close(timeout)
+	}()
+	if !cache.WaitForCacheSync(timeout, manager.secretInformer.HasSynced) {
+		klog.Fatal("clustersynchro manager: wait for secret informer failed")
+	}
+
 	manager.informerFactory.Start(stopInformer)
 	if !cache.WaitForCacheSync(stopCh, manager.clusterInformer.HasSynced) {
 		klog.Fatal("clustersynchro manager: wait for informer factory failed")
@@ -157,6 +200,31 @@ func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
 	klog.Info("wait for cluster synchros stop...")
 	manager.synchroWaitGroup.Wait()
 	klog.Info("cluster synchro manager stopped.")
+}
+
+func (manager *Manager) handleSecret(old *v1.Secret, obj *v1.Secret) {
+	if old != nil && reflect.DeepEqual(old.Data, obj.Data) {
+		return
+	}
+
+	// TODO(Iceber): Optimize cluster lookup using the Key field
+	manager.clusterSecretsMap.Range(func(k, v any) bool {
+		secrets := v.(map[string]struct{})
+		if _, ok := secrets[obj.Name]; ok {
+			manager.enqueue(cache.ExplicitKey(k.(string)))
+		}
+		return true
+	})
+}
+
+func (manager *Manager) handleDeletedSecret(name string) {
+	manager.clusterSecretsMap.Range(func(k, v any) bool {
+		secrets := v.(map[string]struct{})
+		if _, ok := secrets[name]; ok {
+			manager.enqueue(cache.ExplicitKey(k.(string)))
+		}
+		return true
+	})
 }
 
 func (manager *Manager) addCluster(obj interface{}) {
@@ -328,7 +396,21 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	synchro := manager.synchros[cluster.Name]
 	manager.synchrolock.RUnlock()
 
-	config, err := utils.BuildClusterRestConfig(cluster)
+	if from := cluster.Spec.AuthenticationFrom; from != nil {
+		secrets := make(map[string]struct{}, 5)
+		for _, source := range []*v1alpha2.ClusterAuthenticationSource{
+			from.KubeConfig, from.CA, from.Cert, from.Token, from.Key,
+		} {
+			if source != nil {
+				secrets[source.Name] = struct{}{}
+			}
+		}
+		if len(secrets) != 0 {
+			manager.clusterSecretsMap.Store(cluster.Name, secrets)
+		}
+	}
+
+	config, err := utils.BuildClusterRestConfig(cluster, manager.secretLister)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build cluster config", "cluster", cluster.Name)
 		manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, cluster.Spec.APIServer, synchro, clusterv1alpha2.InvalidConfigReason,
@@ -453,6 +535,8 @@ func (manager *Manager) stopClusterSynchro(name string) {
 }
 
 func (manager *Manager) removeCluster(name string) error {
+	manager.clusterSecretsMap.Delete(name)
+
 	manager.synchrolock.Lock()
 	synchro := manager.synchros[name]
 	delete(manager.synchros, name)

@@ -26,6 +26,8 @@ import (
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
 
+const DefaultNamespace = "clusterpedia-system"
+
 type ClusterPediaServerOptions struct {
 	MaxRequestsInFlight         int
 	MaxMutatingRequestsInFlight int
@@ -41,6 +43,7 @@ type ClusterPediaServerOptions struct {
 	Traces         *genericoptions.TracingOptions
 	Metrics        *metrics.Options
 
+	RunInNamespace string
 	Storage        *storageoptions.StorageOptions
 	ResourceServer *kubeapiserver.Options
 }
@@ -72,6 +75,7 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Traces:         genericoptions.NewTracingOptions(),
 		Metrics:        metrics.NewOptions(),
 
+		RunInNamespace: DefaultNamespace,
 		Storage:        storageoptions.NewStorageOptions(),
 		ResourceServer: kubeapiserver.NewOptions(),
 	}
@@ -101,6 +105,7 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	resourceServerConfig.SecretNamespace = o.RunInNamespace
 
 	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error create self-signed certificates: %v", err)
@@ -171,6 +176,7 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	var fss cliflag.NamedFlagSets
 
 	genericfs := fss.FlagSet("generic")
+	genericfs.StringVar(&o.RunInNamespace, "namespace", o.RunInNamespace, "The namespace in which the Pod is running.")
 	genericfs.IntVar(&o.MaxRequestsInFlight, "max-requests-inflight", o.MaxRequestsInFlight, ""+
 		"Otherwise, this flag limits the maximum number of non-mutating requests in flight, or a zero value disables the limit completely.")
 	genericfs.IntVar(&o.MaxMutatingRequestsInFlight, "max-mutating-requests-inflight", o.MaxMutatingRequestsInFlight, ""+
