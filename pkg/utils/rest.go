@@ -19,6 +19,9 @@ func BuildClusterRestConfig(cluster *clusterv1alpha2.PediaCluster, lister v1.Sec
 	if len(cluster.Spec.Kubeconfig) == 0 && len(cluster.Spec.TokenData) == 0 &&
 		(len(cluster.Spec.CertData) == 0 || len(cluster.Spec.KeyData) == 0) &&
 		cluster.Spec.AuthenticationFrom != nil {
+		if lister == nil {
+			return nil, fmt.Errorf("cluster authentication secret listers is nil, perhaps you need to enable feature gate %s", "ClusterAuthenticationFromSecret")
+		}
 		config, err := buildClusterRestConfigFromSecret(cluster.Spec.APIServer, cluster.Spec.AuthenticationFrom, lister)
 		if err != nil {
 			return nil, fmt.Errorf("Cluster Authentication Error: %w", err)

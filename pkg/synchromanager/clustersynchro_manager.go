@@ -92,24 +92,27 @@ func NewManager(client kubernetes.Interface, clusterpediaClient crdclientset.Int
 		synchros:          make(map[string]*clustersynchro.ClusterSynchro),
 	}
 
-	secretInformer := corev1informers.NewSecretInformer(client, secretNamespace, 0, nil)
-	if _, err := secretInformer.AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj any) { manager.handleSecret(nil, obj.(*v1.Secret)) },
-			UpdateFunc: func(older, newer any) { manager.handleSecret(older.(*v1.Secret), newer.(*v1.Secret)) },
-			DeleteFunc: func(obj any) {
-				objName, err := cache.DeletionHandlingObjectToName(obj)
-				if err != nil {
-					return
-				}
-				manager.handleDeletedSecret(objName.Name)
+	if clusterpediafeature.FeatureGate.Enabled(features.ClusterAuthenticationFromSecret) {
+		secretInformer := corev1informers.NewSecretInformer(client, secretNamespace, 0, nil)
+		if _, err := secretInformer.AddEventHandler(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    func(obj any) { manager.handleSecret(nil, obj.(*v1.Secret)) },
+				UpdateFunc: func(older, newer any) { manager.handleSecret(older.(*v1.Secret), newer.(*v1.Secret)) },
+				DeleteFunc: func(obj any) {
+					objName, err := cache.DeletionHandlingObjectToName(obj)
+					if err != nil {
+						return
+					}
+					manager.handleDeletedSecret(objName.Name)
+				},
 			},
-		},
-	); err != nil {
-		klog.ErrorS(err, "error when adding event handler to informer")
+		); err != nil {
+			klog.ErrorS(err, "error when adding event handler to informer")
+		}
+
+		manager.secretInformer = secretInformer
+		manager.secretLister = corev1listers.NewSecretLister(secretInformer.GetIndexer()).Secrets(secretNamespace)
 	}
-	manager.secretInformer = secretInformer
-	manager.secretLister = corev1listers.NewSecretLister(secretInformer.GetIndexer()).Secrets(secretNamespace)
 
 	if _, err := clusterinformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -159,18 +162,20 @@ func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
 	// informerFactory should not be controlled by stopCh
 	stopInformer := make(chan struct{})
 
-	// Start the secret informer first
-	go manager.secretInformer.Run(stopInformer)
-	timeout := make(chan struct{})
-	go func() {
-		select {
-		case <-stopCh:
-		case <-time.After(60 * time.Second):
+	if manager.secretInformer != nil {
+		// Start the secret informer first
+		go manager.secretInformer.Run(stopInformer)
+		timeout := make(chan struct{})
+		go func() {
+			select {
+			case <-stopCh:
+			case <-time.After(60 * time.Second):
+			}
+			close(timeout)
+		}()
+		if !cache.WaitForCacheSync(timeout, manager.secretInformer.HasSynced) {
+			klog.Fatal("clustersynchro manager: wait for secret informer failed")
 		}
-		close(timeout)
-	}()
-	if !cache.WaitForCacheSync(timeout, manager.secretInformer.HasSynced) {
-		klog.Fatal("clustersynchro manager: wait for secret informer failed")
 	}
 
 	manager.informerFactory.Start(stopInformer)
