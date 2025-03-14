@@ -66,10 +66,12 @@ func NewDefaultConfig() *Config {
 }
 
 type ExtraConfig struct {
-	SecretNamespace                 string
-	AllowPediaClusterConfigReuse    bool
-	ExtraProxyRequestHeaderPrefixes []string
-	AllowedProxySubresources        map[schema.GroupResource]sets.Set[string]
+	SecretNamespace                   string
+	AllowPediaClusterConfigReuse      bool
+	ExtraProxyRequestHeaderPrefixes   []string
+	AllowedProxySubresources          map[schema.GroupResource]sets.Set[string]
+	EnableProxyPathForForwardRequest  bool
+	AllowForwardUnsyncResourceRequest bool
 }
 
 type Config struct {
@@ -171,8 +173,11 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	}
 	proxy := proxyrest.NewRemoteProxyREST(c.GenericConfig.Serializer, connector)
 
-	// forward request
-	genericserver.Handler.NonGoRestfulMux.HandlePrefix("/proxy/", http.StripPrefix("/proxy", proxy))
+	if c.ExtraConfig.EnableProxyPathForForwardRequest {
+		// forward request
+		genericserver.Handler.NonGoRestfulMux.HandlePrefix("/proxy/", http.StripPrefix("/proxy", proxy))
+		methods = sortedMethods
+	}
 
 	// handle root discovery request
 	discoveryHandler := WrapForwardRequestHandler(discoveryManager, proxy)
@@ -180,7 +185,8 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	genericserver.Handler.NonGoRestfulMux.Handle("/apis", discoveryHandler)
 
 	resourceHandler := &ResourceHandler{
-		minRequestTimeout: time.Duration(c.GenericConfig.MinRequestTimeout) * time.Second,
+		allowForwardUnsyncResourceRequest: c.ExtraConfig.AllowForwardUnsyncResourceRequest,
+		minRequestTimeout:                 time.Duration(c.GenericConfig.MinRequestTimeout) * time.Second,
 
 		delegate:      delegate,
 		proxy:         proxy,
