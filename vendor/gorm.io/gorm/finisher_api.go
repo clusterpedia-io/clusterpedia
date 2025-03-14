@@ -33,9 +33,10 @@ func (db *DB) CreateInBatches(value interface{}, batchSize int) (tx *DB) {
 		var rowsAffected int64
 		tx = db.getInstance()
 
+		// the reflection length judgment of the optimized value
+		reflectLen := reflectValue.Len()
+
 		callFc := func(tx *DB) error {
-			// the reflection length judgment of the optimized value
-			reflectLen := reflectValue.Len()
 			for i := 0; i < reflectLen; i += batchSize {
 				ends := i + batchSize
 				if ends > reflectLen {
@@ -53,7 +54,7 @@ func (db *DB) CreateInBatches(value interface{}, batchSize int) (tx *DB) {
 			return nil
 		}
 
-		if tx.SkipDefaultTransaction {
+		if tx.SkipDefaultTransaction || reflectLen <= batchSize {
 			tx.AddError(callFc(tx.Session(&Session{})))
 		} else {
 			tx.AddError(tx.Transaction(callFc))
@@ -101,14 +102,13 @@ func (db *DB) Save(value interface{}) (tx *DB) {
 			tx.Statement.Selects = append(tx.Statement.Selects, "*")
 		}
 
-		tx = tx.callbacks.Update().Execute(tx)
+		updateTx := tx.callbacks.Update().Execute(tx.Session(&Session{Initialized: true}))
 
-		if tx.Error == nil && tx.RowsAffected == 0 && !tx.DryRun && !selectedUpdate {
-			result := reflect.New(tx.Statement.Schema.ModelType).Interface()
-			if result := tx.Session(&Session{}).Limit(1).Find(result); result.RowsAffected == 0 {
-				return tx.Create(value)
-			}
+		if updateTx.Error == nil && updateTx.RowsAffected == 0 && !updateTx.DryRun && !selectedUpdate {
+			return tx.Session(&Session{SkipHooks: true}).Clauses(clause.OnConflict{UpdateAll: true}).Create(value)
 		}
+
+		return updateTx
 	}
 
 	return
@@ -231,7 +231,11 @@ func (db *DB) FindInBatches(dest interface{}, batchSize int, fc func(tx *DB, bat
 			break
 		}
 
-		primaryValue, _ := result.Statement.Schema.PrioritizedPrimaryField.ValueOf(tx.Statement.Context, resultsValue.Index(resultsValue.Len()-1))
+		primaryValue, zero := result.Statement.Schema.PrioritizedPrimaryField.ValueOf(tx.Statement.Context, resultsValue.Index(resultsValue.Len()-1))
+		if zero {
+			tx.AddError(ErrPrimaryKeyRequired)
+			break
+		}
 		queryDB = tx.Clauses(clause.Gt{Column: clause.Column{Table: clause.CurrentTable, Name: clause.PrimaryKey}, Value: primaryValue})
 	}
 
@@ -290,6 +294,16 @@ func (db *DB) assignInterfacesToValue(values ...interface{}) {
 
 // FirstOrInit finds the first matching record, otherwise if not found initializes a new instance with given conds.
 // Each conds must be a struct or map.
+//
+// FirstOrInit never modifies the database. It is often used with Assign and Attrs.
+//
+//	// assign an email if the record is not found
+//	db.Where(User{Name: "non_existing"}).Attrs(User{Email: "fake@fake.org"}).FirstOrInit(&user)
+//	// user -> User{Name: "non_existing", Email: "fake@fake.org"}
+//
+//	// assign email regardless of if record is found
+//	db.Where(User{Name: "jinzhu"}).Assign(User{Email: "fake@fake.org"}).FirstOrInit(&user)
+//	// user -> User{Name: "jinzhu", Age: 20, Email: "fake@fake.org"}
 func (db *DB) FirstOrInit(dest interface{}, conds ...interface{}) (tx *DB) {
 	queryTx := db.Limit(1).Order(clause.OrderByColumn{
 		Column: clause.Column{Table: clause.CurrentTable, Name: clause.PrimaryKey},
@@ -317,50 +331,69 @@ func (db *DB) FirstOrInit(dest interface{}, conds ...interface{}) (tx *DB) {
 
 // FirstOrCreate finds the first matching record, otherwise if not found creates a new instance with given conds.
 // Each conds must be a struct or map.
+//
+// Using FirstOrCreate in conjunction with Assign will result in an update to the database even if the record exists.
+//
+//	// assign an email if the record is not found
+//	result := db.Where(User{Name: "non_existing"}).Attrs(User{Email: "fake@fake.org"}).FirstOrCreate(&user)
+//	// user -> User{Name: "non_existing", Email: "fake@fake.org"}
+//	// result.RowsAffected -> 1
+//
+//	// assign email regardless of if record is found
+//	result := db.Where(User{Name: "jinzhu"}).Assign(User{Email: "fake@fake.org"}).FirstOrCreate(&user)
+//	// user -> User{Name: "jinzhu", Age: 20, Email: "fake@fake.org"}
+//	// result.RowsAffected -> 1
 func (db *DB) FirstOrCreate(dest interface{}, conds ...interface{}) (tx *DB) {
 	tx = db.getInstance()
 	queryTx := db.Session(&Session{}).Limit(1).Order(clause.OrderByColumn{
 		Column: clause.Column{Table: clause.CurrentTable, Name: clause.PrimaryKey},
 	})
-	if result := queryTx.Find(dest, conds...); result.Error == nil {
-		if result.RowsAffected == 0 {
-			if c, ok := result.Statement.Clauses["WHERE"]; ok {
-				if where, ok := c.Expression.(clause.Where); ok {
-					result.assignInterfacesToValue(where.Exprs)
-				}
-			}
 
-			// initialize with attrs, conds
-			if len(db.Statement.attrs) > 0 {
-				result.assignInterfacesToValue(db.Statement.attrs...)
-			}
-
-			// initialize with attrs, conds
-			if len(db.Statement.assigns) > 0 {
-				result.assignInterfacesToValue(db.Statement.assigns...)
-			}
-
-			return tx.Create(dest)
-		} else if len(db.Statement.assigns) > 0 {
-			exprs := tx.Statement.BuildCondition(db.Statement.assigns[0], db.Statement.assigns[1:]...)
-			assigns := map[string]interface{}{}
-			for _, expr := range exprs {
-				if eq, ok := expr.(clause.Eq); ok {
-					switch column := eq.Column.(type) {
-					case string:
-						assigns[column] = eq.Value
-					case clause.Column:
-						assigns[column.Name] = eq.Value
-					default:
-					}
-				}
-			}
-
-			return tx.Model(dest).Updates(assigns)
-		}
-	} else {
+	result := queryTx.Find(dest, conds...)
+	if result.Error != nil {
 		tx.Error = result.Error
+		return tx
 	}
+
+	if result.RowsAffected == 0 {
+		if c, ok := result.Statement.Clauses["WHERE"]; ok {
+			if where, ok := c.Expression.(clause.Where); ok {
+				result.assignInterfacesToValue(where.Exprs)
+			}
+		}
+
+		// initialize with attrs, conds
+		if len(db.Statement.attrs) > 0 {
+			result.assignInterfacesToValue(db.Statement.attrs...)
+		}
+
+		// initialize with attrs, conds
+		if len(db.Statement.assigns) > 0 {
+			result.assignInterfacesToValue(db.Statement.assigns...)
+		}
+
+		return tx.Create(dest)
+	} else if len(db.Statement.assigns) > 0 {
+		exprs := tx.Statement.BuildCondition(db.Statement.assigns[0], db.Statement.assigns[1:]...)
+		assigns := map[string]interface{}{}
+		for i := 0; i < len(exprs); i++ {
+			expr := exprs[i]
+
+			if eq, ok := expr.(clause.AndConditions); ok {
+				exprs = append(exprs, eq.Exprs...)
+			} else if eq, ok := expr.(clause.Eq); ok {
+				switch column := eq.Column.(type) {
+				case string:
+					assigns[column] = eq.Value
+				case clause.Column:
+					assigns[column.Name] = eq.Value
+				}
+			}
+		}
+
+		return tx.Model(dest).Updates(assigns)
+	}
+
 	return tx
 }
 
@@ -502,6 +535,7 @@ func (db *DB) Scan(dest interface{}) (tx *DB) {
 			tx.ScanRows(rows, dest)
 		} else {
 			tx.RowsAffected = 0
+			tx.AddError(rows.Err())
 		}
 		tx.AddError(rows.Close())
 	}
@@ -514,8 +548,9 @@ func (db *DB) Scan(dest interface{}) (tx *DB) {
 }
 
 // Pluck queries a single column from a model, returning in the slice dest. E.g.:
-//     var ages []int64
-//     db.Model(&users).Pluck("age", &ages)
+//
+//	var ages []int64
+//	db.Model(&users).Pluck("age", &ages)
 func (db *DB) Pluck(column string, dest interface{}) (tx *DB) {
 	tx = db.getInstance()
 	if tx.Statement.Model != nil {
@@ -592,7 +627,6 @@ func (db *DB) Transaction(fc func(tx *DB) error, opts ...*sql.TxOptions) (err er
 			if err != nil {
 				return
 			}
-
 			defer func() {
 				// Make sure to rollback when panic, Block error or Commit error
 				if panicked || err != nil {
@@ -677,7 +711,21 @@ func (db *DB) Rollback() *DB {
 
 func (db *DB) SavePoint(name string) *DB {
 	if savePointer, ok := db.Dialector.(SavePointerDialectorInterface); ok {
+		// close prepared statement, because SavePoint not support prepared statement.
+		// e.g. mysql8.0 doc: https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+		var (
+			preparedStmtTx   *PreparedStmtTX
+			isPreparedStmtTx bool
+		)
+		// close prepared statement, because SavePoint not support prepared statement.
+		if preparedStmtTx, isPreparedStmtTx = db.Statement.ConnPool.(*PreparedStmtTX); isPreparedStmtTx {
+			db.Statement.ConnPool = preparedStmtTx.Tx
+		}
 		db.AddError(savePointer.SavePoint(db, name))
+		// restore prepared statement
+		if isPreparedStmtTx {
+			db.Statement.ConnPool = preparedStmtTx
+		}
 	} else {
 		db.AddError(ErrUnsupportedDriver)
 	}
@@ -686,7 +734,21 @@ func (db *DB) SavePoint(name string) *DB {
 
 func (db *DB) RollbackTo(name string) *DB {
 	if savePointer, ok := db.Dialector.(SavePointerDialectorInterface); ok {
+		// close prepared statement, because RollbackTo not support prepared statement.
+		// e.g. mysql8.0 doc: https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+		var (
+			preparedStmtTx   *PreparedStmtTX
+			isPreparedStmtTx bool
+		)
+		// close prepared statement, because SavePoint not support prepared statement.
+		if preparedStmtTx, isPreparedStmtTx = db.Statement.ConnPool.(*PreparedStmtTX); isPreparedStmtTx {
+			db.Statement.ConnPool = preparedStmtTx.Tx
+		}
 		db.AddError(savePointer.RollbackTo(db, name))
+		// restore prepared statement
+		if isPreparedStmtTx {
+			db.Statement.ConnPool = preparedStmtTx
+		}
 	} else {
 		db.AddError(ErrUnsupportedDriver)
 	}

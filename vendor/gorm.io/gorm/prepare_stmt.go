@@ -3,6 +3,7 @@ package gorm
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"sync"
 )
 
@@ -20,13 +21,22 @@ type PreparedStmtDB struct {
 	ConnPool
 }
 
-func (db *PreparedStmtDB) GetDBConn() (*sql.DB, error) {
-	if dbConnector, ok := db.ConnPool.(GetDBConnector); ok && dbConnector != nil {
-		return dbConnector.GetDBConn()
+func NewPreparedStmtDB(connPool ConnPool) *PreparedStmtDB {
+	return &PreparedStmtDB{
+		ConnPool:    connPool,
+		Stmts:       make(map[string]*Stmt),
+		Mux:         &sync.RWMutex{},
+		PreparedSQL: make([]string, 0, 100),
 	}
+}
 
+func (db *PreparedStmtDB) GetDBConn() (*sql.DB, error) {
 	if sqldb, ok := db.ConnPool.(*sql.DB); ok {
 		return sqldb, nil
+	}
+
+	if dbConnector, ok := db.ConnPool.(GetDBConnector); ok && dbConnector != nil {
+		return dbConnector.GetDBConn()
 	}
 
 	return nil, ErrInvalidDB
@@ -44,16 +54,15 @@ func (db *PreparedStmtDB) Close() {
 	}
 }
 
-func (db *PreparedStmtDB) Reset() {
-	db.Mux.Lock()
-	defer db.Mux.Unlock()
-	for query, stmt := range db.Stmts {
-		delete(db.Stmts, query)
+func (sdb *PreparedStmtDB) Reset() {
+	sdb.Mux.Lock()
+	defer sdb.Mux.Unlock()
+
+	for _, stmt := range sdb.Stmts {
 		go stmt.Close()
 	}
-
-	db.PreparedSQL = make([]string, 0, 100)
-	db.Stmts = map[string](*Stmt){}
+	sdb.PreparedSQL = make([]string, 0, 100)
+	sdb.Stmts = make(map[string]*Stmt)
 }
 
 func (db *PreparedStmtDB) prepare(ctx context.Context, conn ConnPool, isTransaction bool, query string) (Stmt, error) {
@@ -93,7 +102,7 @@ func (db *PreparedStmtDB) prepare(ctx context.Context, conn ConnPool, isTransact
 
 	// Reason why cannot lock conn.PrepareContext
 	// suppose the maxopen is 1, g1 is creating record and g2 is querying record.
-	// 1. g1 begin tx, g1 is requeued because of waiting for the system call, now `db.ConnPool` db.numOpen == 1.
+	// 1. g1 begin tx, g1 is requeue because of waiting for the system call, now `db.ConnPool` db.numOpen == 1.
 	// 2. g2 select lock `conn.PrepareContext(ctx, query)`, now db.numOpen == db.maxOpen , wait for release.
 	// 3. g1 tx exec insert, wait for unlock `conn.PrepareContext(ctx, query)` to finish tx and release.
 	stmt, err := conn.PrepareContext(ctx, query)
@@ -117,6 +126,19 @@ func (db *PreparedStmtDB) BeginTx(ctx context.Context, opt *sql.TxOptions) (Conn
 	if beginner, ok := db.ConnPool.(TxBeginner); ok {
 		tx, err := beginner.BeginTx(ctx, opt)
 		return &PreparedStmtTX{PreparedStmtDB: db, Tx: tx}, err
+	}
+
+	beginner, ok := db.ConnPool.(ConnPoolBeginner)
+	if !ok {
+		return nil, ErrInvalidTransaction
+	}
+
+	connPool, err := beginner.BeginTx(ctx, opt)
+	if err != nil {
+		return nil, err
+	}
+	if tx, ok := connPool.(Tx); ok {
+		return &PreparedStmtTX{PreparedStmtDB: db, Tx: tx}, nil
 	}
 	return nil, ErrInvalidTransaction
 }
@@ -163,15 +185,19 @@ type PreparedStmtTX struct {
 	PreparedStmtDB *PreparedStmtDB
 }
 
+func (db *PreparedStmtTX) GetDBConn() (*sql.DB, error) {
+	return db.PreparedStmtDB.GetDBConn()
+}
+
 func (tx *PreparedStmtTX) Commit() error {
-	if tx.Tx != nil {
+	if tx.Tx != nil && !reflect.ValueOf(tx.Tx).IsNil() {
 		return tx.Tx.Commit()
 	}
 	return ErrInvalidTransaction
 }
 
 func (tx *PreparedStmtTX) Rollback() error {
-	if tx.Tx != nil {
+	if tx.Tx != nil && !reflect.ValueOf(tx.Tx).IsNil() {
 		return tx.Tx.Rollback()
 	}
 	return ErrInvalidTransaction
