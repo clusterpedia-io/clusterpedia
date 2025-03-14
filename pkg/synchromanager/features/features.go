@@ -68,6 +68,12 @@ const (
 	// owner: @27149chen
 	// alpha: v0.8.0
 	IgnoreSyncLease featuregate.Feature = "IgnoreSyncLease"
+
+	// ClusterAuthenticationFromSecret could get authentication information of the PediaCluster from Secret.
+	//
+	// owner: @scydas
+	// alpha: v0.9.0
+	ClusterAuthenticationFromSecret featuregate.Feature = "ClusterAuthenticationFromSecret"
 )
 
 func init() {
@@ -86,4 +92,5 @@ var defaultClusterSynchroManagerFeatureGates = map[featuregate.Feature]featurega
 	ForcePaginatedListForResourceSync:        {Default: false, PreRelease: featuregate.Alpha},
 	StreamHandlePaginatedListForResourceSync: {Default: false, PreRelease: featuregate.Alpha},
 	IgnoreSyncLease:                          {Default: false, PreRelease: featuregate.Alpha},
+	ClusterAuthenticationFromSecret:          {Default: false, PreRelease: featuregate.Alpha},
 }

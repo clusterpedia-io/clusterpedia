@@ -12,6 +12,12 @@ const (
 	// owner: @scydas
 	// alpha: v0.9.0
 	AllowProxyRequestToClusters featuregate.Feature = "AllowProxyRequestToClusters"
+
+	// ClusterAuthenticationFromSecret could get authentication information of the PediaCluster from Secret.
+	//
+	// owner: @scydas
+	// alpha: v0.9.0
+	ClusterAuthenticationFromSecret featuregate.Feature = "ClusterAuthenticationFromSecret"
 )
 
 func init() {
@@ -21,5 +27,6 @@ func init() {
 // defaultInternalStorageFeatureGates consists of all known custom internalstorage feature keys.
 // To add a new feature, define a key for it above and add it here.
 var defaultInternalStorageFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	AllowProxyRequestToClusters: {Default: false, PreRelease: featuregate.Alpha},
+	AllowProxyRequestToClusters:     {Default: false, PreRelease: featuregate.Alpha},
+	ClusterAuthenticationFromSecret: {Default: false, PreRelease: featuregate.Alpha},
 }

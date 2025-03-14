@@ -18,6 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/version"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/component-base/tracing"
 
@@ -142,7 +143,11 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	restManager := NewRESTManager(c.GenericConfig.Serializer, runtime.ContentTypeJSON, c.StorageFactory, c.InitialAPIGroupResources)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
-	secretLister := c.GenericConfig.SharedInformerFactory.Core().V1().Secrets().Lister().Secrets(c.ExtraConfig.SecretNamespace)
+	var secretLister corev1listers.SecretNamespaceLister
+	if utilfeature.DefaultFeatureGate.Enabled(ClusterAuthenticationFromSecret) {
+		secretLister = c.GenericConfig.SharedInformerFactory.Core().V1().Secrets().Lister().Secrets(c.ExtraConfig.SecretNamespace)
+	}
+
 	clusterInformer := c.InformerFactory.Cluster().V1alpha2().PediaClusters()
 	connector := proxyrest.NewProxyConnector(clusterInformer.Lister(), secretLister, c.ExtraConfig.AllowPediaClusterConfigReuse, c.ExtraConfig.ExtraProxyRequestHeaderPrefixes)
 
