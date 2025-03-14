@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
 	proxyrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/proxy"
 )
@@ -18,6 +19,9 @@ type Options struct {
 
 	AllowedProxySubresources        []string
 	ExtraProxyRequestHeaderPrefixes []string
+
+	EnableProxyPathForForwardRequest  bool
+	AllowForwardUnsyncResourceRequest bool
 }
 
 func NewOptions() *Options {
@@ -40,11 +44,19 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	// If you have a better solution, please submit an issue!
 	fs.StringSliceVar(&o.AllowedProxySubresources, "allowed-proxy-subresources", o.AllowedProxySubresources, ""+
 		"List of subresources that support proxying requests to the specified cluster, formatted as '[resource/subresource],[subresource],...'. "+
-		fmt.Sprintf("Supported proxy subresources include %q", strings.Join(resources, ",")),
+		fmt.Sprintf("Supported proxy subresources include %q.", strings.Join(resources, ",")),
 	)
 
 	fs.BoolVar(&o.AllowPediaClusterConfigForProxyRequest, "allow-pediacluster-config-for-proxy-request", o.AllowPediaClusterConfigForProxyRequest, ""+
 		"Allow proxy requests to use the cluster configuration from PediaCluster when authentication information cannot be got from the header.",
+	)
+
+	fs.BoolVar(&o.EnableProxyPathForForwardRequest, "enable-proxy-path-for-forward-request", o.EnableProxyPathForForwardRequest, ""+
+		"Add a '/proxy' path in the API to proxy any request.",
+	)
+	fs.BoolVar(&o.AllowForwardUnsyncResourceRequest, "allow-forward-unsync-resource-request", o.AllowForwardUnsyncResourceRequest, ""+
+		"Allow forwarding requests for unsynchronized resource types."+
+		"By default, only requests for resource types configured in PediaCluster can be forwarded.",
 	)
 }
 
@@ -55,6 +67,11 @@ var supportedProxyCoreSubresources = map[string][]string{
 }
 
 func (o *Options) Config() (*ExtraConfig, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(AllowProxyRequestToClusters) && (len(o.AllowedProxySubresources) != 0 ||
+		o.EnableProxyPathForForwardRequest || o.AllowForwardUnsyncResourceRequest) {
+		return nil, fmt.Errorf("please enable feature gate %s to allow apiserver to handle the proxy and forward requests", AllowProxyRequestToClusters)
+	}
+
 	subresources := make(map[schema.GroupResource]sets.Set[string])
 
 	for _, subresource := range o.AllowedProxySubresources {
@@ -89,7 +106,9 @@ func (o *Options) Config() (*ExtraConfig, error) {
 		}
 	}
 	return &ExtraConfig{
-		AllowPediaClusterConfigReuse: o.AllowPediaClusterConfigForProxyRequest,
-		AllowedProxySubresources:     subresources,
+		AllowPediaClusterConfigReuse:      o.AllowPediaClusterConfigForProxyRequest,
+		AllowedProxySubresources:          subresources,
+		EnableProxyPathForForwardRequest:  o.EnableProxyPathForForwardRequest,
+		AllowForwardUnsyncResourceRequest: o.AllowForwardUnsyncResourceRequest,
 	}, nil
 }

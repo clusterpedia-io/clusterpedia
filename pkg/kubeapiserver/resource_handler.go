@@ -27,10 +27,10 @@ import (
 )
 
 type ResourceHandler struct {
-	couldForwardAnyRequest bool
-	minRequestTimeout      time.Duration
-	delegate               http.Handler
-	proxy                  http.Handler
+	allowForwardUnsyncResourceRequest bool
+	minRequestTimeout                 time.Duration
+	delegate                          http.Handler
+	proxy                             http.Handler
 
 	rest          *RESTManager
 	discovery     *discovery.DiscoveryManager
@@ -62,7 +62,7 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		shouldForwardRequest = true
 	}
 
-	if shouldForwardRequest && r.couldForwardAnyRequest {
+	if shouldForwardRequest && r.allowForwardUnsyncResourceRequest {
 		r.proxy.ServeHTTP(w, req)
 		return
 	}
