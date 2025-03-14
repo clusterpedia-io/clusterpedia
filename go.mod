@@ -2,12 +2,12 @@ module github.com/clusterpedia-io/clusterpedia
 
 go 1.22.0
 
-toolchain go1.22.2
+toolchain go1.24.1
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/clusterpedia-io/api v0.0.0
-	github.com/go-sql-driver/mysql v1.6.0
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgconn v1.13.0
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
@@ -24,10 +24,10 @@ require (
 	go.uber.org/atomic v1.11.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gorm.io/datatypes v1.0.7
-	gorm.io/driver/mysql v1.4.4
+	gorm.io/driver/mysql v1.5.7
 	gorm.io/driver/postgres v1.4.5
 	gorm.io/driver/sqlite v1.4.4
-	gorm.io/gorm v1.24.1
+	gorm.io/gorm v1.25.7
 	k8s.io/api v0.31.2
 	k8s.io/apiextensions-apiserver v0.31.2
 	k8s.io/apimachinery v0.31.2

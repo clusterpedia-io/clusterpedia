@@ -112,8 +112,8 @@ github.com/go-openapi/jsonreference/internal
 # github.com/go-openapi/swag v0.22.4
 ## explicit; go 1.18
 github.com/go-openapi/swag
-# github.com/go-sql-driver/mysql v1.6.0
-## explicit; go 1.10
+# github.com/go-sql-driver/mysql v1.7.0
+## explicit; go 1.13
 github.com/go-sql-driver/mysql
 # github.com/gobuffalo/flect v1.0.2
 ## explicit; go 1.16
@@ -678,7 +678,7 @@ gopkg.in/yaml.v3
 # gorm.io/datatypes v1.0.7
 ## explicit; go 1.14
 gorm.io/datatypes
-# gorm.io/driver/mysql v1.4.4
+# gorm.io/driver/mysql v1.5.7
 ## explicit; go 1.14
 gorm.io/driver/mysql
 # gorm.io/driver/postgres v1.4.5
@@ -687,8 +687,8 @@ gorm.io/driver/postgres
 # gorm.io/driver/sqlite v1.4.4
 ## explicit; go 1.14
 gorm.io/driver/sqlite
-# gorm.io/gorm v1.24.1
-## explicit; go 1.16
+# gorm.io/gorm v1.25.7
+## explicit; go 1.18
 gorm.io/gorm
 gorm.io/gorm/callbacks
 gorm.io/gorm/clause
