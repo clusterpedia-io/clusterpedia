@@ -11,8 +11,8 @@ import (
 	"syscall"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	genericstorage "k8s.io/apiserver/pkg/storage"
 

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
 	"k8s.io/klog/v2"
