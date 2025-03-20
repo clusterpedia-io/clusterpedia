@@ -1134,12 +1134,12 @@ func TestApplyListOptionsURLQueryParameterizedQueryToWhereClause(t *testing.T) {
 			},
 
 			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
-				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (\\'1\\' = \\'1'",
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (''1'' = ''1'",
 				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
 				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
 				postgresSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1"},
 
-				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (\\'1\\' = \\'1'",
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (''1'' = ''1'",
 				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
 				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
 				mysqlSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1"},
@@ -1160,7 +1160,7 @@ func TestApplyListOptionsURLQueryParameterizedQueryToWhereClause(t *testing.T) {
 			},
 
 			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
-				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (\\'1\\' = \\'1\\'); --' AND test_column2 = true",
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' OR (''1'' = ''1''); --' AND test_column2 = true",
 				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1 AND test_column2 = true",
 				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
 				postgresSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1'); --"},
@@ -1184,7 +1184,7 @@ func TestApplyListOptionsURLQueryParameterizedQueryToWhereClause(t *testing.T) {
 			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
 				ignorePostgres: true,
 
-				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (\\'1\\' = \\'1\\'); #' AND test_column2 = true",
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' OR (''1'' = ''1''); #' AND test_column2 = true",
 				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ? AND test_column2 = true",
 				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\? AND test_column2 = true",
 				mysqlSqlmockDBExecutedArgs:  []driver.Value{" OR ('1' = '1'); #"},
@@ -1242,12 +1242,12 @@ func TestApplyListOptionsURLQueryParameterizedQueryToWhereClause(t *testing.T) {
 			},
 
 			testSQLQueriesAssertionTestCase: testSQLQueriesAssertionTestCase{
-				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' UNION SELECT \\'a\\',NULL,NULL;--'",
+				postgresRawQuery:               "SELECT * FROM \"resources\" WHERE test_column = ' UNION SELECT ''a'',NULL,NULL;--'",
 				postgresUnexplainedRawQuery:    "SELECT * FROM \"resources\" WHERE test_column = $1",
 				postgresSqlmockDBExecutedQuery: "SELECT \\* FROM \"resources\" WHERE test_column = \\$1",
 				postgresSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT 'a',NULL,NULL;--"},
 
-				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' UNION SELECT \\'a\\',NULL,NULL;--'",
+				mysqlRawQuery:               "SELECT * FROM `resources` WHERE test_column = ' UNION SELECT ''a'',NULL,NULL;--'",
 				mysqlUnexplainedRawQuery:    "SELECT * FROM `resources` WHERE test_column = ?",
 				mysqlSqlmockDBExecutedQuery: "SELECT \\* FROM `resources` WHERE test_column = \\?",
 				mysqlSqlmockDBExecutedArgs:  []driver.Value{" UNION SELECT 'a',NULL,NULL;--"},

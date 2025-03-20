@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgx/v4/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jinzhu/configor"
 	"gopkg.in/natefinch/lumberjack.v2"
 	gmysql "gorm.io/driver/mysql"

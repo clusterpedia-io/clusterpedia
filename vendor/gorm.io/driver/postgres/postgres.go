@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
 	"gorm.io/gorm/clause"
@@ -24,10 +24,16 @@ type Dialector struct {
 type Config struct {
 	DriverName           string
 	DSN                  string
+	WithoutQuotingCheck  bool
 	PreferSimpleProtocol bool
 	WithoutReturning     bool
 	Conn                 gorm.ConnPool
 }
+
+var (
+	timeZoneMatcher         = regexp.MustCompile("(time_zone|TimeZone)=(.*?)($|&| )")
+	defaultIdentifierLength = 63 //maximum identifier length for postgres
+)
 
 func Open(dsn string) gorm.Dialector {
 	return &Dialector{&Config{DSN: dsn}}
@@ -41,17 +47,42 @@ func (dialector Dialector) Name() string {
 	return "postgres"
 }
 
-var timeZoneMatcher = regexp.MustCompile("(time_zone|TimeZone)=(.*?)($|&| )")
+func (dialector Dialector) Apply(config *gorm.Config) error {
+	if config.NamingStrategy == nil {
+		config.NamingStrategy = schema.NamingStrategy{
+			IdentifierMaxLength: defaultIdentifierLength,
+		}
+		return nil
+	}
+
+	switch v := config.NamingStrategy.(type) {
+	case *schema.NamingStrategy:
+		if v.IdentifierMaxLength <= 0 {
+			v.IdentifierMaxLength = defaultIdentifierLength
+		}
+	case schema.NamingStrategy:
+		if v.IdentifierMaxLength <= 0 {
+			v.IdentifierMaxLength = defaultIdentifierLength
+			config.NamingStrategy = v
+		}
+	}
+
+	return nil
+}
 
 func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
+	callbackConfig := &callbacks.Config{
+		CreateClauses: []string{"INSERT", "VALUES", "ON CONFLICT"},
+		UpdateClauses: []string{"UPDATE", "SET", "FROM", "WHERE"},
+		DeleteClauses: []string{"DELETE", "FROM", "WHERE"},
+	}
 	// register callbacks
 	if !dialector.WithoutReturning {
-		callbacks.RegisterDefaultCallbacks(db, &callbacks.Config{
-			CreateClauses: []string{"INSERT", "VALUES", "ON CONFLICT", "RETURNING"},
-			UpdateClauses: []string{"UPDATE", "SET", "WHERE", "RETURNING"},
-			DeleteClauses: []string{"DELETE", "FROM", "WHERE", "RETURNING"},
-		})
+		callbackConfig.CreateClauses = append(callbackConfig.CreateClauses, "RETURNING")
+		callbackConfig.UpdateClauses = append(callbackConfig.UpdateClauses, "RETURNING")
+		callbackConfig.DeleteClauses = append(callbackConfig.DeleteClauses, "RETURNING")
 	}
+	callbacks.RegisterDefaultCallbacks(db, callbackConfig)
 
 	if dialector.Conn != nil {
 		db.ConnPool = dialector.Conn
@@ -65,7 +96,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 			return
 		}
 		if dialector.Config.PreferSimpleProtocol {
-			config.PreferSimpleProtocol = true
+			config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 		}
 		result := timeZoneMatcher.FindStringSubmatch(dialector.Config.DSN)
 		if len(result) > 2 {
@@ -90,10 +121,23 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 
 func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
 	writer.WriteByte('$')
-	writer.WriteString(strconv.Itoa(len(stmt.Vars)))
+	index := 0
+	varLen := len(stmt.Vars)
+	if varLen > 0 {
+		switch stmt.Vars[0].(type) {
+		case pgx.QueryExecMode:
+			index++
+		}
+	}
+	writer.WriteString(strconv.Itoa(varLen - index))
 }
 
 func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
+	if dialector.WithoutQuotingCheck {
+		writer.WriteString(str)
+		return
+	}
+
 	var (
 		underQuoted, selfQuoted bool
 		continuousBacktick      int8
@@ -221,12 +265,12 @@ func (dialector Dialector) getSchemaCustomType(field *schema.Field) string {
 	return sqlType
 }
 
-func (dialectopr Dialector) SavePoint(tx *gorm.DB, name string) error {
+func (dialector Dialector) SavePoint(tx *gorm.DB, name string) error {
 	tx.Exec("SAVEPOINT " + name)
 	return nil
 }
 
-func (dialectopr Dialector) RollbackTo(tx *gorm.DB, name string) error {
+func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error {
 	tx.Exec("ROLLBACK TO SAVEPOINT " + name)
 	return nil
 }

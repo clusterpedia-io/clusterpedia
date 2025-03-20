@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-dialects=("postgres" "postgres_simple" "mysql" "mssql" "sqlite")
+dialects=("postgres" "postgres_simple" "mysql" "sqlserver" "sqlite")
 
 for dialect in "${dialects[@]}" ; do
   if [ "$GORM_DIALECT" = "" ] || [ "$GORM_DIALECT" = "${dialect}" ]

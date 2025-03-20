@@ -118,8 +118,8 @@ func TestApplyListOptionsToResourceQuery_Owner(t *testing.T) {
 				OwnerGroupResource: schema.GroupResource{Group: "apps", Resource: "deployments"},
 			},
 			expected{
-				`SELECT * FROM "resources" WHERE cluster = 'cluster-1' AND owner_uid IN (SELECT "uid" FROM "resources" WHERE "cluster" = 'cluster-1' AND "group" = 'apps' AND "resource" = 'deployments' AND name = 'owner-name-1')`,
-				"SELECT * FROM `resources` WHERE cluster = 'cluster-1' AND owner_uid IN (SELECT `uid` FROM `resources` WHERE `cluster` = 'cluster-1' AND `group` = 'apps' AND `resource` = 'deployments' AND name = 'owner-name-1')",
+				`SELECT * FROM "resources" WHERE cluster = 'cluster-1' AND owner_uid IN (SELECT "uid" FROM "resources" WHERE "cluster" = 'cluster-1' AND ("group" = 'apps' AND "resource" = 'deployments') AND name = 'owner-name-1')`,
+				"SELECT * FROM `resources` WHERE cluster = 'cluster-1' AND owner_uid IN (SELECT `uid` FROM `resources` WHERE `cluster` = 'cluster-1' AND (`group` = 'apps' AND `resource` = 'deployments') AND name = 'owner-name-1')",
 				"",
 			},
 		},
