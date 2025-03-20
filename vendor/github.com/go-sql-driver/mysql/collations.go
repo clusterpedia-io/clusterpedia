@@ -8,12 +8,13 @@
 
 package mysql
 
-const defaultCollation = "utf8mb4_general_ci"
-const binaryCollation = "binary"
+const defaultCollationID = 45 // utf8mb4_general_ci
+const binaryCollationID = 63
 
 // A list of available collations mapped to the internal ID.
 // To update this map use the following MySQL query:
-//     SELECT COLLATION_NAME, ID FROM information_schema.COLLATIONS WHERE ID<256 ORDER BY ID
+//
+//	SELECT COLLATION_NAME, ID FROM information_schema.COLLATIONS WHERE ID<256 ORDER BY ID
 //
 // Handshake packet have only 1 byte for collation_id.  So we can't use collations with ID > 255.
 //
