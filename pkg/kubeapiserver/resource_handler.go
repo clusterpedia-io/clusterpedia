@@ -23,6 +23,7 @@ import (
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest"
+	"github.com/clusterpedia-io/clusterpedia/pkg/utils/negotiation"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/request"
 )
 
@@ -146,8 +147,14 @@ func (r *ResourceHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			handler = handlers.GetResource(storage, reqScope)
 		case "list":
+			if mediaType, ok := negotiation.NegotiateMediaTypeOptions(req.Header.Get("Accept"), reqScope.Serializer.SupportedMediaTypes(), reqScope); ok && mediaType.Convert != nil {
+				req = req.WithContext(request.WithExtraMediaTypeKind(req.Context(), mediaType.Convert.Kind))
+			}
 			handler = handlers.ListResource(storage, nil, reqScope, false, r.minRequestTimeout)
 		case "watch":
+			if mediaType, ok := negotiation.NegotiateMediaTypeOptions(req.Header.Get("Accept"), reqScope.Serializer.SupportedMediaTypes(), reqScope); ok && mediaType.Convert != nil {
+				req = req.WithContext(request.WithExtraMediaTypeKind(req.Context(), mediaType.Convert.Kind))
+			}
 			handler = handlers.ListResource(storage, storage, reqScope, true, r.minRequestTimeout)
 		default:
 			responsewriters.ErrorNegotiated(
