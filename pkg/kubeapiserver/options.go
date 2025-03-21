@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/features"
 	proxyrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/proxy"
 )
 
@@ -67,9 +68,9 @@ var supportedProxyCoreSubresources = map[string][]string{
 }
 
 func (o *Options) Config() (*ExtraConfig, error) {
-	if !utilfeature.DefaultFeatureGate.Enabled(AllowProxyRequestToClusters) && (len(o.AllowedProxySubresources) != 0 ||
+	if !utilfeature.DefaultFeatureGate.Enabled(features.AllowProxyRequestToClusters) && (len(o.AllowedProxySubresources) != 0 ||
 		o.EnableProxyPathForForwardRequest || o.AllowForwardUnsyncResourceRequest) {
-		return nil, fmt.Errorf("please enable feature gate %s to allow apiserver to handle the proxy and forward requests", AllowProxyRequestToClusters)
+		return nil, fmt.Errorf("please enable feature gate %s to allow apiserver to handle the proxy and forward requests", features.AllowProxyRequestToClusters)
 	}
 
 	subresources := make(map[schema.GroupResource]sets.Set[string])

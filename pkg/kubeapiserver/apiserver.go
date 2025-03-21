@@ -24,6 +24,7 @@ import (
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/features"
 	proxyrest "github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/resourcerest/proxy"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
@@ -144,7 +145,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	discoveryManager := discovery.NewDiscoveryManager(c.GenericConfig.Serializer, restManager, delegate)
 
 	var secretLister corev1listers.SecretNamespaceLister
-	if utilfeature.DefaultFeatureGate.Enabled(ClusterAuthenticationFromSecret) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.ClusterAuthenticationFromSecret) {
 		secretLister = c.GenericConfig.SharedInformerFactory.Core().V1().Secrets().Lister().Secrets(c.ExtraConfig.SecretNamespace)
 	}
 
