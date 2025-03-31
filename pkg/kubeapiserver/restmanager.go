@@ -385,14 +385,24 @@ func (m *RESTManager) genLegacyResourceRESTStorage(gvr schema.GroupVersionResour
 	}
 
 	return &resourcerest.RESTStorage{
+		StorageGVR:               resourceConfig.StorageResource,
 		DefaultQualifiedResource: gvr.GroupResource(),
 
-		NewFunc: func() runtime.Object {
+		NewMemoryFunc: func() runtime.Object {
 			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.MemoryResource.GroupVersion().WithKind(kind))
 			return obj
 		},
-		NewListFunc: func() runtime.Object {
+		NewMemoryListFunc: func() runtime.Object {
 			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.MemoryResource.GroupVersion().WithKind(kind + "List"))
+			return obj
+		},
+
+		NewStorageFunc: func() runtime.Object {
+			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.StorageResource.GroupVersion().WithKind(kind))
+			return obj
+		},
+		NewStorageListFunc: func() runtime.Object {
+			obj, _ := scheme.LegacyResourceScheme.New(resourceConfig.StorageResource.GroupVersion().WithKind(kind + "List"))
 			return obj
 		},
 
@@ -413,12 +423,12 @@ func (m *RESTManager) genUnstructuredRESTStorage(gvr schema.GroupVersionResource
 	}
 
 	return &resourcerest.RESTStorage{
-		NewFunc: func() runtime.Object {
+		NewMemoryFunc: func() runtime.Object {
 			obj := &unstructured.Unstructured{}
 			obj.SetGroupVersionKind(resourceConfig.MemoryResource.GroupVersion().WithKind(kind))
 			return obj
 		},
-		NewListFunc: func() runtime.Object {
+		NewMemoryListFunc: func() runtime.Object {
 			obj := &unstructured.UnstructuredList{}
 			obj.SetGroupVersionKind(resourceConfig.MemoryResource.GroupVersion().WithKind(kind + "List"))
 			return obj
