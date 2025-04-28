@@ -17,15 +17,18 @@ import (
 	"k8s.io/client-go/discovery"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/klog/v2"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/install"
+	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/features"
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/collectionresources"
 	"github.com/clusterpedia-io/clusterpedia/pkg/apiserver/registry/clusterpedia/resources"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
+	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils/filters"
 )
 
@@ -139,6 +142,10 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 		handler := handlerChainFunc(apiHandler, c)
 		handler = filters.WithRequestQuery(handler)
 		handler = filters.WithAcceptHeader(handler)
+		if clusterpediafeature.FeatureGate.Enabled(features.ResourcePathWithoutClusterpediaPrefix) {
+			klog.InfoS("Enable rewrite apiserver url")
+			handler = filters.WithRewriteFilter(handler)
+		}
 		return handler
 	}
 
