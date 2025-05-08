@@ -27,7 +27,7 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 	return nil, nil
 }
 
-func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
+func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]storage.ClusterResourceVersions, error) {
 	return nil, nil
 }
 

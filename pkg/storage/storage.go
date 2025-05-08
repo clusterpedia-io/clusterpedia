@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -11,6 +12,11 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig"
 )
 
+type ClusterResourceVersions struct {
+	Resources map[string]interface{}
+	Events    map[string]interface{}
+}
+
 type StorageFactory interface {
 	// Currently only supports returning a union of verbs for all resources,
 	// in the future it may be necessary to return verbs depending on different resources.
@@ -18,7 +24,7 @@ type StorageFactory interface {
 
 	PrepareCluster(cluster string) error
 
-	GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error)
+	GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]ClusterResourceVersions, error)
 	GetCollectionResources(ctx context.Context) ([]*internal.CollectionResource, error)
 
 	NewResourceStorage(config *ResourceStorageConfig) (ResourceStorage, error)
@@ -42,6 +48,8 @@ type ResourceStorage interface {
 
 	ConvertDeletedObject(obj interface{}) (runtime.Object, error)
 	Delete(ctx context.Context, cluster string, obj runtime.Object) error
+
+	RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error
 }
 
 type CollectionResourceStorage interface {

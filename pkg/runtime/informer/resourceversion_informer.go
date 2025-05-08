@@ -116,12 +116,12 @@ func (informer *resourceVersionInformer) HandleDeltas(deltas cache.Deltas, isInI
 			if err := informer.storage.Update(d.Object); err != nil {
 				return err
 			}
-			informer.handler.OnUpdate(nil, d.Object)
+			informer.handler.OnUpdate(nil, d.Object, isInInitialList)
 		case cache.Deleted:
 			if err := informer.storage.Delete(d.Object); err != nil {
 				return err
 			}
-			informer.handler.OnDelete(d.Object)
+			informer.handler.OnDelete(d.Object, isInInitialList)
 		}
 	}
 	return nil
