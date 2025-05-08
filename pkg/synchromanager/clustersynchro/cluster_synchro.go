@@ -500,31 +500,31 @@ func (s *ClusterSynchro) runner() {
 	}
 }
 
-func (synchro *ClusterSynchro) startRunner() {
+func (s *ClusterSynchro) startRunner() {
 	select {
-	case <-synchro.stopRunnerCh:
-		synchro.stopRunnerCh = make(chan struct{})
+	case <-s.stopRunnerCh:
+		s.stopRunnerCh = make(chan struct{})
 	default:
 	}
 
 	select {
-	case <-synchro.startRunnerCh:
+	case <-s.startRunnerCh:
 	default:
-		close(synchro.startRunnerCh)
+		close(s.startRunnerCh)
 	}
 }
 
-func (synchro *ClusterSynchro) stopRunner() {
+func (s *ClusterSynchro) stopRunner() {
 	select {
-	case <-synchro.startRunnerCh:
-		synchro.startRunnerCh = make(chan struct{})
+	case <-s.startRunnerCh:
+		s.startRunnerCh = make(chan struct{})
 	default:
 	}
 
 	select {
-	case <-synchro.stopRunnerCh:
+	case <-s.stopRunnerCh:
 	default:
-		close(synchro.stopRunnerCh)
+		close(s.stopRunnerCh)
 	}
 }
 

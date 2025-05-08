@@ -26,7 +26,6 @@ import (
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/clusterpedia-io/api/cluster/v1alpha2"
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/controller"
 	crdclientset "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
@@ -403,7 +402,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	if from := cluster.Spec.AuthenticationFrom; from != nil {
 		secrets := make(map[string]struct{}, 5)
-		for _, source := range []*v1alpha2.ClusterAuthenticationSource{
+		for _, source := range []*clusterv1alpha2.ClusterAuthenticationSource{
 			from.KubeConfig, from.CA, from.Cert, from.Token, from.Key,
 		} {
 			if source != nil {
