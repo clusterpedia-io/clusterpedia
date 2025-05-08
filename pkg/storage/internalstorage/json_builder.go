@@ -9,6 +9,38 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+type JSONUpdateExpression struct {
+	column string
+	key    string
+	value  []byte
+}
+
+func JSONUpdate(column string, key string, value []byte) *JSONUpdateExpression {
+	return &JSONUpdateExpression{column: column, key: key, value: value}
+}
+
+func (jsonUpdate *JSONUpdateExpression) Build(builder clause.Builder) {
+	stmt, ok := builder.(*gorm.Statement)
+	if !ok {
+		return
+	}
+
+	var rawSQL string
+	var values []interface{}
+	dialector := stmt.Dialector.Name()
+	switch dialector {
+	case "mysql", "sqlite3", "sqlite":
+		rawSQL = fmt.Sprintf("JSON_SET(COALESCE(%s, '{}'), ?, JSON(?))", jsonUpdate.column)
+		values = []interface{}{fmt.Sprintf(`$."%s"`, jsonUpdate.key), string(jsonUpdate.value)}
+	case "postgres":
+		rawSQL = fmt.Sprintf("JSONB_SET(COALESCE(%s, '{}'), ?, ?, true)", jsonUpdate.column)
+		values = []interface{}{fmt.Sprintf("{%s}", jsonUpdate.key), jsonUpdate.value}
+	}
+	if rawSQL != "" {
+		gorm.Expr(rawSQL, values...).Build(builder)
+	}
+}
+
 type JSONQueryExpression struct {
 	column string
 	keys   []string
