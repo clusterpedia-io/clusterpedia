@@ -66,7 +66,6 @@ type controller struct {
 
 	reflectorMutex sync.RWMutex
 	reflector      *Reflector
-	queue          cache.Queue
 }
 
 func NewNamedController(name string, config *Config) cache.Controller {
@@ -128,10 +127,7 @@ func (c *controller) HasSynced() bool {
 	c.reflectorMutex.RLock()
 	defer c.reflectorMutex.RUnlock()
 
-	if c.queue == nil {
-		return false
-	}
-	return c.queue.HasSynced() && c.reflector.HasInitializedSynced()
+	return c.config.Queue.HasSynced() && c.reflector.HasInitializedSynced()
 }
 
 func (c *controller) LastSyncResourceVersion() string {

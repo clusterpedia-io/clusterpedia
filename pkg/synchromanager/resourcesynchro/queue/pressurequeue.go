@@ -32,35 +32,37 @@ type pressurequeue struct {
 	queue      []string
 	keyFunc    KeyFunc
 	closed     bool
+
+	initialCount int
 }
 
-func (q *pressurequeue) Add(obj interface{}) error {
+func (q *pressurequeue) Add(obj interface{}, isInInitialList bool) error {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.queueActionLocked(Added, obj)
+	return q.queueActionLocked(Added, obj, isInInitialList)
 }
 
-func (q *pressurequeue) Update(obj interface{}) error {
+func (q *pressurequeue) Update(obj interface{}, isInInitialList bool) error {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.queueActionLocked(Updated, obj)
+	return q.queueActionLocked(Updated, obj, isInInitialList)
 }
 
-func (q *pressurequeue) Delete(obj interface{}) error {
+func (q *pressurequeue) Delete(obj interface{}, isInInitialList bool) error {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.queueActionLocked(Deleted, obj)
+	return q.queueActionLocked(Deleted, obj, isInInitialList)
 }
 
-func (q *pressurequeue) queueActionLocked(action ActionType, obj interface{}) error {
+func (q *pressurequeue) queueActionLocked(action ActionType, obj interface{}, inited bool) error {
 	key, err := q.keyFunc(obj)
 	if err != nil {
 		return err
 	}
-	q.put(key, pressureEvents(q.items[key], &Event{Action: action, Object: obj}))
+	q.put(key, pressureEvents(q.items[key], &Event{Action: action, Object: obj}), inited)
 	return nil
 }
 
@@ -80,11 +82,11 @@ func (q *pressurequeue) Reput(event *Event) error {
 	q.processing.Delete(key)
 
 	event.reputCount++
-	q.put(key, pressureEvents(event, q.items[key]))
+	q.put(key, pressureEvents(event, q.items[key]), false)
 	return nil
 }
 
-func (q *pressurequeue) put(key string, event *Event) {
+func (q *pressurequeue) put(key string, event *Event, inited bool) {
 	if event == nil {
 		return
 	}
@@ -93,6 +95,9 @@ func (q *pressurequeue) put(key string, event *Event) {
 		if _, existed := q.items[key]; !existed {
 			q.queue = append(q.queue, key)
 		}
+	}
+	if inited {
+		q.initialCount = len(q.queue)
 	}
 	q.items[key] = event
 	q.cond.Broadcast()
@@ -106,6 +111,9 @@ func (q *pressurequeue) Done(event *Event) error {
 
 	q.lock.Lock()
 	defer q.lock.Unlock()
+	if q.initialCount > 0 {
+		q.initialCount--
+	}
 
 	q.processing.Delete(key)
 	if _, existed := q.items[key]; existed {
@@ -113,6 +121,12 @@ func (q *pressurequeue) Done(event *Event) error {
 	}
 	q.cond.Broadcast()
 	return nil
+}
+
+func (q *pressurequeue) HasInitialEvent() bool {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	return q.initialCount > 0
 }
 
 func (q *pressurequeue) Pop() (*Event, error) {

@@ -3,13 +3,16 @@ package clustersynchro
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
 	"go.uber.org/atomic"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -46,6 +49,8 @@ type resourceSynchro struct {
 	cache   *informer.ResourceVersionStorage
 	rvs     map[string]interface{}
 	rvsLock sync.Mutex
+
+	eventSynchro *eventSynchro
 
 	memoryVersion schema.GroupVersion
 	storage       storage.ResourceStorage
@@ -117,6 +122,16 @@ func (factory DefaultResourceSynchroFactory) NewResourceSynchro(cluster string, 
 		synchro.metricsWriter = metricsstore.NewMetricsWriter(config.MetricsStore.MetricsStore)
 	}
 
+	if config.Event != nil {
+		synchro.eventSynchro = newEventSynchro(cluster, synchro,
+			informer.NewFilteredListerWatcher(config.Event.ListerWatcher, func(opts *metav1.ListOptions) {
+				// https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/#list-of-supported-fields
+				field := fields.Set{}
+				field["involvedObject.kind"] = config.Kind
+				opts.FieldSelector = field.String()
+			}), config.Event.ResourceVersions)
+	}
+
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusPending, "", "")
 	return synchro, nil
 }
@@ -149,6 +164,12 @@ func (synchro *resourceSynchro) Run(shutdown <-chan struct{}) {
 
 	// make `synchro.Start` runable
 	close(synchro.stopped)
+
+	if synchro.eventSynchro != nil {
+		go func() {
+			synchro.eventSynchro.Run(synchro.closer)
+		}()
+	}
 
 	synchro.runningStage = "running"
 	wait.Until(func() {
@@ -289,7 +310,15 @@ func (synchro *resourceSynchro) Start(stopCh <-chan struct{}) {
 		if clusterpediafeature.FeatureGate.Enabled(features.ForcePaginatedListForResourceSync) {
 			config.ForcePaginatedList = true
 		}
-		informer.NewResourceVersionInformer(synchro.cluster, config).Run(informerStopCh)
+
+		i := informer.NewResourceVersionInformer(synchro.cluster, config)
+		if synchro.eventSynchro != nil {
+			go func() {
+				cache.WaitForCacheSync(informerStopCh, i.HasSynced, func() bool { return !synchro.queue.HasInitialEvent() })
+				synchro.eventSynchro.Start(informerStopCh)
+			}()
+		}
+		i.Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
 		if !synchro.isRunnableForStorage.Load() {
@@ -336,10 +365,10 @@ func (synchro *resourceSynchro) OnAdd(obj interface{}, isInInitialList bool) {
 	// https://github.com/clusterpedia-io/clusterpedia/issues/4
 	synchro.pruneObject(obj.(*unstructured.Unstructured))
 
-	_ = synchro.queue.Add(obj)
+	_ = synchro.queue.Add(obj, isInInitialList)
 }
 
-func (synchro *resourceSynchro) OnUpdate(_, obj interface{}) {
+func (synchro *resourceSynchro) OnUpdate(_, obj interface{}, isInInitialList bool) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
@@ -351,10 +380,10 @@ func (synchro *resourceSynchro) OnUpdate(_, obj interface{}) {
 
 	// https://github.com/clusterpedia-io/clusterpedia/issues/4
 	synchro.pruneObject(obj.(*unstructured.Unstructured))
-	_ = synchro.queue.Update(obj)
+	_ = synchro.queue.Update(obj, isInInitialList)
 }
 
-func (synchro *resourceSynchro) OnDelete(obj interface{}) {
+func (synchro *resourceSynchro) OnDelete(obj interface{}, isInInitialList bool) {
 	if !synchro.isRunnableForStorage.Load() {
 		return
 	}
@@ -366,7 +395,7 @@ func (synchro *resourceSynchro) OnDelete(obj interface{}) {
 	if err != nil {
 		return
 	}
-	_ = synchro.queue.Delete(obj)
+	_ = synchro.queue.Delete(obj, isInInitialList)
 }
 
 func (synchro *resourceSynchro) OnSync(obj interface{}) {}
@@ -612,4 +641,109 @@ func (synchro *resourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 	if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
 		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusSyncing, "", "")
 	}
+}
+
+type eventSynchro struct {
+	ctx    context.Context
+	closer <-chan struct{}
+
+	cluster       string
+	synchro       *resourceSynchro
+	listerWatcher cache.ListerWatcher
+
+	queue   queue.EventQueue
+	rvs     map[string]interface{}
+	rvsLock sync.Mutex
+	cache   *informer.ResourceVersionStorage
+}
+
+func newEventSynchro(cluster string, synchro *resourceSynchro, lw cache.ListerWatcher, rvs map[string]interface{}) *eventSynchro {
+	return &eventSynchro{
+		cluster:       cluster,
+		listerWatcher: lw,
+		synchro:       synchro,
+		rvs:           rvs,
+		queue:         queue.NewPressureQueue(cache.MetaNamespaceKeyFunc),
+	}
+}
+
+func (synchro *eventSynchro) Run(closer <-chan struct{}) {
+	synchro.closer = closer
+
+	wait.Until(func() {
+		synchro.processResources()
+	}, time.Second, closer)
+	synchro.queue.Close()
+}
+
+func (synchro *eventSynchro) Start(stop <-chan struct{}) {
+	synchro.rvsLock.Lock()
+	rvs := maps.Clone(synchro.rvs)
+	synchro.rvsLock.Unlock()
+
+	synchro.cache = informer.NewResourceVersionStorage()
+	_ = synchro.cache.Replace(rvs)
+
+	config := informer.InformerConfig{
+		ListerWatcher: synchro.listerWatcher,
+		Storage:       synchro.cache,
+		ExampleObject: &corev1.Event{},
+		Handler:       synchro,
+	}
+	informer.NewResourceVersionInformer(synchro.cluster, config).Run(stop)
+}
+
+func (synchro *eventSynchro) OnAdd(obj interface{}, _ bool) {
+	_ = synchro.queue.Add(obj, false)
+}
+
+func (synchro *eventSynchro) OnUpdate(_, obj interface{}, _ bool) {
+	_ = synchro.queue.Update(obj, false)
+}
+
+func (*eventSynchro) OnDelete(obj interface{}, _ bool) {
+	// ignore deletion event
+}
+
+func (*eventSynchro) OnSync(obj interface{}) {
+	// ignore deletion event
+}
+
+func (synchro *eventSynchro) processResources() {
+	for {
+		select {
+		case <-synchro.closer:
+			return
+		default:
+		}
+
+		event, err := synchro.queue.Pop()
+		if err != nil {
+			if err == queue.ErrQueueClosed {
+				return
+			}
+			klog.Error(err)
+			continue
+		}
+
+		synchro.handleResourceEvent(event)
+	}
+}
+
+func (synchro *eventSynchro) handleResourceEvent(event *queue.Event) {
+	defer func() { _ = synchro.queue.Done(event) }()
+
+	obj := event.Object.(*corev1.Event)
+	obj.SetManagedFields(nil)
+	err := synchro.synchro.storage.RecordEvent(synchro.ctx, synchro.cluster, obj)
+	if err != nil {
+		klog.ErrorS(err, "Failed to storage event", "cluster", synchro.cluster)
+		return
+	}
+
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
+
+	synchro.rvsLock.Lock()
+	synchro.rvs[key] = obj.GetResourceVersion()
+	synchro.rvsLock.Unlock()
 }

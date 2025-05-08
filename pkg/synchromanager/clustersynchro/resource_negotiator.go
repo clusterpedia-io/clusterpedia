@@ -33,6 +33,7 @@ type syncConfig struct {
 	syncResource          schema.GroupVersionResource
 	convertor             runtime.ObjectConvertor
 	resourceStorageConfig *storage.ResourceStorageConfig
+	syncEvents            bool
 }
 
 func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
@@ -85,8 +86,10 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 	var groupResourceStatus = NewGroupResourceStatus()
 	var storageResourceSyncConfigs = make(map[schema.GroupVersionResource]syncConfig)
 	for _, groupResources := range syncResources {
+		events := sets.New(groupResources.EventsInvolvedResources...)
 		for _, resource := range groupResources.Resources {
 			syncGR := schema.GroupResource{Group: groupResources.Group, Resource: resource}
+			syncEvents := events.Has("*") || events.Has(resource)
 
 			if clusterpediafeature.FeatureGate.Enabled(features.IgnoreSyncLease) {
 				// skip leases.coordination.k8s.io
@@ -155,6 +158,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					syncResource:          syncGVR,
 					resourceStorageConfig: &storage.ResourceStorageConfig{ResourceConfig: *resourceConfig},
 					convertor:             convertor,
+					syncEvents:            syncEvents,
 				}
 			}
 		}

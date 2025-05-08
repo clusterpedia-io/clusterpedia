@@ -140,7 +140,7 @@ type ClusterGroupResources struct {
 	Resources []string `json:"resources"`
 
 	// +optional
-	EventInvolvedResources []string `json:"eventInvolvedResources"`
+	EventsInvolvedResources []string `json:"eventsInvolvedResources"`
 }
 
 type ClusterStatus struct {

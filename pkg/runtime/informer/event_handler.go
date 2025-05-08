@@ -1,9 +1,9 @@
 package informer
 
-import "k8s.io/client-go/tools/cache"
-
 type ResourceEventHandler interface {
-	cache.ResourceEventHandler
+	OnAdd(obj interface{}, isInInitialList bool)
+	OnUpdate(oldObj, newObj interface{}, isInInitialList bool)
+	OnDelete(obj interface{}, isInInitialList bool)
 	OnSync(obj interface{})
 }
 
@@ -14,13 +14,13 @@ type ResourceEventHandlerFuncs struct {
 	SyncFunc   func(obj interface{})
 }
 
-func (r ResourceEventHandlerFuncs) OnAdd(obj interface{}) {
+func (r ResourceEventHandlerFuncs) OnAdd(obj interface{}, _ bool) {
 	if r.AddFunc != nil {
 		r.AddFunc(obj)
 	}
 }
 
-func (r ResourceEventHandlerFuncs) OnUpdate(oldObj, newObj interface{}) {
+func (r ResourceEventHandlerFuncs) OnUpdate(oldObj, newObj interface{}, _ bool) {
 	if r.UpdateFunc != nil {
 		r.UpdateFunc(oldObj, newObj)
 	}
@@ -55,21 +55,21 @@ func (r FilteringResourceEventHandler) OnUpdate(oldObj, newObj interface{}, isIn
 	older := r.FilterFunc(oldObj)
 	switch {
 	case newer && older:
-		r.Handler.OnUpdate(oldObj, newObj)
+		r.Handler.OnUpdate(oldObj, newObj, isInInitialList)
 	case newer && !older:
 		r.Handler.OnAdd(newObj, isInInitialList)
 	case !newer && older:
-		r.Handler.OnDelete(oldObj)
+		r.Handler.OnDelete(oldObj, isInInitialList)
 	default:
 		// do nothing
 	}
 }
 
-func (r FilteringResourceEventHandler) OnDelete(obj interface{}) {
+func (r FilteringResourceEventHandler) OnDelete(obj interface{}, isInInitialList bool) {
 	if !r.FilterFunc(obj) {
 		return
 	}
-	r.Handler.OnDelete(obj)
+	r.Handler.OnDelete(obj, isInInitialList)
 }
 
 func (r FilteringResourceEventHandler) OnSync(obj interface{}) {

@@ -74,3 +74,20 @@ func (f *listerWatcherFactory) ForResourceWithOptions(namespace string, gvr sche
 		},
 	}
 }
+
+func NewFilteredListerWatcher(lw cache.ListerWatcher, tweakListOptions TweakListOptionsFunc) cache.ListerWatcher {
+	return &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			if tweakListOptions != nil {
+				tweakListOptions(&options)
+			}
+			return lw.List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			if tweakListOptions != nil {
+				tweakListOptions(&options)
+			}
+			return lw.Watch(options)
+		},
+	}
+}

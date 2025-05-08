@@ -40,7 +40,7 @@ spec:
               syncResources:
                 items:
                   properties:
-                    eventInvolvedResources:
+                    eventsInvolvedResources:
                       items:
                         type: string
                       type: array
