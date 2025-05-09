@@ -53,7 +53,7 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 // GetSingularName implements rest.SingularNameProvider interface
-func (s *REST) GetSingularName() string {
+func (r *REST) GetSingularName() string {
 	return "resources"
 }
 

@@ -15,11 +15,11 @@ import (
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 )
 
-func (synchro *ClusterSynchro) monitor() {
-	klog.InfoS("cluster synchro monitor is running...", "cluster", synchro.name)
-	defer klog.InfoS("cluster synchro monitor is stoped", "cluster", synchro.name)
+func (s *ClusterSynchro) monitor() {
+	klog.InfoS("cluster synchro monitor is running...", "cluster", s.name)
+	defer klog.InfoS("cluster synchro monitor is stoped", "cluster", s.name)
 
-	wait.JitterUntil(synchro.checkClusterHealthy, 5*time.Second, 0.5, true, synchro.closer)
+	wait.JitterUntil(s.checkClusterHealthy, 5*time.Second, 0.5, true, s.closer)
 
 	healthyCondition := metav1.Condition{
 		Type:               clusterv1alpha2.ClusterHealthyCondition,
@@ -28,22 +28,22 @@ func (synchro *ClusterSynchro) monitor() {
 		Message:            "cluster synchro is shutdown",
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
-	if lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition); lastReadyCondition.Status == metav1.ConditionFalse {
+	if lastReadyCondition := s.healthyCondition.Load().(metav1.Condition); lastReadyCondition.Status == metav1.ConditionFalse {
 		healthyCondition.Message = fmt.Sprintf("Last Condition Reason: %s, Message: %s", lastReadyCondition.Reason, lastReadyCondition.Message)
 	}
-	synchro.healthyCondition.Store(healthyCondition)
+	s.healthyCondition.Store(healthyCondition)
 }
 
-func (synchro *ClusterSynchro) checkClusterHealthy() {
-	defer synchro.updateStatus()
-	lastReadyCondition := synchro.healthyCondition.Load().(metav1.Condition)
+func (s *ClusterSynchro) checkClusterHealthy() {
+	defer s.updateStatus()
+	lastReadyCondition := s.healthyCondition.Load().(metav1.Condition)
 
 	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
 	defer cancel()
-	if ready, err := synchro.healthChecker.Ready(ctx); !ready {
+	if ready, err := s.healthChecker.Ready(ctx); !ready {
 		// if the last status was not ConditionTrue, stop resource synchros
 		if lastReadyCondition.Status != metav1.ConditionTrue {
-			synchro.stopRunner()
+			s.stopRunner()
 		}
 
 		condition := metav1.Condition{
@@ -59,24 +59,24 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 
 		if lastReadyCondition.Status != condition.Status || lastReadyCondition.Reason != condition.Reason || lastReadyCondition.Message != condition.Message {
 			condition.LastTransitionTime = metav1.Now().Rfc3339Copy()
-			synchro.healthyCondition.Store(condition)
+			s.healthyCondition.Store(condition)
 		}
 		return
 	}
 
-	synchro.startRunner()
+	s.startRunner()
 	message := "cluster health responded with ok"
 	if lastReadyCondition.Status == metav1.ConditionTrue && lastReadyCondition.Message == message {
 		return
 	}
 
-	if _, err := synchro.dynamicDiscovery.GetAndFetchServerVersion(); err != nil {
+	if _, err := s.dynamicDiscovery.GetAndFetchServerVersion(); err != nil {
 		message = fmt.Sprintf("cluster health responded with ok, but get server version: %v", err)
 	}
 
 	if lastReadyCondition.Status == metav1.ConditionTrue && lastReadyCondition.Message == message {
 		// the ready status and message has not been modified,
-		// to reduce the cluster status updates, do not update the `synchro.healthyCondition`.
+		// to reduce the cluster status updates, do not update the `s.healthyCondition`.
 		return
 	}
 
@@ -87,7 +87,7 @@ func (synchro *ClusterSynchro) checkClusterHealthy() {
 		Message:            message,
 		LastTransitionTime: metav1.Now().Rfc3339Copy(),
 	}
-	synchro.healthyCondition.Store(condition)
+	s.healthyCondition.Store(condition)
 }
 
 type healthChecker struct {
