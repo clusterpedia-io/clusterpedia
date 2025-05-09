@@ -64,6 +64,9 @@ type Resource struct {
 
 	Object datatypes.JSON `gorm:"not null"`
 
+	Events                datatypes.JSONMap `gorm:"not null;default:'{}'"`
+	EventResourceVersions datatypes.JSONMap `gorm:"not null;default:'{}'"`
+
 	CreatedAt time.Time `gorm:"not null"`
 	SyncedAt  time.Time `gorm:"not null;autoUpdateTime"`
 	DeletedAt sql.NullTime

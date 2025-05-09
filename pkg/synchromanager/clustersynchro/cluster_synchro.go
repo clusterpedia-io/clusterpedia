@@ -9,9 +9,13 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
 
@@ -43,6 +47,7 @@ type ClusterSynchro struct {
 	healthChecker          *healthChecker
 	dynamicDiscovery       discovery.DynamicDiscoveryInterface
 	listerWatcherFactory   informer.DynamicListerWatcherFactory
+	eventsListerWatcher    cache.ListerWatcher
 
 	closeOnce sync.Once
 	closer    chan struct{}
@@ -58,7 +63,7 @@ type ClusterSynchro struct {
 	handlerStopCh chan struct{}
 	// Key is the storage resource.
 	// Sometimes the synchronized resource and the storage resource are different
-	storageResourceVersions map[schema.GroupVersionResource]map[string]interface{}
+	storageResourceVersions map[schema.GroupVersionResource]storage.ClusterResourceVersions
 	storageResourceSynchros sync.Map
 
 	syncResources       atomic.Value // []clusterv1alpha2.ClusterGroupResources
@@ -76,13 +81,13 @@ type ClusterStatusUpdater interface {
 
 type RetryableError error
 
-func New(name string, config *rest.Config, storage storage.StorageFactory, updater ClusterStatusUpdater, syncConfig ClusterSyncConfig) (*ClusterSynchro, error) {
+func New(name string, config *rest.Config, storageFactory storage.StorageFactory, updater ClusterStatusUpdater, syncConfig ClusterSyncConfig) (*ClusterSynchro, error) {
 	dynamicDiscovery, err := discovery.NewDynamicDiscoveryManager(name, config)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to create dynamic discovery manager: %w", err))
 	}
 
-	resourceversions, err := storage.GetResourceVersions(context.TODO(), name)
+	resourceversions, err := storageFactory.GetResourceVersions(context.TODO(), name)
 	if err != nil {
 		return nil, RetryableError(fmt.Errorf("failed to get resource versions from storage: %w", err))
 	}
@@ -104,16 +109,29 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		return nil, fmt.Errorf("failed to create a cluster health checker: %w", err)
 	}
 
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cluster client: %w", err)
+	}
+
 	synchro := &ClusterSynchro{
 		name:                 name,
 		RESTConfig:           config,
 		ClusterStatusUpdater: updater,
-		storage:              storage,
+		storage:              storageFactory,
 
 		syncConfig:           syncConfig,
 		healthChecker:        healthChecker,
 		dynamicDiscovery:     dynamicDiscovery,
 		listerWatcherFactory: listWatchFactory,
+		eventsListerWatcher: &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return client.CoreV1().Events("").List(context.TODO(), options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Events("").Watch(context.TODO(), options)
+			},
+		},
 
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
@@ -122,10 +140,10 @@ func New(name string, config *rest.Config, storage storage.StorageFactory, updat
 		startRunnerCh:  make(chan struct{}),
 		stopRunnerCh:   make(chan struct{}),
 
-		storageResourceVersions: make(map[schema.GroupVersionResource]map[string]interface{}),
+		storageResourceVersions: make(map[schema.GroupVersionResource]storage.ClusterResourceVersions),
 	}
 
-	if factory, ok := storage.(resourcesynchro.SynchroFactory); ok {
+	if factory, ok := storageFactory.(resourcesynchro.SynchroFactory); ok {
 		synchro.resourceSynchroFactory = factory
 	} else {
 		synchro.resourceSynchroFactory = DefaultResourceSynchroFactory{}
@@ -185,12 +203,12 @@ func (s *ClusterSynchro) GetMetricsWriterList() (writers metricsstore.MetricsWri
 	return
 }
 
-func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.GroupVersionResource]map[string]interface{}) {
+func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.GroupVersionResource]storage.ClusterResourceVersions) {
 	if len(resourceversions) == 0 {
 		return
 	}
 
-	s.storageResourceVersions = make(map[schema.GroupVersionResource]map[string]interface{}, len(resourceversions))
+	s.storageResourceVersions = resourceversions
 	for gvr, rvs := range resourceversions {
 		s.storageResourceVersions[gvr] = rvs
 	}
@@ -361,13 +379,23 @@ func (s *ClusterSynchro) refreshSyncResources() {
 
 			rvs, ok := s.storageResourceVersions[storageGVR]
 			if !ok {
-				rvs = make(map[string]interface{})
+				rvs = storage.ClusterResourceVersions{
+					Resources: make(map[string]interface{}),
+					Events:    make(map[string]interface{}),
+				}
 				s.storageResourceVersions[storageGVR] = rvs
 			}
 
 			var metricsStore *kubestatemetrics.MetricsStore
 			if s.syncConfig.MetricsStoreBuilder != nil {
 				metricsStore = s.syncConfig.MetricsStoreBuilder.GetMetricStore(s.name, config.syncResource)
+			}
+			var eventConfig *resourcesynchro.EventConfig
+			if config.syncEvents {
+				eventConfig = &resourcesynchro.EventConfig{
+					ListerWatcher:    s.eventsListerWatcher,
+					ResourceVersions: rvs.Events,
+				}
 			}
 			synchro, err := s.resourceSynchroFactory.NewResourceSynchro(s.name,
 				resourcesynchro.Config{
@@ -376,9 +404,10 @@ func (s *ClusterSynchro) refreshSyncResources() {
 					ListerWatcher:        s.listerWatcherFactory.ForResource(metav1.NamespaceAll, config.syncResource),
 					ObjectConvertor:      config.convertor,
 					MetricsStore:         metricsStore,
-					ResourceVersions:     rvs,
+					ResourceVersions:     rvs.Resources,
 					PageSizeForInformer:  s.syncConfig.PageSizeForResourceSync,
 					ResourceStorage:      resourceStorage,
+					Event:                eventConfig,
 				},
 			)
 			if err != nil {

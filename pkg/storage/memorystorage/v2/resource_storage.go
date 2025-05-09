@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/fields"
@@ -100,6 +101,10 @@ func (s *ResourceStorage) cleanCluster(cluster string) {
 	// When cleaning up a cluster, support is needed to configure the time to send
 	// the removal of all resources in the cluster or a cluster removal event.
 	// If a cluster removal event is sent, then the client informer needs to be adapted.
+}
+
+func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
+	return nil
 }
 
 func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {

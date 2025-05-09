@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -95,8 +95,8 @@ func NewManager(client kubernetes.Interface, clusterpediaClient crdclientset.Int
 		secretInformer := corev1informers.NewSecretInformer(client, secretNamespace, 0, nil)
 		if _, err := secretInformer.AddEventHandler(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    func(obj any) { manager.handleSecret(nil, obj.(*v1.Secret)) },
-				UpdateFunc: func(older, newer any) { manager.handleSecret(older.(*v1.Secret), newer.(*v1.Secret)) },
+				AddFunc:    func(obj any) { manager.handleSecret(nil, obj.(*corev1.Secret)) },
+				UpdateFunc: func(older, newer any) { manager.handleSecret(older.(*corev1.Secret), newer.(*corev1.Secret)) },
 				DeleteFunc: func(obj any) {
 					objName, err := cache.DeletionHandlingObjectToName(obj)
 					if err != nil {
@@ -206,7 +206,7 @@ func (manager *Manager) Run(workers int, stopCh <-chan struct{}) {
 	klog.Info("cluster synchro manager stopped.")
 }
 
-func (manager *Manager) handleSecret(old *v1.Secret, obj *v1.Secret) {
+func (manager *Manager) handleSecret(old *corev1.Secret, obj *corev1.Secret) {
 	if old != nil && reflect.DeepEqual(old.Data, obj.Data) {
 		return
 	}

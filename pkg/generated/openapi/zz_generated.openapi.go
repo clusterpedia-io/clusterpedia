@@ -210,6 +210,20 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterGroupResources(ref commo
 							},
 						},
 					},
+					"eventInvolvedResources": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"group", "resources"},
 			},

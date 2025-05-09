@@ -125,6 +125,9 @@ type WatchErrorHandler func(r *Reflector, err error)
 
 // DefaultWatchErrorHandler is the default implementation of WatchErrorHandler
 func DefaultWatchErrorHandler(r *Reflector, err error) {
+	if err == nil {
+		return
+	}
 	switch {
 	case isExpiredError(err):
 		// Don't set LastSyncResourceVersionUnavailable - LIST call with ResourceVersion=RV already
