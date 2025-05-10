@@ -10,7 +10,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.0
 	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.7.4
 	github.com/jinzhu/configor v1.2.2
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/common v0.55.0
