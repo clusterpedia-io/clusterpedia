@@ -42,8 +42,15 @@ type Config struct {
 
 	MetricsStore    *kubestatemetrics.MetricsStore
 	ResourceStorage storage.ResourceStorage
+
+	Event *EventConfig
 }
 
 func (c Config) GroupVersionKind() schema.GroupVersionKind {
 	return c.GroupVersionResource.GroupVersion().WithKind(c.Kind)
+}
+
+type EventConfig struct {
+	ListerWatcher    cache.ListerWatcher
+	ResourceVersions map[string]interface{}
 }

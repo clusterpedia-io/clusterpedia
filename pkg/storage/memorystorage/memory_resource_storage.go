@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -55,6 +56,10 @@ type ResourceStorage struct {
 
 func (s *ResourceStorage) GetStorageConfig() *storage.ResourceStorageConfig {
 	return s.storageConfig
+}
+
+func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
+	return nil
 }
 
 func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtime.Object) error {

@@ -37,21 +37,24 @@ func (s *StorageFactory) NewCollectionResourceStorage(cr *internal.CollectionRes
 	return nil, fmt.Errorf("not support collection resource: %s", cr.Name)
 }
 
-func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]map[string]interface{}, error) {
+func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string) (map[schema.GroupVersionResource]storage.ClusterResourceVersions, error) {
 	var resources []Resource
-	result := s.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version").
+	result := s.db.WithContext(ctx).Select("group", "version", "resource", "namespace", "name", "resource_version", "event_resource_versions").
 		Where(map[string]interface{}{"cluster": cluster}).
 		Find(&resources)
 	if result.Error != nil {
 		return nil, InterpretDBError(cluster, result.Error)
 	}
 
-	resourceversions := make(map[schema.GroupVersionResource]map[string]interface{})
+	resourceversions := make(map[schema.GroupVersionResource]storage.ClusterResourceVersions)
 	for _, resource := range resources {
 		gvr := resource.GroupVersionResource()
-		versions := resourceversions[gvr]
-		if versions == nil {
-			versions = make(map[string]interface{})
+		versions, ok := resourceversions[gvr]
+		if !ok {
+			versions = storage.ClusterResourceVersions{
+				Resources: make(map[string]interface{}),
+				Events:    make(map[string]interface{}, 0),
+			}
 			resourceversions[gvr] = versions
 		}
 
@@ -59,7 +62,10 @@ func (s *StorageFactory) GetResourceVersions(ctx context.Context, cluster string
 		if resource.Namespace != "" {
 			key = resource.Namespace + "/" + resource.Name
 		}
-		versions[key] = resource.ResourceVersion
+		versions.Resources[key] = resource.ResourceVersion
+		for k, v := range resource.EventResourceVersions {
+			versions.Events[k] = v
+		}
 	}
 	return resourceversions, nil
 }

@@ -138,6 +138,9 @@ type ClusterGroupResources struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	Resources []string `json:"resources"`
+
+	// +optional
+	EventsInvolvedResources []string `json:"eventsInvolvedResources"`
 }
 
 type ClusterStatus struct {

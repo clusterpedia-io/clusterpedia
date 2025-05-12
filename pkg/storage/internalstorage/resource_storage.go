@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +28,7 @@ import (
 	"k8s.io/component-base/tracing"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
+	"github.com/clusterpedia-io/clusterpedia/pkg/runtime/scheme"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 )
 
@@ -101,6 +104,30 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 
 	result := s.db.WithContext(ctx).Create(&resource)
 	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
+}
+
+var codec = scheme.LegacyResourceCodecs.LegacyCodec(corev1.SchemeGroupVersion)
+
+func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
+	if event.InvolvedObject.UID == "" {
+		return errors.New("invalid event: involedObject.UID is empty")
+	}
+
+	var buffer bytes.Buffer
+	if err := codec.Encode(event, &buffer); err != nil {
+		return err
+	}
+	key, _ := cache.MetaNamespaceKeyFunc(event)
+
+	if err := s.db.WithContext(ctx).Model(&Resource{}).Where(
+		map[string]interface{}{"cluster": cluster, "uid": event.InvolvedObject.UID},
+	).UpdateColumns(map[string]interface{}{
+		"events":                  JSONUpdate("events", string(event.UID), buffer.Bytes()),
+		"event_resource_versions": JSONUpdate("event_resource_versions", key, []byte(event.ResourceVersion)),
+	}).Error; err != nil {
+		return InterpretResourceDBError(cluster, "", err)
+	}
+	return nil
 }
 
 func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtime.Object) error {
