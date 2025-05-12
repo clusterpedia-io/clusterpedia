@@ -203,11 +203,11 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *internal.ListOptions) (int64, *int64, *gorm.DB, ObjectList, error) {
 	var result ObjectList
 	switch {
-	case opts.OnlyMetadata && opts.WithEvents:
+	case opts.OnlyMetadata && opts.InjectEvents:
 		result = &ResourceMetadataWithEventsList{}
 	case opts.OnlyMetadata:
 		result = &ResourceMetadataList{}
-	case opts.WithEvents:
+	case opts.InjectEvents:
 		result = &BytesWithEventsList{}
 	default:
 		result = &BytesList{}

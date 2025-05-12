@@ -68,6 +68,7 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 		return err
 	}
 
+	out.InjectEvents = in.InjectEvents
 	out.WithContinue = in.WithContinue
 	out.WithRemainingCount = in.WithRemainingCount
 
@@ -150,6 +151,10 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 							return fmt.Errorf("Invalid Query Offset(%s): %w", out.Continue, err)
 						}
 					}
+				case clusterpedia.SearchLabelInjectEvents:
+					if err := runtime.Convert_Slice_string_To_bool(&values, &out.InjectEvents, s); err != nil {
+						return err
+					}
 				case clusterpedia.SearchLabelWithContinue:
 					if in.WithContinue == nil && len(values) != 0 {
 						if err := runtime.Convert_Slice_string_To_Pointer_bool(&values, &out.WithContinue, s); err != nil {
@@ -226,6 +231,7 @@ func Convert_clusterpedia_ListOptions_To_v1beta1_ListOptions(in *clusterpedia.Li
 		return err
 	}
 
+	out.InjectEvents = in.InjectEvents
 	out.WithContinue = in.WithContinue
 	out.WithRemainingCount = in.WithRemainingCount
 	return nil

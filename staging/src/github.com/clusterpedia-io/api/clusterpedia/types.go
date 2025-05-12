@@ -23,6 +23,7 @@ const (
 	SearchLabelOwnerGroupResource = "search.clusterpedia.io/owner-gr"
 	SearchLabelOwnerSeniority     = "search.clusterpedia.io/owner-seniority"
 
+	SearchLabelInjectEvents       = "search.clusterpedia.io/inject-events"
 	SearchLabelWithContinue       = "search.clusterpedia.io/with-continue"
 	SearchLabelWithRemainingCount = "search.clusterpedia.io/with-remaining-count"
 
@@ -62,7 +63,7 @@ type ListOptions struct {
 	Since  *metav1.Time
 	Before *metav1.Time
 
-	WithEvents         bool
+	InjectEvents       bool
 	WithContinue       *bool
 	WithRemainingCount *bool
 

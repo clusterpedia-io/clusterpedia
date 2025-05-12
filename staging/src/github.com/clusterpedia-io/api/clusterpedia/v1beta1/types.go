@@ -45,6 +45,9 @@ type ListOptions struct {
 	OwnerSeniority int `json:"ownerSeniority,omitempty"`
 
 	// +optional
+	InjectEvents bool `json:"injectEvents,omitempty"`
+
+	// +optional
 	WithContinue *bool `json:"withContinue,omitempty"`
 
 	// +optional
