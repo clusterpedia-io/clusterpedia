@@ -36,6 +36,7 @@ const (
 
 	ShadowAnnotationClusterName          = "shadow.clusterpedia.io/cluster-name"
 	ShadowAnnotationGroupVersionResource = "shadow.clusterpedia.io/gvr"
+	ShadowAnnotationEvents               = "shadow.clusterpedia.io/events"
 )
 
 type OrderBy struct {
@@ -61,6 +62,7 @@ type ListOptions struct {
 	Since  *metav1.Time
 	Before *metav1.Time
 
+	WithEvents         bool
 	WithContinue       *bool
 	WithRemainingCount *bool
 
