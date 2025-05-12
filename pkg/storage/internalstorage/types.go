@@ -3,24 +3,26 @@ package internalstorage
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"time"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 )
 
 type Object interface {
 	GetResourceType() ResourceType
 	ConvertToUnstructured() (*unstructured.Unstructured, error)
 	ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error)
+	GetEvents() []*corev1.Event
 }
 
 type ObjectList interface {
@@ -102,6 +104,10 @@ func (res Resource) ConvertTo(codec runtime.Codec, object runtime.Object) (runti
 	return obj, err
 }
 
+func (res Resource) GetEvents() []*corev1.Event {
+	panic("no implemented")
+}
+
 type ResourceMetadata struct {
 	ResourceType `gorm:"embedded"`
 
@@ -159,6 +165,10 @@ func (data ResourceMetadata) GetResourceType() ResourceType {
 	return data.ResourceType
 }
 
+func (data ResourceMetadata) GetEvents() []*corev1.Event {
+	return nil
+}
+
 type Bytes datatypes.JSON
 
 func (bytes *Bytes) Scan(data any) error {
@@ -184,6 +194,10 @@ func (bytes Bytes) ConvertTo(codec runtime.Codec, object runtime.Object) (runtim
 
 func (bytes Bytes) GetResourceType() ResourceType {
 	return ResourceType{}
+}
+
+func (bytes Bytes) GetEvents() []*corev1.Event {
+	return nil
 }
 
 type ResourceList []Resource
@@ -242,6 +256,123 @@ func (list *BytesList) From(db *gorm.DB) error {
 }
 
 func (list BytesList) Items() []Object {
+	objects := make([]Object, 0, len(list))
+	for _, object := range list {
+		objects = append(objects, object)
+	}
+	return objects
+}
+
+type EventsBytes Bytes
+
+func (bytes *EventsBytes) Scan(data any) error {
+	return (*datatypes.JSON)(bytes).Scan(data)
+}
+
+func (bytes EventsBytes) Value() (driver.Value, error) {
+	return (datatypes.JSON)(bytes).Value()
+}
+
+func (bytes EventsBytes) Decode() ([]*corev1.Event, error) {
+	var objects map[string]json.RawMessage
+	if err := json.Unmarshal(bytes, &objects); err != nil {
+		return nil, err
+	}
+
+	events := make([]*corev1.Event, 0, len(objects))
+	for _, obj := range objects {
+		event := &corev1.Event{}
+		if _, _, err := codec.Decode([]byte(obj), nil, event); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
+type ResourceMetadataWithEvents struct {
+	ResourceMetadata `gorm:"embedded"`
+
+	Events EventsBytes
+}
+
+func (bytes ResourceMetadataWithEvents) ConvertToUnstructured() (*unstructured.Unstructured, error) {
+	return bytes.ResourceMetadata.ConvertToUnstructured()
+}
+
+func (bytes ResourceMetadataWithEvents) ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error) {
+	return bytes.ResourceMetadata.ConvertTo(codec, object)
+}
+
+func (bytes ResourceMetadataWithEvents) GetResourceType() ResourceType {
+	return bytes.ResourceMetadata.GetResourceType()
+}
+
+func (bytes ResourceMetadataWithEvents) GetEvents() []*corev1.Event {
+	events, _ := bytes.Events.Decode()
+	return events
+}
+
+type ResourceMetadataWithEventsList []ResourceMetadata
+
+func (list *ResourceMetadataWithEventsList) From(db *gorm.DB) error {
+	switch db.Dialector.Name() {
+	case "sqlite", "sqlite3", "mysql":
+		db = db.Select("`group`, version, resource, kind, object->>'$.metadata' as metadata, events")
+	case "postgres":
+		db = db.Select(`"group", version, resource, kind, object->>'metadata' as metadata, events`)
+	default:
+		panic("storage: only support sqlite3, mysql or postgres")
+	}
+	metadatas := []ResourceMetadata{}
+	if result := db.Find(&metadatas); result.Error != nil {
+		return result.Error
+	}
+	*list = metadatas
+	return nil
+}
+
+func (list ResourceMetadataWithEventsList) Items() []Object {
+	objects := make([]Object, 0, len(list))
+	for _, object := range list {
+		objects = append(objects, object)
+	}
+	return objects
+}
+
+type BytesWithEvents struct {
+	Object Bytes
+	Events EventsBytes
+}
+
+func (bytes BytesWithEvents) ConvertToUnstructured() (*unstructured.Unstructured, error) {
+	return bytes.Object.ConvertToUnstructured()
+}
+
+func (bytes BytesWithEvents) ConvertTo(codec runtime.Codec, object runtime.Object) (runtime.Object, error) {
+	obj, _, err := codec.Decode(bytes.Object, nil, object)
+	return obj, err
+}
+
+func (bytes BytesWithEvents) GetResourceType() ResourceType {
+	return bytes.Object.GetResourceType()
+}
+
+func (bytes BytesWithEvents) GetEvents() []*corev1.Event {
+	events, _ := bytes.Events.Decode()
+	return events
+}
+
+type BytesWithEventsList []BytesWithEvents
+
+func (list *BytesWithEventsList) From(db *gorm.DB) error {
+	if result := db.Select("object", "events").Find(list); result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (list BytesWithEventsList) Items() []Object {
 	objects := make([]Object, 0, len(list))
 	for _, object := range list {
 		objects = append(objects, object)

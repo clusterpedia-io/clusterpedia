@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -106,30 +107,6 @@ func (s *ResourceStorage) Create(ctx context.Context, cluster string, obj runtim
 	return InterpretResourceDBError(cluster, metaobj.GetName(), result.Error)
 }
 
-var codec = scheme.LegacyResourceCodecs.LegacyCodec(corev1.SchemeGroupVersion)
-
-func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
-	if event.InvolvedObject.UID == "" {
-		return errors.New("invalid event: involedObject.UID is empty")
-	}
-
-	var buffer bytes.Buffer
-	if err := codec.Encode(event, &buffer); err != nil {
-		return err
-	}
-	key, _ := cache.MetaNamespaceKeyFunc(event)
-
-	if err := s.db.WithContext(ctx).Model(&Resource{}).Where(
-		map[string]interface{}{"cluster": cluster, "uid": event.InvolvedObject.UID},
-	).UpdateColumns(map[string]interface{}{
-		"events":                  JSONUpdate("events", string(event.UID), buffer.Bytes()),
-		"event_resource_versions": JSONUpdate("event_resource_versions", key, []byte(event.ResourceVersion)),
-	}).Error; err != nil {
-		return InterpretResourceDBError(cluster, "", err)
-	}
-	return nil
-}
-
 func (s *ResourceStorage) Update(ctx context.Context, cluster string, obj runtime.Object) error {
 	metaobj, err := meta.Accessor(obj)
 	if err != nil {
@@ -224,9 +201,16 @@ func (s *ResourceStorage) Get(ctx context.Context, cluster, namespace, name stri
 }
 
 func (s *ResourceStorage) genListObjectsQuery(ctx context.Context, opts *internal.ListOptions) (int64, *int64, *gorm.DB, ObjectList, error) {
-	var result ObjectList = &BytesList{}
-	if opts.OnlyMetadata {
+	var result ObjectList
+	switch {
+	case opts.OnlyMetadata && opts.WithEvents:
+		result = &ResourceMetadataWithEventsList{}
+	case opts.OnlyMetadata:
 		result = &ResourceMetadataList{}
+	case opts.WithEvents:
+		result = &BytesWithEventsList{}
+	default:
+		result = &BytesList{}
 	}
 
 	db := s.db.WithContext(ctx)
@@ -321,6 +305,19 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 		if err != nil {
 			return err
 		}
+		if events := object.GetEvents(); events != nil {
+			if m, err := meta.Accessor(obj); err == nil {
+				annos := m.GetAnnotations()
+				if annos == nil {
+					annos = make(map[string]string, 1)
+				}
+				data, err := json.Marshal(events)
+				if err == nil {
+					annos[internal.ShadowAnnotationEvents] = string(data)
+					m.SetAnnotations(annos)
+				}
+			}
+		}
 		slice.Index(i).Set(reflect.ValueOf(obj).Elem())
 	}
 	v.Set(slice)
@@ -329,6 +326,43 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 
 func (s *ResourceStorage) Watch(_ context.Context, _ *internal.ListOptions) (watch.Interface, error) {
 	return nil, apierrors.NewMethodNotSupported(s.groupResource, "watch")
+}
+
+var codec = scheme.LegacyResourceCodecs.LegacyCodec(corev1.SchemeGroupVersion)
+
+func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
+	if event.InvolvedObject.UID == "" {
+		return errors.New("invalid event: involedObject.UID is empty")
+	}
+
+	var buffer bytes.Buffer
+	if err := codec.Encode(event, &buffer); err != nil {
+		return err
+	}
+	key, _ := cache.MetaNamespaceKeyFunc(event)
+
+	if err := s.db.WithContext(ctx).Model(&Resource{}).Where(
+		map[string]interface{}{"cluster": cluster, "uid": event.InvolvedObject.UID},
+	).UpdateColumns(map[string]interface{}{
+		"events":                  JSONUpdate("events", string(event.UID), buffer.Bytes()),
+		"event_resource_versions": JSONUpdate("event_resource_versions", key, []byte(event.ResourceVersion)),
+	}).Error; err != nil {
+		return InterpretResourceDBError(cluster, "", err)
+	}
+	return nil
+}
+
+func (s *ResourceStorage) GetResourceEvents(ctx context.Context, cluster, namespace, name string) ([]*corev1.Event, error) {
+	var data []EventsBytes
+
+	result := s.db.WithContext(ctx).Model(&Resource{}).Select("events").Where(s.resourceKeyMap(cluster, namespace, name)).First(&data)
+	if result.Error != nil {
+		return nil, InterpretResourceDBError(cluster, namespace+"/"+name, result.Error)
+	}
+	if len(data) == 0 {
+		return nil, nil
+	}
+	return data[0].Decode()
 }
 
 func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (int64, *int64, *gorm.DB, error) {
