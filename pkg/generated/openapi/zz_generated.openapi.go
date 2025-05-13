@@ -1084,6 +1084,12 @@ func schema_clusterpedia_io_api_clusterpedia_v1beta1_ListOptions(ref common.Refe
 							Format: "int32",
 						},
 					},
+					"injectEvents": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 					"withContinue": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"boolean"},
