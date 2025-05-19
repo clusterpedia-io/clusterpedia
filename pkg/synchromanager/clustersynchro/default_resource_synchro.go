@@ -717,8 +717,14 @@ func (synchro *eventSynchro) OnUpdate(_, obj interface{}, _ bool) {
 	_ = synchro.queue.Update(obj, false)
 }
 
-func (*eventSynchro) OnDelete(obj interface{}, _ bool) {
-	// ignore deletion event
+func (synchro *eventSynchro) OnDelete(obj interface{}, _ bool) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	synchro.rvsLock.Lock()
+	delete(synchro.rvs, key)
+	synchro.rvsLock.Unlock()
 }
 
 func (*eventSynchro) OnSync(obj interface{}) {
