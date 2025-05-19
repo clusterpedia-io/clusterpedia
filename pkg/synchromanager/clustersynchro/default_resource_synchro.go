@@ -693,11 +693,27 @@ func (synchro *eventSynchro) Start(stop <-chan struct{}) {
 	informer.NewResourceVersionInformer(synchro.cluster, config).Run(stop)
 }
 
+func (synchro *eventSynchro) isOrphanEvent(event *corev1.Event) bool {
+	key := cache.NewObjectName(event.InvolvedObject.Namespace, event.InvolvedObject.Name).String()
+	synchro.synchro.rvsLock.Lock()
+	_, ok := synchro.synchro.rvs[key]
+	synchro.synchro.rvsLock.Unlock()
+	return !ok
+}
+
 func (synchro *eventSynchro) OnAdd(obj interface{}, _ bool) {
+	if synchro.isOrphanEvent(obj.(*corev1.Event)) {
+		// TODO(Iceber): cache orphan events
+		return
+	}
 	_ = synchro.queue.Add(obj, false)
 }
 
 func (synchro *eventSynchro) OnUpdate(_, obj interface{}, _ bool) {
+	if synchro.isOrphanEvent(obj.(*corev1.Event)) {
+		// TODO(Iceber): cache orphan events
+		return
+	}
 	_ = synchro.queue.Update(obj, false)
 }
 
