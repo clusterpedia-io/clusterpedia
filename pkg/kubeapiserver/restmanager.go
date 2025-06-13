@@ -284,7 +284,7 @@ func (m *RESTManager) LoadResources(infos ResourceInfoMap) map[schema.GroupResou
 		m.addAPIResourcesLocked(addedAPIResources)
 	}
 	if len(addedInfos) != 0 {
-		m.addresourceRESTInfosLocked(addedInfos)
+		m.addResourceRESTInfosLocked(addedInfos)
 	}
 	return apis
 }
@@ -317,7 +317,7 @@ func (m *RESTManager) addAPIResourcesLocked(addedResources map[schema.GroupResou
 	m.resources.Store(resources)
 }
 
-func (m *RESTManager) addresourceRESTInfosLocked(addedInfos map[schema.GroupVersionResource]resourceRESTInfo) {
+func (m *RESTManager) addResourceRESTInfosLocked(addedInfos map[schema.GroupVersionResource]resourceRESTInfo) {
 	restinfos := m.resourceRESTInfos.Load().(map[schema.GroupVersionResource]resourceRESTInfo)
 
 	infos := make(map[schema.GroupVersionResource]resourceRESTInfo, len(restinfos)+len(addedInfos))
