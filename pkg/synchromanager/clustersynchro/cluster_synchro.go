@@ -208,8 +208,13 @@ func (s *ClusterSynchro) initWithResourceVersions(resourceversions map[schema.Gr
 		return
 	}
 
-	s.storageResourceVersions = resourceversions
 	for gvr, rvs := range resourceversions {
+		if rvs.Resources == nil {
+			rvs.Resources = make(map[string]interface{})
+		}
+		if rvs.Events == nil {
+			rvs.Events = make(map[string]interface{})
+		}
 		s.storageResourceVersions[gvr] = rvs
 	}
 }
