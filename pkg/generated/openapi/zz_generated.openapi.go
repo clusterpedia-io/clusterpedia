@@ -377,6 +377,13 @@ func schema_clusterpedia_io_api_cluster_v1alpha2_ClusterResourceSyncCondition(re
 							Format:      "",
 						},
 					},
+					"initialListPhase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "optional",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
