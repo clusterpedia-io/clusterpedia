@@ -56,7 +56,8 @@ type resourceSynchro struct {
 	storage       storage.ResourceStorage
 	convertor     runtime.ObjectConvertor
 
-	status atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
+	status           atomic.Value // clusterv1alpha2.ClusterResourceSyncCondition
+	initialListPhase atomic.Bool  // If other phases are added, it can be changed to a more general field.
 
 	startlock sync.Mutex
 	stopped   chan struct{}
@@ -312,12 +313,18 @@ func (synchro *resourceSynchro) Start(stopCh <-chan struct{}) {
 		}
 
 		i := informer.NewResourceVersionInformer(synchro.cluster, config)
-		if synchro.eventSynchro != nil {
-			go func() {
-				cache.WaitForCacheSync(informerStopCh, i.HasSynced, func() bool { return !synchro.queue.HasInitialEvent() })
+		go func() {
+			synchro.initialListPhase.Store(true)
+			if !cache.WaitForCacheSync(informerStopCh, i.HasSynced, func() bool { return !synchro.queue.HasInitialEvent() }) {
+				synchro.initialListPhase.Store(false)
+				return
+			}
+			synchro.initialListPhase.Store(false)
+
+			if synchro.eventSynchro != nil {
 				synchro.eventSynchro.Start(informerStopCh)
-			}()
-		}
+			}
+		}()
 		i.Run(informerStopCh)
 
 		// TODO(Iceber): Optimize status updates in case of storage exceptions
@@ -624,7 +631,12 @@ func (synchro *resourceSynchro) setStatus(status string, reason, message string)
 }
 
 func (synchro *resourceSynchro) Status() clusterv1alpha2.ClusterResourceSyncCondition {
-	return synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
+	s := synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
+	switch s.Status {
+	case clusterv1alpha2.ResourceSyncStatusPending, clusterv1alpha2.ResourceSyncStatusSyncing:
+		s.InitialListPhase = synchro.initialListPhase.Load()
+	}
+	return s
 }
 
 func (synchro *resourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
@@ -638,7 +650,8 @@ func (synchro *resourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 	// `reflector` sets a default timeout when watching,
 	// then when re-watching the error handler is called again and the `err` is nil.
 	// if the current status is Syncing, then the status is not updated to avoid triggering a cluster status update
-	if status := synchro.Status(); status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
+	status := synchro.status.Load().(clusterv1alpha2.ClusterResourceSyncCondition)
+	if status.Status != clusterv1alpha2.ResourceSyncStatusSyncing {
 		synchro.setStatus(clusterv1alpha2.ResourceSyncStatusSyncing, "", "")
 	}
 }

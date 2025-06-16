@@ -215,6 +215,9 @@ type ClusterResourceSyncCondition struct {
 	// optional
 	Message string `json:"message,omitempty"`
 
+	// optional
+	InitialListPhase bool `json:"initialListPhase,omitempty"`
+
 	// +required
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string

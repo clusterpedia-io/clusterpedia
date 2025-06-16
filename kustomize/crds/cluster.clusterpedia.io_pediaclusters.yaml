@@ -249,6 +249,9 @@ spec:
                           syncConditions:
                             items:
                               properties:
+                                initialListPhase:
+                                  description: optional
+                                  type: boolean
                                 lastTransitionTime:
                                   format: date-time
                                   type: string
