@@ -3,8 +3,8 @@ package controller
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
-	"go.uber.org/atomic"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -215,7 +215,7 @@ func (manager *DependentResourceManager) SetPolicyDependentGVRs(name string, sou
 
 	manager.policyToSource[name] = source
 	manager.sourceToPolicy[source] = name
-	manager.policyCouldEnqueue[name] = atomic.NewBool(false)
+	manager.policyCouldEnqueue[name] = &atomic.Bool{}
 
 	references[source] = struct{}{}
 	manager.setPolicyDependentGVRs(name, references)
