@@ -318,9 +318,10 @@ func (schema *Schema) ParseField(fieldStruct reflect.StructField) *Field {
 	}
 
 	if val, ok := field.TagSettings["TYPE"]; ok {
-		switch DataType(strings.ToLower(val)) {
+		lowerVal := DataType(strings.ToLower(val))
+		switch lowerVal {
 		case Bool, Int, Uint, Float, String, Time, Bytes:
-			field.DataType = DataType(strings.ToLower(val))
+			field.DataType = lowerVal
 		default:
 			field.DataType = DataType(val)
 		}
@@ -996,6 +997,6 @@ func (field *Field) setupNewValuePool() {
 	}
 
 	if field.NewValuePool == nil {
-		field.NewValuePool = poolInitializer(reflect.PtrTo(field.IndirectFieldType))
+		field.NewValuePool = poolInitializer(reflect.PointerTo(field.IndirectFieldType))
 	}
 }

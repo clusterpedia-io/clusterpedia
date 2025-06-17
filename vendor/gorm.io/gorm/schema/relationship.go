@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/jinzhu/inflection"
 	"golang.org/x/text/cases"
@@ -32,6 +33,8 @@ type Relationships struct {
 	Relations map[string]*Relationship
 
 	EmbeddedRelations map[string]*Relationships
+
+	Mux sync.RWMutex
 }
 
 type Relationship struct {
@@ -75,7 +78,7 @@ func (schema *Schema) parseRelation(field *Field) *Relationship {
 	cacheStore := schema.cacheStore
 
 	if relation.FieldSchema, err = getOrParse(fieldValue, cacheStore, schema.namer); err != nil {
-		schema.err = err
+		schema.err = fmt.Errorf("failed to parse field: %s, error: %w", field.Name, err)
 		return nil
 	}
 
@@ -98,9 +101,10 @@ func (schema *Schema) parseRelation(field *Field) *Relationship {
 	}
 
 	if relation.Type == has {
-		// don't add relations to embedded schema, which might be shared
 		if relation.FieldSchema != relation.Schema && relation.Polymorphic == nil && field.OwnerSchema == nil {
+			relation.FieldSchema.Relationships.Mux.Lock()
 			relation.FieldSchema.Relationships.Relations["_"+relation.Schema.Name+"_"+relation.Name] = relation
+			relation.FieldSchema.Relationships.Mux.Unlock()
 		}
 
 		switch field.IndirectFieldType.Kind() {
@@ -659,6 +663,7 @@ func (rel *Relationship) ParseConstraint() *Constraint {
 					if !(rel.References[idx].PrimaryKey == ref.PrimaryKey && rel.References[idx].ForeignKey == ref.ForeignKey &&
 						rel.References[idx].PrimaryValue == ref.PrimaryValue) {
 						matched = false
+						break
 					}
 				}
 
@@ -671,7 +676,7 @@ func (rel *Relationship) ParseConstraint() *Constraint {
 
 	var (
 		name     string
-		idx      = strings.Index(str, ",")
+		idx      = strings.IndexByte(str, ',')
 		settings = ParseTagSetting(str, ",")
 	)
 
@@ -758,8 +763,9 @@ func (rel *Relationship) ToQueryConditions(ctx context.Context, reflectValue ref
 }
 
 func copyableDataType(str DataType) bool {
+	lowerStr := strings.ToLower(string(str))
 	for _, s := range []string{"auto_increment", "primary key"} {
-		if strings.Contains(strings.ToLower(string(str)), s) {
+		if strings.Contains(lowerStr, s) {
 			return false
 		}
 	}

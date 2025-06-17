@@ -1,3 +1,30 @@
+# 5.7.5 (May 17, 2025)
+
+* Support sslnegotiation connection option (divyam234)
+* Update golang.org/x/crypto to v0.37.0. This placates security scanners that were unable to see that pgx did not use the behavior affected by https://pkg.go.dev/vuln/GO-2025-3487.
+* TraceLog now logs Acquire and Release at the debug level (dave sinclair)
+* Add support for PGTZ environment variable
+* Add support for PGOPTIONS environment variable
+* Unpin memory used by Rows quicker
+* Remove PlanScan memoization. This resolves a rare issue where scanning could be broken for one type by first scanning another. The problem was in the memoization system and benchmarking revealed that memoization was not providing any meaningful benefit.
+
+# 5.7.4 (March 24, 2025)
+
+* Fix / revert change to scanning JSON `null` (Felix Röhrich)
+
+# 5.7.3 (March 21, 2025)
+
+* Expose EmptyAcquireWaitTime in pgxpool.Stat (vamshiaruru32)
+* Improve SQL sanitizer performance (ninedraft)
+* Fix Scan confusion with json(b), sql.Scanner, and automatic dereferencing (moukoublen, felix-roehrich)
+* Fix Values() for xml type always returning nil instead of []byte
+* Add ability to send Flush message in pipeline mode (zenkovev)
+* Fix pgtype.Timestamp's JSON behavior to match PostgreSQL (pconstantinou)
+* Better error messages when scanning structs (logicbomb)
+* Fix handling of error on batch write (bonnefoa)
+* Match libpq's connection fallback behavior more closely (felix-roehrich)
+* Add MinIdleConns to pgxpool (djahandarie)
+
 # 5.7.2 (December 21, 2024)
 
 * Fix prepared statement already exists on batch prepare failure
@@ -9,6 +36,7 @@
 * Implement pgtype.UUID.String() (Konstantin Grachev)
 * Switch from ExecParams to Exec in ValidateConnectTargetSessionAttrs functions (Alexander Rumyantsev)
 * Update golang.org/x/crypto
+* Fix json(b) columns prefer sql.Scanner interface like database/sql (Ludovico Russo)
 
 # 5.7.1 (September 10, 2024)
 
