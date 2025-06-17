@@ -5,9 +5,9 @@ import (
 	"errors"
 	"maps"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +63,7 @@ type resourceSynchro struct {
 	stopped   chan struct{}
 
 	// TODO(Iceber): Optimize variable names
-	isRunnableForStorage *atomic.Bool
+	isRunnableForStorage atomic.Bool
 	forStorageLock       sync.Mutex
 	runnableForStorage   chan struct{}
 	stopForStorage       chan struct{}
@@ -103,14 +103,14 @@ func (factory DefaultResourceSynchroFactory) NewResourceSynchro(cluster string, 
 		memoryVersion:  storageConfig.MemoryResource.GroupVersion(),
 		metricsWrapper: resourcesynchro.DefaultMetricsWrapperFactory.NewWrapper(cluster, config.GroupVersionResource),
 
-		stopped:              make(chan struct{}),
-		isRunnableForStorage: atomic.NewBool(true),
-		runnableForStorage:   make(chan struct{}),
-		stopForStorage:       make(chan struct{}),
+		stopped:            make(chan struct{}),
+		runnableForStorage: make(chan struct{}),
+		stopForStorage:     make(chan struct{}),
 
 		closer: make(chan struct{}),
 		closed: make(chan struct{}),
 	}
+	synchro.isRunnableForStorage.Store(true)
 	close(synchro.runnableForStorage)
 	synchro.ctx, synchro.cancel = context.WithCancel(context.Background())
 
