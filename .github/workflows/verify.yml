@@ -8,10 +8,14 @@ jobs:
   verify-forked-code:
     name: Verify Forked Code
     runs-on: ubuntu-latest
+    env:
+      WORKSPACE: ${{ github.workspace }}/src/github.com/clusterpedia-io/clusterpedia
     defaults:
       run:
         working-directory: ${{ env.WORKSPACE }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          path: ${{ env.WORKSPACE }}
       - run: hack/verify-forked-code.sh
