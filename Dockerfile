@@ -6,7 +6,10 @@ ARG BIN_NAME
 ARG TARGETARCH
 RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
 
-FROM alpine:3.18.12
+# https://alpinelinux.org/releases/
+# Once we select a branch, we will continue to use the relevant version until it ends support.
+# The new branch selection must ensure that the patch version >= 3.
+FROM alpine:3.21.3
 RUN apk add --no-cache gcompat
 
 # https://pkg.go.dev/net#hdr-Name_Resolution
