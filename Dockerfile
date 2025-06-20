@@ -1,5 +1,8 @@
-ARG BUILDER_IMAGE
-FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} as builder
+# To avoid the `InvalidDefaultArgInFrom` warning during build time,
+# we add a non-existent default builder image.
+# https://docs.docker.com/reference/build-checks/invalid-default-arg-in-from/
+ARG BUILDER_IMAGE='clusterpedia.io/builder:not-build'
+FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} AS builder
 WORKDIR /clusterpedia
 
 ARG BIN_NAME
