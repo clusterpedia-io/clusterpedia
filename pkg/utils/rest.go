@@ -103,7 +103,7 @@ func buildClusterRestConfigFromSecret(apiserver string, auth *clusterv1alpha2.Cl
 		config.TLSClientConfig.Insecure = true
 	}
 
-	if auth.CA != nil && auth.Key != nil {
+	if auth.Cert != nil && auth.Key != nil {
 		cert, err := getValueFromSecret(lister, auth.Cert.Name, auth.Cert.Key)
 		if err != nil {
 			return nil, err
