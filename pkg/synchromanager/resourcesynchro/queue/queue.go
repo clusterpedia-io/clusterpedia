@@ -14,7 +14,7 @@ type EventQueue interface {
 
 	Len() int
 	DiscardAndRetain(retain int) bool
-	HasInitialEvent() bool
+	HasInitialEvents() bool
 
 	Close()
 }

@@ -315,7 +315,7 @@ func (synchro *resourceSynchro) Start(stopCh <-chan struct{}) {
 		i := informer.NewResourceVersionInformer(synchro.cluster, config)
 		go func() {
 			synchro.initialListPhase.Store(true)
-			if !cache.WaitForCacheSync(informerStopCh, i.HasSynced, func() bool { return !synchro.queue.HasInitialEvent() }) {
+			if !cache.WaitForCacheSync(informerStopCh, i.HasSynced, func() bool { return !synchro.queue.HasInitialEvents() }) {
 				synchro.initialListPhase.Store(false)
 				return
 			}
