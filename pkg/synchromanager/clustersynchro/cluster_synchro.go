@@ -604,6 +604,7 @@ func (s *ClusterSynchro) genClusterStatus() *clusterv1alpha2.ClusterStatus {
 					cond.Status = status.Status
 					cond.Reason = status.Reason
 					cond.Message = status.Message
+					cond.InitialListPhase = status.InitialListPhase
 					cond.LastTransitionTime = status.LastTransitionTime
 				} else {
 					if cond.Status == "" {
