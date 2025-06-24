@@ -2,6 +2,7 @@ package options
 
 import (
 	"fmt"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,8 @@ import (
 const (
 	ClusterSynchroManagerUserAgent = "cluster-synchro-manager"
 
-	DefaultNamespace = "clusterpedia-system"
+	DefaultNamespace  = "clusterpedia-system"
+	RunInNamespaceEnv = "CLUSTERPEDIA_NAMESPACE"
 )
 
 type Options struct {
@@ -54,6 +56,12 @@ type Options struct {
 }
 
 func NewClusterSynchroManagerOptions() (*Options, error) {
+	var options Options
+	options.RunInNamespace = os.Getenv(RunInNamespaceEnv)
+	if options.RunInNamespace == "" {
+		options.RunInNamespace = DefaultNamespace
+	}
+
 	var (
 		leaderElection   componentbaseconfigv1alpha1.LeaderElectionConfiguration
 		clientConnection componentbaseconfigv1alpha1.ClientConnectionConfiguration
@@ -62,12 +70,10 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 	componentbaseconfigv1alpha1.RecommendedDefaultClientConnectionConfiguration(&clientConnection)
 
 	leaderElection.ResourceName = "clusterpedia-clustersynchro-manager"
-	leaderElection.ResourceNamespace = DefaultNamespace
+	leaderElection.ResourceNamespace = options.RunInNamespace
 	leaderElection.ResourceLock = resourcelock.LeasesResourceLock
 
 	clientConnection.ContentType = runtime.ContentTypeJSON
-
-	var options Options
 
 	// not need scheme.Convert
 	if err := componentbaseconfigv1alpha1.Convert_v1alpha1_LeaderElectionConfiguration_To_config_LeaderElectionConfiguration(&leaderElection, &options.LeaderElection, nil); err != nil {
@@ -81,7 +87,6 @@ func NewClusterSynchroManagerOptions() (*Options, error) {
 	options.Storage = storageoptions.NewStorageOptions()
 	options.Metrics = NewMetricsOptions()
 	options.KubeStateMetrics = kubestatemetrics.NewOptions()
-	options.RunInNamespace = DefaultNamespace
 
 	options.WorkerNumber = 5
 	return &options, nil
@@ -96,7 +101,6 @@ func (o *Options) Flags() cliflag.NamedFlagSets {
 	genericfs.Int32Var(&o.ClientConnection.Burst, "kube-api-burst", o.ClientConnection.Burst, "Burst to use while talking with kubernetes apiserver.")
 	genericfs.IntVar(&o.WorkerNumber, "worker-number", o.WorkerNumber, "The number of worker goroutines.")
 	genericfs.StringVar(&o.ShardingName, "sharding-name", o.ShardingName, "The sharding name of manager.")
-	genericfs.StringVar(&o.RunInNamespace, "namespace", o.RunInNamespace, "The namespace in which the Pod is running.")
 
 	syncfs := fss.FlagSet("resource sync")
 	syncfs.Int64Var(&o.PageSizeForResourceSync, "page-size", o.PageSizeForResourceSync, "The requested chunk size of initial and resync watch lists for resource sync")
@@ -174,8 +178,6 @@ func (o *Options) Config() (*config.Config, error) {
 	if o.ShardingName != "" {
 		o.LeaderElection.ResourceName = fmt.Sprintf("%s-%s", o.LeaderElection.ResourceName, o.ShardingName)
 	}
-	// Override the namespace for leader election resource.
-	o.LeaderElection.ResourceNamespace = o.RunInNamespace
 
 	return &config.Config{
 		Namespace:     o.RunInNamespace,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -26,7 +27,11 @@ import (
 	storageoptions "github.com/clusterpedia-io/clusterpedia/pkg/storage/options"
 )
 
-const DefaultNamespace = "clusterpedia-system"
+const (
+	DefaultNamespace = "clusterpedia-system"
+
+	RunInNamespaceEnv = "CLUSTERPEDIA_NAMESPACE"
+)
 
 type ClusterPediaServerOptions struct {
 	MaxRequestsInFlight         int
@@ -43,7 +48,6 @@ type ClusterPediaServerOptions struct {
 	Traces         *genericoptions.TracingOptions
 	Metrics        *metrics.Options
 
-	RunInNamespace string
 	Storage        *storageoptions.StorageOptions
 	ResourceServer *kubeapiserver.Options
 }
@@ -75,7 +79,6 @@ func NewServerOptions() *ClusterPediaServerOptions {
 		Traces:         genericoptions.NewTracingOptions(),
 		Metrics:        metrics.NewOptions(),
 
-		RunInNamespace: DefaultNamespace,
 		Storage:        storageoptions.NewStorageOptions(),
 		ResourceServer: kubeapiserver.NewOptions(),
 	}
@@ -105,7 +108,12 @@ func (o *ClusterPediaServerOptions) Config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	resourceServerConfig.SecretNamespace = o.RunInNamespace
+
+	namespace := os.Getenv(RunInNamespaceEnv)
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+	resourceServerConfig.SecretNamespace = namespace
 
 	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error create self-signed certificates: %v", err)
@@ -176,7 +184,6 @@ func (o *ClusterPediaServerOptions) Flags() cliflag.NamedFlagSets {
 	var fss cliflag.NamedFlagSets
 
 	genericfs := fss.FlagSet("generic")
-	genericfs.StringVar(&o.RunInNamespace, "namespace", o.RunInNamespace, "The namespace in which the Pod is running.")
 	genericfs.IntVar(&o.MaxRequestsInFlight, "max-requests-inflight", o.MaxRequestsInFlight, ""+
 		"Otherwise, this flag limits the maximum number of non-mutating requests in flight, or a zero value disables the limit completely.")
 	genericfs.IntVar(&o.MaxMutatingRequestsInFlight, "max-mutating-requests-inflight", o.MaxMutatingRequestsInFlight, ""+
