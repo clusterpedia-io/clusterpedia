@@ -123,7 +123,7 @@ func (q *pressurequeue) Done(event *Event) error {
 	return nil
 }
 
-func (q *pressurequeue) HasInitialEvent() bool {
+func (q *pressurequeue) HasInitialEvents() bool {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	return q.initialCount > 0
