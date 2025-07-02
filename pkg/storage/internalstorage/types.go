@@ -1,6 +1,7 @@
 package internalstorage
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -10,6 +11,8 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	gormschema "gorm.io/gorm/schema"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -49,6 +52,41 @@ func (rt ResourceType) GroupVersionResource() schema.GroupVersionResource {
 	}
 }
 
+type JSONMap datatypes.JSONMap
+
+func (m JSONMap) Value() (driver.Value, error) {
+	return datatypes.JSONMap(m).Value()
+}
+
+func (m *JSONMap) Scan(val interface{}) error {
+	return (*datatypes.JSONMap)(m).Scan(val)
+}
+
+func (m JSONMap) MarshalJSON() ([]byte, error) {
+	return (datatypes.JSONMap)(m).MarshalJSON()
+}
+
+func (m *JSONMap) UnmarshalJSON(b []byte) error {
+	return (*datatypes.JSONMap)(m).UnmarshalJSON(b)
+}
+
+func (m JSONMap) GormDataType() string {
+	return datatypes.JSONMap(m).GormDataType()
+}
+
+func (m JSONMap) GormDBDataType(db *gorm.DB, field *gormschema.Field) string {
+	return datatypes.JSONMap(m).GormDBDataType(db, field)
+}
+
+func (m JSONMap) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+	if m == nil {
+		// Ensure that all empty values are stored as NULL,
+		// rather than having both the string 'null' and actual NULL values
+		return gorm.Expr("NULL")
+	}
+	return datatypes.JSONMap(m).GormValue(ctx, db)
+}
+
 type Resource struct {
 	ID uint `gorm:"primaryKey"`
 
@@ -66,8 +104,9 @@ type Resource struct {
 
 	Object datatypes.JSON `gorm:"not null"`
 
-	Events                datatypes.JSONMap `gorm:"not null;default:'{}'"`
-	EventResourceVersions datatypes.JSONMap `gorm:"not null;default:'{}'"`
+	// Since MySQL doesn't allow setting default values for JSON fields, we can only avoid using NOT NULL and DEFAULT.
+	Events                JSONMap
+	EventResourceVersions JSONMap
 
 	CreatedAt time.Time `gorm:"not null"`
 	SyncedAt  time.Time `gorm:"not null;autoUpdateTime"`
