@@ -28,8 +28,11 @@ func (jsonUpdate *JSONUpdateExpression) Build(builder clause.Builder) {
 	var rawSQL string
 	var values []interface{}
 	switch stmt.Dialector.Name() {
-	case "mysql", "sqlite3", "sqlite":
-		rawSQL = fmt.Sprintf("JSON_SET(COALESCE(%s, '{}'), ?, JSON(?))", jsonUpdate.column)
+	case "mysql":
+		rawSQL = fmt.Sprintf("JSON_SET(COALESCE(%s, JSON_OBJECT()), ?, CAST(? AS JSON))", jsonUpdate.column)
+		values = []interface{}{fmt.Sprintf(`$."%s"`, jsonUpdate.key), string(jsonUpdate.value)}
+	case "sqlite3", "sqlite":
+		rawSQL = fmt.Sprintf("JSON_SET(COALESCE(%s, JSON_OBJECT()), ?, JSON(?))", jsonUpdate.column)
 		values = []interface{}{fmt.Sprintf(`$."%s"`, jsonUpdate.key), string(jsonUpdate.value)}
 	case "postgres":
 		rawSQL = fmt.Sprintf("JSONB_SET(COALESCE(%s, '{}'), ?, ?, true)", jsonUpdate.column)
