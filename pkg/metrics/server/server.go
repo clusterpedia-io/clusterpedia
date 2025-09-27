@@ -34,7 +34,9 @@ func Run(config Config) {
 	}
 
 	klog.Info("Metrics Server is running...")
-	_ = web.ListenAndServe(server, flags, Logger)
+	if err := web.ListenAndServe(server, flags, Logger); err != nil {
+		klog.ErrorS(err, "Metrics Server error")
+	}
 }
 
 func buildMetricsServer(config Config) *http.ServeMux {
