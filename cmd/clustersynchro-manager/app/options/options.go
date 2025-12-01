@@ -33,7 +33,6 @@ import (
 const (
 	ClusterSynchroManagerUserAgent = "cluster-synchro-manager"
 
-	DefaultNamespace  = "clusterpedia-system"
 	RunInNamespaceEnv = "CLUSTERPEDIA_NAMESPACE"
 )
 
@@ -57,10 +56,11 @@ type Options struct {
 
 func NewClusterSynchroManagerOptions() (*Options, error) {
 	var options Options
-	options.RunInNamespace = os.Getenv(RunInNamespaceEnv)
-	if options.RunInNamespace == "" {
-		options.RunInNamespace = DefaultNamespace
+	defaultNamespace, err := getDefaultNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default namespace: %w", err)
 	}
+	options.RunInNamespace = defaultNamespace
 
 	var (
 		leaderElection   componentbaseconfigv1alpha1.LeaderElectionConfiguration
@@ -200,4 +200,30 @@ func (o *Options) Config() (*config.Config, error) {
 
 		LeaderElection: o.LeaderElection,
 	}, nil
+}
+
+const (
+	defaultNamespace       = "clusterpedia-system"
+	inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+)
+
+func getDefaultNamespace() (string, error) {
+	if ns := os.Getenv(RunInNamespaceEnv); ns != "" {
+		return ns, nil
+	}
+
+	// Check whether the namespace file exists.
+	// If not, we are not running in cluster so can't guess the namespace.
+	if _, err := os.Stat(inClusterNamespacePath); os.IsNotExist(err) {
+		return defaultNamespace, nil
+	} else if err != nil {
+		return "", fmt.Errorf("error checking namespace file: %w", err)
+	}
+
+	// Load the namespace file and return its content
+	namespace, err := os.ReadFile(inClusterNamespacePath)
+	if err != nil {
+		return "", fmt.Errorf("error reading namespace file: %w", err)
+	}
+	return string(namespace), nil
 }
