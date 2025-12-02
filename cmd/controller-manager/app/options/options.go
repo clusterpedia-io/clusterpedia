@@ -1,6 +1,9 @@
 package options
 
 import (
+	"fmt"
+	"os"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientset "k8s.io/client-go/kubernetes"
@@ -36,6 +39,11 @@ type Options struct {
 }
 
 func NewControllerManagerOptions() (*Options, error) {
+	defaultNamespace, err := getDefaultNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default namespace: %w", err)
+	}
+
 	var (
 		leaderElection   componentbaseconfigv1alpha1.LeaderElectionConfiguration
 		clientConnection componentbaseconfigv1alpha1.ClientConnectionConfiguration
@@ -44,7 +52,7 @@ func NewControllerManagerOptions() (*Options, error) {
 	componentbaseconfigv1alpha1.RecommendedDefaultClientConnectionConfiguration(&clientConnection)
 
 	leaderElection.ResourceName = "clusterpedia-controller-manager"
-	leaderElection.ResourceNamespace = "clusterpedia-system"
+	leaderElection.ResourceNamespace = defaultNamespace
 	leaderElection.ResourceLock = resourcelock.LeasesResourceLock
 
 	clientConnection.ContentType = runtime.ContentTypeJSON
@@ -121,4 +129,26 @@ func (o *Options) Config() (*config.Config, error) {
 
 		LeaderElection: o.LeaderElection,
 	}, nil
+}
+
+const (
+	defaultNamespace       = "clusterpedia-system"
+	inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+)
+
+func getDefaultNamespace() (string, error) {
+	// Check whether the namespace file exists.
+	// If not, we are not running in cluster so can't guess the namespace.
+	if _, err := os.Stat(inClusterNamespacePath); os.IsNotExist(err) {
+		return defaultNamespace, nil
+	} else if err != nil {
+		return "", fmt.Errorf("error checking namespace file: %w", err)
+	}
+
+	// Load the namespace file and return its content
+	namespace, err := os.ReadFile(inClusterNamespacePath)
+	if err != nil {
+		return "", fmt.Errorf("error reading namespace file: %w", err)
+	}
+	return string(namespace), nil
 }
