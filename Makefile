@@ -87,7 +87,7 @@ images: image-builder image-apiserver image-binding-apiserver image-clustersynch
 
 image-builder:
 	docker buildx build \
-		-t $(REGISTRY)/builder-$(GOARCH):$(BUILDER_IMAGE_TAG) \
+		-t $(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--platform=linux/$(GOARCH) \
 		--load \
 		-f builder.dockerfile . ; \
@@ -96,7 +96,7 @@ build-image-%:
 	GOARCH=$(HOSTARCH) $(MAKE) image-builder
 	$(MAKE) $(subst build-,,$@)
 
-image-apiserver:
+image-apiserver: image-builder
 	docker buildx build \
 		-t $(REGISTRY)/apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
@@ -104,7 +104,7 @@ image-apiserver:
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=apiserver .
 
-image-binding-apiserver:
+image-binding-apiserver: image-builder
 	docker buildx build \
 		-t $(REGISTRY)/binding-apiserver-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
@@ -112,7 +112,7 @@ image-binding-apiserver:
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=binding-apiserver .
 
-image-clustersynchro-manager:
+image-clustersynchro-manager: image-builder
 	docker buildx build \
 		-t $(REGISTRY)/clustersynchro-manager-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
@@ -120,7 +120,7 @@ image-clustersynchro-manager:
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
 		--build-arg BIN_NAME=clustersynchro-manager .
 
-image-controller-manager:
+image-controller-manager: image-builder
 	docker buildx build \
 		-t $(REGISTRY)/controller-manager-$(GOARCH):$(VERSION) \
 		--platform=linux/$(GOARCH) \
