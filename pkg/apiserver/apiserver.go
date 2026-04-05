@@ -13,7 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
-	"k8s.io/apiserver/pkg/util/version"
+	"k8s.io/component-base/version"
 	"k8s.io/client-go/discovery"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"

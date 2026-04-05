@@ -271,7 +271,7 @@ func (s *ResourceStorage) List(ctx context.Context, listObject runtime.Object, o
 
 			uObj, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				return genericstorage.NewInternalError("the converted object is not *unstructured.Unstructured")
+				return genericstorage.NewInternalError(fmt.Errorf("the converted object is not *unstructured.Unstructured"))
 			}
 
 			if uObj.GroupVersionKind().Empty() {
