@@ -17,10 +17,10 @@ import (
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/component-base/version"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/component-base/tracing"
+	"k8s.io/component-base/version"
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
