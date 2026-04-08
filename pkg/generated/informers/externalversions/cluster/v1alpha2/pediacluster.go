@@ -3,13 +3,13 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	apiclusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // PediaClusters.
 type PediaClusterInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha2.PediaClusterLister
+	Lister() clusterv1alpha2.PediaClusterLister
 }
 
 type pediaClusterInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredPediaClusterInformer(client versioned.Interface, resyncPeriod ti
 				return client.ClusterV1alpha2().PediaClusters().Watch(context.TODO(), options)
 			},
 		},
-		&clusterv1alpha2.PediaCluster{},
+		&apiclusterv1alpha2.PediaCluster{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *pediaClusterInformer) defaultInformer(client versioned.Interface, resyn
 }
 
 func (f *pediaClusterInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&clusterv1alpha2.PediaCluster{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiclusterv1alpha2.PediaCluster{}, f.defaultInformer)
 }
 
-func (f *pediaClusterInformer) Lister() v1alpha2.PediaClusterLister {
-	return v1alpha2.NewPediaClusterLister(f.Informer().GetIndexer())
+func (f *pediaClusterInformer) Lister() clusterv1alpha2.PediaClusterLister {
+	return clusterv1alpha2.NewPediaClusterLister(f.Informer().GetIndexer())
 }

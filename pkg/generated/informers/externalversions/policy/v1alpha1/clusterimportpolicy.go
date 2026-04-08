@@ -3,13 +3,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	policyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
+	apipolicyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/policy/v1alpha1"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/policy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // ClusterImportPolicies.
 type ClusterImportPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.ClusterImportPolicyLister
+	Lister() policyv1alpha1.ClusterImportPolicyLister
 }
 
 type clusterImportPolicyInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredClusterImportPolicyInformer(client versioned.Interface, resyncPe
 				return client.PolicyV1alpha1().ClusterImportPolicies().Watch(context.TODO(), options)
 			},
 		},
-		&policyv1alpha1.ClusterImportPolicy{},
+		&apipolicyv1alpha1.ClusterImportPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *clusterImportPolicyInformer) defaultInformer(client versioned.Interface
 }
 
 func (f *clusterImportPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&policyv1alpha1.ClusterImportPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&apipolicyv1alpha1.ClusterImportPolicy{}, f.defaultInformer)
 }
 
-func (f *clusterImportPolicyInformer) Lister() v1alpha1.ClusterImportPolicyLister {
-	return v1alpha1.NewClusterImportPolicyLister(f.Informer().GetIndexer())
+func (f *clusterImportPolicyInformer) Lister() policyv1alpha1.ClusterImportPolicyLister {
+	return policyv1alpha1.NewClusterImportPolicyLister(f.Informer().GetIndexer())
 }

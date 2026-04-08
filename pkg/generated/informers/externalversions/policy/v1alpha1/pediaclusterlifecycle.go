@@ -3,13 +3,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	policyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
+	apipolicyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/policy/v1alpha1"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/policy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // PediaClusterLifecycles.
 type PediaClusterLifecycleInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.PediaClusterLifecycleLister
+	Lister() policyv1alpha1.PediaClusterLifecycleLister
 }
 
 type pediaClusterLifecycleInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredPediaClusterLifecycleInformer(client versioned.Interface, resync
 				return client.PolicyV1alpha1().PediaClusterLifecycles().Watch(context.TODO(), options)
 			},
 		},
-		&policyv1alpha1.PediaClusterLifecycle{},
+		&apipolicyv1alpha1.PediaClusterLifecycle{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *pediaClusterLifecycleInformer) defaultInformer(client versioned.Interfa
 }
 
 func (f *pediaClusterLifecycleInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&policyv1alpha1.PediaClusterLifecycle{}, f.defaultInformer)
+	return f.factory.InformerFor(&apipolicyv1alpha1.PediaClusterLifecycle{}, f.defaultInformer)
 }
 
-func (f *pediaClusterLifecycleInformer) Lister() v1alpha1.PediaClusterLifecycleLister {
-	return v1alpha1.NewPediaClusterLifecycleLister(f.Informer().GetIndexer())
+func (f *pediaClusterLifecycleInformer) Lister() policyv1alpha1.PediaClusterLifecycleLister {
+	return policyv1alpha1.NewPediaClusterLifecycleLister(f.Informer().GetIndexer())
 }
