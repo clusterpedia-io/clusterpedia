@@ -71,6 +71,7 @@ func withAuthorization(handler http.Handler, a authorizer.Authorizer, s runtime.
 		authorized, reason, err := a.Authorize(ctx, attributes)
 
 		authorizationFinish := time.Now()
+		request.TrackAuthorizationLatency(ctx, authorizationFinish.Sub(authorizationStart))
 		defer func() {
 			metrics(ctx, authorized, err, authorizationStart, authorizationFinish)
 		}()
@@ -93,7 +94,7 @@ func withAuthorization(handler http.Handler, a authorizer.Authorizer, s runtime.
 		audit.AddAuditAnnotations(ctx,
 			decisionAnnotationKey, decisionForbid,
 			reasonAnnotationKey, reason)
-		responsewriters.Forbidden(ctx, attributes, w, req, reason, s)
+		responsewriters.Forbidden(attributes, w, req, reason, s)
 	})
 }
 
