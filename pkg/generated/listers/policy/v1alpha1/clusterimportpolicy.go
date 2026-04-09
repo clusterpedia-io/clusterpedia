@@ -3,10 +3,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	policyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterImportPolicyLister helps list ClusterImportPolicies.
@@ -14,19 +14,19 @@ import (
 type ClusterImportPolicyLister interface {
 	// List lists all ClusterImportPolicies in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.ClusterImportPolicy, err error)
+	List(selector labels.Selector) (ret []*policyv1alpha1.ClusterImportPolicy, err error)
 	// Get retrieves the ClusterImportPolicy from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.ClusterImportPolicy, error)
+	Get(name string) (*policyv1alpha1.ClusterImportPolicy, error)
 	ClusterImportPolicyListerExpansion
 }
 
 // clusterImportPolicyLister implements the ClusterImportPolicyLister interface.
 type clusterImportPolicyLister struct {
-	listers.ResourceIndexer[*v1alpha1.ClusterImportPolicy]
+	listers.ResourceIndexer[*policyv1alpha1.ClusterImportPolicy]
 }
 
 // NewClusterImportPolicyLister returns a new ClusterImportPolicyLister.
 func NewClusterImportPolicyLister(indexer cache.Indexer) ClusterImportPolicyLister {
-	return &clusterImportPolicyLister{listers.New[*v1alpha1.ClusterImportPolicy](indexer, v1alpha1.Resource("clusterimportpolicy"))}
+	return &clusterImportPolicyLister{listers.New[*policyv1alpha1.ClusterImportPolicy](indexer, policyv1alpha1.Resource("clusterimportpolicy"))}
 }

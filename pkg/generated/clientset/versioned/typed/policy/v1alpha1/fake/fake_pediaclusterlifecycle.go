@@ -3,120 +3,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/policy/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakePediaClusterLifecycles implements PediaClusterLifecycleInterface
-type FakePediaClusterLifecycles struct {
+// fakePediaClusterLifecycles implements PediaClusterLifecycleInterface
+type fakePediaClusterLifecycles struct {
+	*gentype.FakeClientWithList[*v1alpha1.PediaClusterLifecycle, *v1alpha1.PediaClusterLifecycleList]
 	Fake *FakePolicyV1alpha1
 }
 
-var pediaclusterlifecyclesResource = v1alpha1.SchemeGroupVersion.WithResource("pediaclusterlifecycles")
-
-var pediaclusterlifecyclesKind = v1alpha1.SchemeGroupVersion.WithKind("PediaClusterLifecycle")
-
-// Get takes name of the pediaClusterLifecycle, and returns the corresponding pediaClusterLifecycle object, and an error if there is any.
-func (c *FakePediaClusterLifecycles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PediaClusterLifecycle, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(pediaclusterlifecyclesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakePediaClusterLifecycles(fake *FakePolicyV1alpha1) policyv1alpha1.PediaClusterLifecycleInterface {
+	return &fakePediaClusterLifecycles{
+		gentype.NewFakeClientWithList[*v1alpha1.PediaClusterLifecycle, *v1alpha1.PediaClusterLifecycleList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("pediaclusterlifecycles"),
+			v1alpha1.SchemeGroupVersion.WithKind("PediaClusterLifecycle"),
+			func() *v1alpha1.PediaClusterLifecycle { return &v1alpha1.PediaClusterLifecycle{} },
+			func() *v1alpha1.PediaClusterLifecycleList { return &v1alpha1.PediaClusterLifecycleList{} },
+			func(dst, src *v1alpha1.PediaClusterLifecycleList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.PediaClusterLifecycleList) []*v1alpha1.PediaClusterLifecycle {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.PediaClusterLifecycleList, items []*v1alpha1.PediaClusterLifecycle) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.PediaClusterLifecycle), err
-}
-
-// List takes label and field selectors, and returns the list of PediaClusterLifecycles that match those selectors.
-func (c *FakePediaClusterLifecycles) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.PediaClusterLifecycleList, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycleList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(pediaclusterlifecyclesResource, pediaclusterlifecyclesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.PediaClusterLifecycleList{ListMeta: obj.(*v1alpha1.PediaClusterLifecycleList).ListMeta}
-	for _, item := range obj.(*v1alpha1.PediaClusterLifecycleList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested pediaClusterLifecycles.
-func (c *FakePediaClusterLifecycles) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(pediaclusterlifecyclesResource, opts))
-}
-
-// Create takes the representation of a pediaClusterLifecycle and creates it.  Returns the server's representation of the pediaClusterLifecycle, and an error, if there is any.
-func (c *FakePediaClusterLifecycles) Create(ctx context.Context, pediaClusterLifecycle *v1alpha1.PediaClusterLifecycle, opts v1.CreateOptions) (result *v1alpha1.PediaClusterLifecycle, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(pediaclusterlifecyclesResource, pediaClusterLifecycle, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.PediaClusterLifecycle), err
-}
-
-// Update takes the representation of a pediaClusterLifecycle and updates it. Returns the server's representation of the pediaClusterLifecycle, and an error, if there is any.
-func (c *FakePediaClusterLifecycles) Update(ctx context.Context, pediaClusterLifecycle *v1alpha1.PediaClusterLifecycle, opts v1.UpdateOptions) (result *v1alpha1.PediaClusterLifecycle, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(pediaclusterlifecyclesResource, pediaClusterLifecycle, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.PediaClusterLifecycle), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakePediaClusterLifecycles) UpdateStatus(ctx context.Context, pediaClusterLifecycle *v1alpha1.PediaClusterLifecycle, opts v1.UpdateOptions) (result *v1alpha1.PediaClusterLifecycle, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(pediaclusterlifecyclesResource, "status", pediaClusterLifecycle, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.PediaClusterLifecycle), err
-}
-
-// Delete takes name of the pediaClusterLifecycle and deletes it. Returns an error if one occurs.
-func (c *FakePediaClusterLifecycles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(pediaclusterlifecyclesResource, name, opts), &v1alpha1.PediaClusterLifecycle{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakePediaClusterLifecycles) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(pediaclusterlifecyclesResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.PediaClusterLifecycleList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched pediaClusterLifecycle.
-func (c *FakePediaClusterLifecycles) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.PediaClusterLifecycle, err error) {
-	emptyResult := &v1alpha1.PediaClusterLifecycle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(pediaclusterlifecyclesResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.PediaClusterLifecycle), err
 }

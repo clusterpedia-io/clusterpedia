@@ -3,10 +3,10 @@
 package v1alpha2
 
 import (
-	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PediaClusterLister helps list PediaClusters.
@@ -14,19 +14,19 @@ import (
 type PediaClusterLister interface {
 	// List lists all PediaClusters in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.PediaCluster, err error)
+	List(selector labels.Selector) (ret []*clusterv1alpha2.PediaCluster, err error)
 	// Get retrieves the PediaCluster from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha2.PediaCluster, error)
+	Get(name string) (*clusterv1alpha2.PediaCluster, error)
 	PediaClusterListerExpansion
 }
 
 // pediaClusterLister implements the PediaClusterLister interface.
 type pediaClusterLister struct {
-	listers.ResourceIndexer[*v1alpha2.PediaCluster]
+	listers.ResourceIndexer[*clusterv1alpha2.PediaCluster]
 }
 
 // NewPediaClusterLister returns a new PediaClusterLister.
 func NewPediaClusterLister(indexer cache.Indexer) PediaClusterLister {
-	return &pediaClusterLister{listers.New[*v1alpha2.PediaCluster](indexer, v1alpha2.Resource("pediacluster"))}
+	return &pediaClusterLister{listers.New[*clusterv1alpha2.PediaCluster](indexer, clusterv1alpha2.Resource("pediacluster"))}
 }

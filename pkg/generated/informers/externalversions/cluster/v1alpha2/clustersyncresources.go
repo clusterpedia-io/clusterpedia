@@ -3,13 +3,13 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
+	apiclusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	versioned "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
+	clusterv1alpha2 "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // ClusterSyncResources.
 type ClusterSyncResourcesInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha2.ClusterSyncResourcesLister
+	Lister() clusterv1alpha2.ClusterSyncResourcesLister
 }
 
 type clusterSyncResourcesInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredClusterSyncResourcesInformer(client versioned.Interface, resyncP
 				return client.ClusterV1alpha2().ClusterSyncResources().Watch(context.TODO(), options)
 			},
 		},
-		&clusterv1alpha2.ClusterSyncResources{},
+		&apiclusterv1alpha2.ClusterSyncResources{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *clusterSyncResourcesInformer) defaultInformer(client versioned.Interfac
 }
 
 func (f *clusterSyncResourcesInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&clusterv1alpha2.ClusterSyncResources{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiclusterv1alpha2.ClusterSyncResources{}, f.defaultInformer)
 }
 
-func (f *clusterSyncResourcesInformer) Lister() v1alpha2.ClusterSyncResourcesLister {
-	return v1alpha2.NewClusterSyncResourcesLister(f.Informer().GetIndexer())
+func (f *clusterSyncResourcesInformer) Lister() clusterv1alpha2.ClusterSyncResourcesLister {
+	return clusterv1alpha2.NewClusterSyncResourcesLister(f.Informer().GetIndexer())
 }
