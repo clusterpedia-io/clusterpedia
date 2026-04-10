@@ -23,6 +23,7 @@ type Config struct {
 	// You can disable it by setting `SkipDefaultTransaction` to true
 	SkipDefaultTransaction    bool
 	DefaultTransactionTimeout time.Duration
+	DefaultContextTimeout     time.Duration
 
 	// NamingStrategy tables, columns naming strategy
 	NamingStrategy schema.Namer
@@ -136,6 +137,14 @@ func Open(dialector Dialector, opts ...Option) (db *DB, err error) {
 		_, isConfig2 := opts[j].(*Config)
 		return isConfig && !isConfig2
 	})
+
+	if len(opts) > 0 {
+		if c, ok := opts[0].(*Config); ok {
+			config = c
+		} else {
+			opts = append([]Option{config}, opts...)
+		}
+	}
 
 	var skipAfterInitialize bool
 	for _, opt := range opts {
