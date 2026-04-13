@@ -3,120 +3,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	policyv1alpha1 "github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/typed/policy/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeClusterImportPolicies implements ClusterImportPolicyInterface
-type FakeClusterImportPolicies struct {
+// fakeClusterImportPolicies implements ClusterImportPolicyInterface
+type fakeClusterImportPolicies struct {
+	*gentype.FakeClientWithList[*v1alpha1.ClusterImportPolicy, *v1alpha1.ClusterImportPolicyList]
 	Fake *FakePolicyV1alpha1
 }
 
-var clusterimportpoliciesResource = v1alpha1.SchemeGroupVersion.WithResource("clusterimportpolicies")
-
-var clusterimportpoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("ClusterImportPolicy")
-
-// Get takes name of the clusterImportPolicy, and returns the corresponding clusterImportPolicy object, and an error if there is any.
-func (c *FakeClusterImportPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterImportPolicy, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(clusterimportpoliciesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeClusterImportPolicies(fake *FakePolicyV1alpha1) policyv1alpha1.ClusterImportPolicyInterface {
+	return &fakeClusterImportPolicies{
+		gentype.NewFakeClientWithList[*v1alpha1.ClusterImportPolicy, *v1alpha1.ClusterImportPolicyList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("clusterimportpolicies"),
+			v1alpha1.SchemeGroupVersion.WithKind("ClusterImportPolicy"),
+			func() *v1alpha1.ClusterImportPolicy { return &v1alpha1.ClusterImportPolicy{} },
+			func() *v1alpha1.ClusterImportPolicyList { return &v1alpha1.ClusterImportPolicyList{} },
+			func(dst, src *v1alpha1.ClusterImportPolicyList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.ClusterImportPolicyList) []*v1alpha1.ClusterImportPolicy {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.ClusterImportPolicyList, items []*v1alpha1.ClusterImportPolicy) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.ClusterImportPolicy), err
-}
-
-// List takes label and field selectors, and returns the list of ClusterImportPolicies that match those selectors.
-func (c *FakeClusterImportPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterImportPolicyList, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicyList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(clusterimportpoliciesResource, clusterimportpoliciesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.ClusterImportPolicyList{ListMeta: obj.(*v1alpha1.ClusterImportPolicyList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ClusterImportPolicyList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested clusterImportPolicies.
-func (c *FakeClusterImportPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(clusterimportpoliciesResource, opts))
-}
-
-// Create takes the representation of a clusterImportPolicy and creates it.  Returns the server's representation of the clusterImportPolicy, and an error, if there is any.
-func (c *FakeClusterImportPolicies) Create(ctx context.Context, clusterImportPolicy *v1alpha1.ClusterImportPolicy, opts v1.CreateOptions) (result *v1alpha1.ClusterImportPolicy, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(clusterimportpoliciesResource, clusterImportPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterImportPolicy), err
-}
-
-// Update takes the representation of a clusterImportPolicy and updates it. Returns the server's representation of the clusterImportPolicy, and an error, if there is any.
-func (c *FakeClusterImportPolicies) Update(ctx context.Context, clusterImportPolicy *v1alpha1.ClusterImportPolicy, opts v1.UpdateOptions) (result *v1alpha1.ClusterImportPolicy, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(clusterimportpoliciesResource, clusterImportPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterImportPolicy), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterImportPolicies) UpdateStatus(ctx context.Context, clusterImportPolicy *v1alpha1.ClusterImportPolicy, opts v1.UpdateOptions) (result *v1alpha1.ClusterImportPolicy, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(clusterimportpoliciesResource, "status", clusterImportPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterImportPolicy), err
-}
-
-// Delete takes name of the clusterImportPolicy and deletes it. Returns an error if one occurs.
-func (c *FakeClusterImportPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(clusterimportpoliciesResource, name, opts), &v1alpha1.ClusterImportPolicy{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeClusterImportPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(clusterimportpoliciesResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterImportPolicyList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched clusterImportPolicy.
-func (c *FakeClusterImportPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterImportPolicy, err error) {
-	emptyResult := &v1alpha1.ClusterImportPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(clusterimportpoliciesResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterImportPolicy), err
 }

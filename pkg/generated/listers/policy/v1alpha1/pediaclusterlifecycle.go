@@ -3,10 +3,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	policyv1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PediaClusterLifecycleLister helps list PediaClusterLifecycles.
@@ -14,19 +14,19 @@ import (
 type PediaClusterLifecycleLister interface {
 	// List lists all PediaClusterLifecycles in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.PediaClusterLifecycle, err error)
+	List(selector labels.Selector) (ret []*policyv1alpha1.PediaClusterLifecycle, err error)
 	// Get retrieves the PediaClusterLifecycle from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.PediaClusterLifecycle, error)
+	Get(name string) (*policyv1alpha1.PediaClusterLifecycle, error)
 	PediaClusterLifecycleListerExpansion
 }
 
 // pediaClusterLifecycleLister implements the PediaClusterLifecycleLister interface.
 type pediaClusterLifecycleLister struct {
-	listers.ResourceIndexer[*v1alpha1.PediaClusterLifecycle]
+	listers.ResourceIndexer[*policyv1alpha1.PediaClusterLifecycle]
 }
 
 // NewPediaClusterLifecycleLister returns a new PediaClusterLifecycleLister.
 func NewPediaClusterLifecycleLister(indexer cache.Indexer) PediaClusterLifecycleLister {
-	return &pediaClusterLifecycleLister{listers.New[*v1alpha1.PediaClusterLifecycle](indexer, v1alpha1.Resource("pediaclusterlifecycle"))}
+	return &pediaClusterLifecycleLister{listers.New[*policyv1alpha1.PediaClusterLifecycle](indexer, policyv1alpha1.Resource("pediaclusterlifecycle"))}
 }

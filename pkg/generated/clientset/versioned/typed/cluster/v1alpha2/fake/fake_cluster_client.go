@@ -13,11 +13,11 @@ type FakeClusterV1alpha2 struct {
 }
 
 func (c *FakeClusterV1alpha2) ClusterSyncResources() v1alpha2.ClusterSyncResourcesInterface {
-	return &FakeClusterSyncResources{c}
+	return newFakeClusterSyncResources(c)
 }
 
 func (c *FakeClusterV1alpha2) PediaClusters() v1alpha2.PediaClusterInterface {
-	return &FakePediaClusters{c}
+	return newFakePediaClusters(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

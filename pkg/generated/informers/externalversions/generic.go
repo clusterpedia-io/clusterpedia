@@ -3,7 +3,7 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	v1alpha1 "github.com/clusterpedia-io/api/policy/v1alpha1"

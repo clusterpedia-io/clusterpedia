@@ -13,11 +13,11 @@ type FakePolicyV1alpha1 struct {
 }
 
 func (c *FakePolicyV1alpha1) ClusterImportPolicies() v1alpha1.ClusterImportPolicyInterface {
-	return &FakeClusterImportPolicies{c}
+	return newFakeClusterImportPolicies(c)
 }
 
 func (c *FakePolicyV1alpha1) PediaClusterLifecycles() v1alpha1.PediaClusterLifecycleInterface {
-	return &FakePediaClusterLifecycles{c}
+	return newFakePediaClusterLifecycles(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
