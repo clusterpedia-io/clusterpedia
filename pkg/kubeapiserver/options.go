@@ -62,29 +62,39 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 }
 
 var supportedProxyCoreSubresources = map[string][]string{
-	"pods":     {"proxy", "log", "exec", "attach", "portfowrd"},
+	"pods":     {"proxy", "log", "exec", "attach", "portforward"},
 	"nodes":    {"proxy"},
 	"services": {"proxy"},
 }
 
-func (o *Options) Config() (*ExtraConfig, error) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.AllowProxyRequestToClusters) && (len(o.AllowedProxySubresources) != 0 ||
-		o.EnableProxyPathForForwardRequest || o.AllowForwardUnsyncResourceRequest) {
-		return nil, fmt.Errorf("please enable feature gate %s to allow apiserver to handle the proxy and forward requests", features.AllowProxyRequestToClusters)
-	}
+// TODO(Iceber): remove the legacy portfowrd alias in 1.0.
+var proxySubresourceAliases = map[string]string{
+	"portfowrd": "portforward",
+}
 
+func normalizeProxySubresourceName(name string) string {
+	if canonical, ok := proxySubresourceAliases[name]; ok {
+		return canonical
+	}
+	return name
+}
+
+func parseAllowedProxySubresources(allowed []string) (map[schema.GroupResource]sets.Set[string], error) {
 	subresources := make(map[schema.GroupResource]sets.Set[string])
 
-	for _, subresource := range o.AllowedProxySubresources {
+	for _, subresource := range allowed {
+		raw := strings.TrimSpace(subresource)
 		var resource string
-		switch slice := strings.Split(strings.TrimSpace(subresource), "/"); len(slice) {
+		switch slice := strings.Split(raw, "/"); len(slice) {
 		case 1:
 			subresource = slice[0]
 		case 2:
 			resource, subresource = slice[0], slice[1]
 		default:
-			return nil, fmt.Errorf("--allowed-proxy-subresources: invalid format %q", subresource)
+			return nil, fmt.Errorf("--allowed-proxy-subresources: invalid format %q", raw)
 		}
+
+		subresource = normalizeProxySubresourceName(subresource)
 
 		var matched bool
 		for r, srs := range supportedProxyCoreSubresources {
@@ -103,8 +113,21 @@ func (o *Options) Config() (*ExtraConfig, error) {
 			}
 		}
 		if !matched {
-			return nil, fmt.Errorf("--allowed-proxy-subresources: unsupported subresources or invalid format %q", subresource)
+			return nil, fmt.Errorf("--allowed-proxy-subresources: unsupported subresources or invalid format %q", raw)
 		}
+	}
+	return subresources, nil
+}
+
+func (o *Options) Config() (*ExtraConfig, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.AllowProxyRequestToClusters) && (len(o.AllowedProxySubresources) != 0 ||
+		o.EnableProxyPathForForwardRequest || o.AllowForwardUnsyncResourceRequest) {
+		return nil, fmt.Errorf("please enable feature gate %s to allow apiserver to handle the proxy and forward requests", features.AllowProxyRequestToClusters)
+	}
+
+	subresources, err := parseAllowedProxySubresources(o.AllowedProxySubresources)
+	if err != nil {
+		return nil, err
 	}
 	return &ExtraConfig{
 		AllowPediaClusterConfigReuse:      o.AllowPediaClusterConfigForProxyRequest,
