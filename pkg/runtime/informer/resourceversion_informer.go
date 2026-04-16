@@ -59,7 +59,6 @@ func NewResourceVersionInformer(name string, config InformerConfig) ResourceVers
 		&Config{
 			ListerWatcher: config.ListerWatcher,
 			ObjectType:    config.ExampleObject,
-			RetryOnError:  false,
 			Process: func(obj interface{}, isInInitialList bool) error {
 				deltas := obj.(cache.Deltas)
 				return informer.HandleDeltas(deltas, isInInitialList)

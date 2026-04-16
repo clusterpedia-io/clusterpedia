@@ -13,10 +13,10 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/apiserver/pkg/util/compatibility"
 	"k8s.io/client-go/discovery"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
-	"k8s.io/component-base/version"
 
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/install"
@@ -86,7 +86,7 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (cfg *Config) Complete() CompletedConfig {
-	cfg.GenericConfig.EffectiveVersion = version.DefaultBuildEffectiveVersion()
+	cfg.GenericConfig.EffectiveVersion = compatibility.DefaultBuildEffectiveVersion()
 
 	c := completedConfig{
 		cfg.GenericConfig.Complete(),

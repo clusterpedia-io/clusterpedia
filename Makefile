@@ -268,7 +268,7 @@ clean-controller-manager-manifest:
 .PHONY: golangci-lint
 golangci-lint:
 ifeq (, $(shell which golangci-lint))
-	GO111MODULE=on go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+	GO111MODULE=on go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 GOLANGLINT_BIN=$(shell go env GOPATH)/bin/golangci-lint
 else
 GOLANGLINT_BIN=$(shell which golangci-lint)
