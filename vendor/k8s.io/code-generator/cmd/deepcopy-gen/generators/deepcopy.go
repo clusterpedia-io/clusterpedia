@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"k8s.io/code-generator/cmd/deepcopy-gen/args"
+	genutil "k8s.io/code-generator/pkg/util"
 	"k8s.io/gengo/v2"
 	"k8s.io/gengo/v2/generator"
 	"k8s.io/gengo/v2/namer"
@@ -53,21 +54,24 @@ func extractEnabledTypeTag(t *types.Type) *enabledTagValue {
 }
 
 func extractEnabledTag(comments []string) *enabledTagValue {
-	tagVals := gengo.ExtractCommentTags("+", comments)[tagEnabledName]
-	if tagVals == nil {
+	tags, err := genutil.ExtractCommentTagsWithoutArguments("+", []string{tagEnabledName}, comments)
+	if err != nil {
+		klog.Fatalf("Error extracting %s tags: %v", tagEnabledName, err)
+	}
+	if tags[tagEnabledName] == nil {
 		// No match for the tag.
 		return nil
 	}
 	// If there are multiple values, abort.
-	if len(tagVals) > 1 {
-		klog.Fatalf("Found %d %s tags: %q", len(tagVals), tagEnabledName, tagVals)
+	if len(tags[tagEnabledName]) > 1 {
+		klog.Fatalf("Found %d %s tags: %q", len(tags[tagEnabledName]), tagEnabledName, tags[tagEnabledName])
 	}
 
 	// If we got here we are returning something.
 	tag := &enabledTagValue{}
 
 	// Get the primary value.
-	parts := strings.Split(tagVals[0], ",")
+	parts := strings.Split(tags[tagEnabledName][0], ",")
 	if len(parts) >= 1 {
 		tag.value = parts[0]
 	}
@@ -122,16 +126,6 @@ func GetTargets(context *generator.Context, args *args.Args) []generator.Target 
 	boilerplate, err := gengo.GoBoilerplate(args.GoHeaderFile, gengo.StdBuildTag, gengo.StdGeneratedBy)
 	if err != nil {
 		klog.Fatalf("Failed loading boilerplate: %v", err)
-	}
-
-	boundingDirs := []string{}
-	if args.BoundingDirs == nil {
-		args.BoundingDirs = context.Inputs
-	}
-	for i := range args.BoundingDirs {
-		// Strip any trailing slashes - they are not exactly "correct" but
-		// this is friendlier.
-		boundingDirs = append(boundingDirs, strings.TrimRight(args.BoundingDirs[i], "/"))
 	}
 
 	targets := []generator.Target{}
@@ -193,7 +187,7 @@ func GetTargets(context *generator.Context, args *args.Args) []generator.Target 
 					},
 					GeneratorsFunc: func(c *generator.Context) (generators []generator.Generator) {
 						return []generator.Generator{
-							NewGenDeepCopy(args.OutputFile, pkg.Path, boundingDirs, (ptagValue == tagValuePackage), ptagRegister),
+							NewGenDeepCopy(args.OutputFile, pkg.Path, (ptagValue == tagValuePackage), ptagRegister),
 						}
 					},
 				})
@@ -206,20 +200,18 @@ func GetTargets(context *generator.Context, args *args.Args) []generator.Target 
 type genDeepCopy struct {
 	generator.GoGenerator
 	targetPackage string
-	boundingDirs  []string
 	allTypes      bool
 	registerTypes bool
 	imports       namer.ImportTracker
 	typesForInit  []*types.Type
 }
 
-func NewGenDeepCopy(outputFilename, targetPackage string, boundingDirs []string, allTypes, registerTypes bool) generator.Generator {
+func NewGenDeepCopy(outputFilename, targetPackage string, allTypes, registerTypes bool) generator.Generator {
 	return &genDeepCopy{
 		GoGenerator: generator.GoGenerator{
 			OutputFilename: outputFilename,
 		},
 		targetPackage: targetPackage,
-		boundingDirs:  boundingDirs,
 		allTypes:      allTypes,
 		registerTypes: registerTypes,
 		imports:       generator.NewImportTrackerForPackage(targetPackage),
@@ -451,8 +443,11 @@ func (g *genDeepCopy) needsGeneration(t *types.Type) bool {
 func extractInterfacesTag(t *types.Type) []string {
 	var result []string
 	comments := append(append([]string{}, t.SecondClosestCommentLines...), t.CommentLines...)
-	values := gengo.ExtractCommentTags("+", comments)[interfacesTagName]
-	for _, v := range values {
+	tags, err := genutil.ExtractCommentTagsWithoutArguments("+", []string{interfacesTagName}, comments)
+	if err != nil {
+		klog.Fatalf("Error extracting %s tags: %v", interfacesTagName, err)
+	}
+	for _, v := range tags[interfacesTagName] {
 		if len(v) == 0 {
 			continue
 		}
@@ -469,7 +464,12 @@ func extractInterfacesTag(t *types.Type) []string {
 
 func extractNonPointerInterfaces(t *types.Type) (bool, error) {
 	comments := append(append([]string{}, t.SecondClosestCommentLines...), t.CommentLines...)
-	values := gengo.ExtractCommentTags("+", comments)[interfacesNonPointerTagName]
+	tags, err := genutil.ExtractCommentTagsWithoutArguments("+", []string{interfacesNonPointerTagName}, comments)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse comments: %w", err)
+	}
+
+	values := tags[interfacesNonPointerTagName]
 	if len(values) == 0 {
 		return false, nil
 	}
