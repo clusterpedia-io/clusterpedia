@@ -215,8 +215,10 @@ func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaC
 //
 // The selector is parsed so that embedded commas in set-notation values
 // (e.g. "key in (v1,v2)") and labels whose keys merely share the
-// SearchLabelForwardRequest prefix are handled correctly, and so that the
-// returned string is always a valid label selector.
+// SearchLabelForwardRequest prefix are handled correctly. If parsing fails,
+// the original selector is returned unchanged with false. Only selectors
+// that are successfully parsed and rebuilt are guaranteed to round-trip to a
+// valid label selector.
 func trimForwardLabelForLabelSelectorQuery(selector string) (string, bool) {
 	parsed, err := labels.Parse(selector)
 	if err != nil {
