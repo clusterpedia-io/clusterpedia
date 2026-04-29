@@ -92,6 +92,12 @@ func TestTrimForwardLabelForLabelSelectorQuery(t *testing.T) {
 			wantResult:  ",,,",
 			wantTrimmed: false,
 		},
+		{
+			name:        "invalid selector containing forward label is returned unchanged",
+			selector:    "foo=bar,search.clusterpedia.io/forward in (",
+			wantResult:  "foo=bar,search.clusterpedia.io/forward in (",
+			wantTrimmed: false,
+		},
 	}
 
 	for _, test := range tests {

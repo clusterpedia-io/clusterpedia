@@ -220,6 +220,10 @@ func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaC
 // that are successfully parsed and rebuilt are guaranteed to round-trip to a
 // valid label selector.
 func trimForwardLabelForLabelSelectorQuery(selector string) (string, bool) {
+	if !strings.Contains(selector, clusterpedia.SearchLabelForwardRequest) {
+		return selector, false
+	}
+
 	parsed, err := labels.Parse(selector)
 	if err != nil {
 		return selector, false
