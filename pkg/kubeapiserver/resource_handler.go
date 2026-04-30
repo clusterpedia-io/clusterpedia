@@ -10,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/endpoints/handlers"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
@@ -208,17 +209,41 @@ func checkClusterAndWarning(ctx context.Context, cluster *clusterv1alpha2.PediaC
 	}
 }
 
-var forwardLabelLength = len(clusterpedia.SearchLabelForwardRequest)
-
+// trimForwardLabelForLabelSelectorQuery removes the SearchLabelForwardRequest
+// requirement from a label selector query string. It returns the rewritten
+// selector and a boolean indicating whether the forward label was present.
+//
+// The selector is parsed so that embedded commas in set-notation values
+// (e.g. "key in (v1,v2)") and labels whose keys merely share the
+// SearchLabelForwardRequest prefix are handled correctly. If parsing fails,
+// the original selector is returned unchanged with false. Only selectors
+// that are successfully parsed and rebuilt are guaranteed to round-trip to a
+// valid label selector.
 func trimForwardLabelForLabelSelectorQuery(selector string) (string, bool) {
-	if i := strings.Index(selector, clusterpedia.SearchLabelForwardRequest); i != -1 {
-		l, other := selector[:i], selector[i+forwardLabelLength:]
-		if i := strings.Index(other, ","); i != -1 {
-			l += other[i:]
-		}
-		return strings.TrimPrefix(strings.TrimSuffix(l, ","), ","), true
+	if !strings.Contains(selector, clusterpedia.SearchLabelForwardRequest) {
+		return selector, false
 	}
-	return selector, false
+
+	parsed, err := labels.Parse(selector)
+	if err != nil {
+		return selector, false
+	}
+
+	requirements, _ := parsed.Requirements()
+	kept := make([]labels.Requirement, 0, len(requirements))
+	var trimmed bool
+	for _, req := range requirements {
+		if req.Key() == clusterpedia.SearchLabelForwardRequest {
+			trimmed = true
+			continue
+		}
+		kept = append(kept, req)
+	}
+
+	if !trimmed {
+		return selector, false
+	}
+	return labels.NewSelector().Add(kept...).String(), true
 }
 
 func HasForwardRequestHeader(req *http.Request) bool {
