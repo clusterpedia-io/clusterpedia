@@ -212,7 +212,7 @@ func writeString(builder clause.Writer, str string) {
 }
 
 func buildOwnerQueryByUID(db *gorm.DB, cluster, uid string, seniority int) interface{} {
-	if seniority == 0 {
+	if seniority <= 0 {
 		return uid
 	}
 
@@ -226,7 +226,7 @@ func buildOwnerQueryByUID(db *gorm.DB, cluster, uid string, seniority int) inter
 
 func buildOwnerQueryByName(db *gorm.DB, cluster string, namespaces []string, groupResource schema.GroupResource, name string, seniority int) interface{} {
 	ownerQuery := db.Model(Resource{}).Select("uid").Where(map[string]interface{}{"cluster": cluster})
-	if seniority != 0 {
+	if seniority > 0 {
 		parentOwner := buildOwnerQueryByName(db, cluster, namespaces, groupResource, name, seniority-1)
 		return ownerQuery.Where("owner_uid IN (?)", parentOwner)
 	}

@@ -112,6 +112,9 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 						if err != nil {
 							return fmt.Errorf("Invalid Query OwnerSeniority(%s): %w", values[0], err)
 						}
+						if seniority < 0 {
+							return fmt.Errorf("Invalid Query OwnerSeniority(%s): must be non-negative", values[0])
+						}
 						out.OwnerSeniority = seniority
 					}
 				case clusterpedia.SearchLabelSince:
