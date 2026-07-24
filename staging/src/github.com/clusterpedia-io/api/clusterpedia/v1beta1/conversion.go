@@ -185,6 +185,9 @@ func Convert_v1beta1_ListOptions_To_clusterpedia_ListOptions(in *ListOptions, ou
 			out.ExtraLabelSelector = labels.NewSelector().Add(extraLabelRequest...)
 		}
 	}
+	if out.OwnerSeniority < 0 {
+		return fmt.Errorf("Invalid Query OwnerSeniority(%d): must be non-negative", out.OwnerSeniority)
+	}
 	if out.Before.Before(out.Since) {
 		return fmt.Errorf("Invalid Query, Since is after Before")
 	}

@@ -186,6 +186,19 @@ func TestApplyListOptionsToResourceQuery_Owner(t *testing.T) {
 	}
 }
 
+func TestApplyOwnerToResourceQueryRejectsNegativeOwnerSeniority(t *testing.T) {
+	query := postgresDB.Session(&gorm.Session{DryRun: true}).Model(&Resource{})
+	_, err := applyOwnerToResourceQuery(postgresDB, query, &internal.ListOptions{
+		ClusterNames:   []string{"cluster-1"},
+		OwnerUID:       "owner-uid-1",
+		OwnerSeniority: -1,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ownerSeniority")
+	assert.Contains(t, err.Error(), "must be non-negative")
+}
+
 func TestResourceStorage_genGetObjectQuery(t *testing.T) {
 	tests := []struct {
 		name         string

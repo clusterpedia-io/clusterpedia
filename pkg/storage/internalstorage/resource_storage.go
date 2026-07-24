@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/watch"
 	genericstorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
@@ -379,6 +380,16 @@ func applyListOptionsToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal
 }
 
 func applyOwnerToResourceQuery(db *gorm.DB, query *gorm.DB, opts *internal.ListOptions) (*gorm.DB, error) {
+	if opts.OwnerSeniority < 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: internal.GroupName, Kind: "ListOptions"},
+			"ownerSeniority",
+			field.ErrorList{
+				field.Invalid(field.NewPath("ownerSeniority"), opts.OwnerSeniority, "must be non-negative"),
+			},
+		)
+	}
+
 	var ownerQuery interface{}
 	switch {
 	case len(opts.ClusterNames) != 1:
