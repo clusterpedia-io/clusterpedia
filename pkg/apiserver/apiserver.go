@@ -139,6 +139,7 @@ func (config completedConfig) New() (*ClusterPediaServer, error) {
 		handler := handlerChainFunc(apiHandler, c)
 		handler = filters.WithRequestQuery(handler)
 		handler = filters.WithAcceptHeader(handler)
+		handler = filters.WithRequestMetrics(handler, c.RequestInfoResolver)
 		return handler
 	}
 
