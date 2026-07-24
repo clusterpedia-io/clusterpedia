@@ -86,6 +86,9 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		if err := db.Use(NewGormMetrics(cfg.Database, cfg.Metrics.DBStatsRefreshInterval)); err != nil {
 			return nil, err
 		}
+		if err := db.Use(NewGormOperationMetrics(cfg.Database)); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := db.Use(NewGormTrace(false)); err != nil {
