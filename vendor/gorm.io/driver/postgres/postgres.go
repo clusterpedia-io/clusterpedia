@@ -31,6 +31,7 @@ type Config struct {
 	PreferSimpleProtocol bool
 	WithoutReturning     bool
 	Conn                 gorm.ConnPool
+	OptionOpenDB         []stdlib.OptionOpenDB
 }
 
 var (
@@ -102,10 +103,9 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 			config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 		}
 		result := timeZoneMatcher.FindStringSubmatch(dialector.Config.DSN)
-		var options []stdlib.OptionOpenDB
 		if len(result) > 2 {
 			config.RuntimeParams["timezone"] = result[2]
-			options = append(options, stdlib.OptionAfterConnect(func(ctx context.Context, conn *pgx.Conn) error {
+			dialector.OptionOpenDB = append(dialector.OptionOpenDB, stdlib.OptionAfterConnect(func(ctx context.Context, conn *pgx.Conn) error {
 				loc, tzErr := time.LoadLocation(result[2])
 				if tzErr != nil {
 					return tzErr
@@ -118,7 +118,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 				return nil
 			}))
 		}
-		db.ConnPool = stdlib.OpenDB(*config, options...)
+		db.ConnPool = stdlib.OpenDB(*config, dialector.OptionOpenDB...)
 	}
 	return
 }
