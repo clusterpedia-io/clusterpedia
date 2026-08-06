@@ -96,7 +96,7 @@ can embed the API interface directly.
 
 This option is not recommended. It will lead to publishing packages that
 contain runtime panics when users update to newer versions of
-[go.opentelemetry.io/otel/trace], which may be done with a trasitive
+[go.opentelemetry.io/otel/trace], which may be done with a transitive
 dependency.
 
 Finally, an author can embed another implementation in theirs. The embedded
@@ -116,4 +116,4 @@ It is strongly recommended that authors only embed
 That implementation is the only one OpenTelemetry authors can guarantee will
 fully implement all the API interfaces when a user updates their API.
 */
-package trace // import "go.opentelemetry.io/otel/trace"
+package trace
