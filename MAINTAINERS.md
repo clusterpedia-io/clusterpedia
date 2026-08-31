@@ -8,6 +8,7 @@ Please keep the below list sorted in ascending order.
 
 | Maintainer  | GitHub ID        | Affiliation        | Email                            |
 |-------------|------------------|--------------------|----------------------------------|
-| Calvin Chen | @calvin0327      | DaoCloud           | <120380290@qq.com>               |
+| Calvin Chen | @calvin0327      | Individual         | <120380290@qq.com>               |
 | Iceber Gu   | @Iceber          | DaoCloud           | <caiwei95@hotmail.com>           |
-| wuyingjun   | @wuyingjun-lucky | China Mobile Cloud | <wuyingjun@cmss.chinamobile.com> |
+| Leo Shi     | @scydas          | DaoCloud           | <scyda@outlook.com>              |
+| Yingjun Wu  | @wuyingjun-lucky | China Mobile Cloud | <wuyingjun@cmss.chinamobile.com> |
