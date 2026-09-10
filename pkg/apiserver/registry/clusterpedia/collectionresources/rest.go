@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/duration"
-	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/rest"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
@@ -20,6 +19,7 @@ import (
 	internal "github.com/clusterpedia-io/api/clusterpedia"
 	"github.com/clusterpedia-io/api/clusterpedia/scheme"
 	"github.com/clusterpedia-io/api/clusterpedia/v1beta1"
+	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/features"
 	resourceconfigfactory "github.com/clusterpedia-io/clusterpedia/pkg/runtime/resourceconfig/factory"
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
@@ -117,7 +117,7 @@ func (s *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 	}
 
 	if opts.WithRemainingCount == nil {
-		if enabled := utilfeature.DefaultFeatureGate.Enabled(genericfeatures.RemainingItemCount); enabled {
+		if enabled := utilfeature.DefaultFeatureGate.Enabled(features.RemainingItemCount); enabled {
 			opts.WithRemainingCount = &enabled
 		}
 	}

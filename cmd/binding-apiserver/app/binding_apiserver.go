@@ -7,11 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	genericfeatures "k8s.io/apiserver/pkg/features"
 	clientset "k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
-	"k8s.io/component-base/featuregate"
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
@@ -102,17 +100,6 @@ func NewClusterPediaServerCommand(ctx context.Context) *cobra.Command {
 
 func init() {
 	runtime.Must(logsapi.AddFeatureGates(clusterpediafeature.MutableFeatureGate))
-
-	// The feature gate `RemainingItemCount` should default to false
-	// https://github.com/clusterpedia-io/clusterpedia/issues/196
-	gates := clusterpediafeature.MutableFeatureGate.GetAll()
-	gate := gates[genericfeatures.RemainingItemCount]
-	gate.Default = false
-	gates[genericfeatures.RemainingItemCount] = gate
-
-	clusterpediafeature.MutableFeatureGate = featuregate.NewFeatureGate()
-	runtime.Must(clusterpediafeature.MutableFeatureGate.Add(gates))
-	clusterpediafeature.FeatureGate = clusterpediafeature.MutableFeatureGate
 
 	runtime.Must(storage.LoadPlugins(os.Getenv("STORAGE_PLUGINS")))
 }

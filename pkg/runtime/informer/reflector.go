@@ -34,7 +34,7 @@ const defaultExpectedTypeName = "<unspecified>"
 
 // Reflector watches a specified resource and causes all changes to be reflected in the given store.
 type Reflector struct {
-	// name identifies this reflector. By default it will be a file:line if possible.
+	// name identifies this reflector. By default, it will be a file:line if possible.
 	name string
 
 	// The name of the type we expect to place in the store. The name
@@ -50,7 +50,7 @@ type Reflector struct {
 	// The GVK of the object we expect to place in the store if unstructured.
 	expectedGVK *schema.GroupVersionKind
 	// The destination to sync up with the watch source
-	store cache.Store
+	store cache.ReflectorStore
 	// listerWatcher is used to perform lists and watches.
 	listerWatcher cache.ListerWatcher
 
@@ -172,7 +172,7 @@ func NewReflector(lw cache.ListerWatcher, expectedType interface{}, store cache.
 }
 
 // NewNamedReflector same as NewReflector, but with a specified name for logging
-func NewNamedReflector(name string, lw cache.ListerWatcher, expectedType interface{}, store cache.Store, resyncPeriod time.Duration) *Reflector {
+func NewNamedReflector(name string, lw cache.ListerWatcher, expectedType interface{}, store cache.ReflectorStore, resyncPeriod time.Duration) *Reflector {
 	realClock := &clock.RealClock{}
 	r := &Reflector{
 		name:          name,
@@ -532,7 +532,7 @@ func (r *Reflector) syncWithKeys(keys []interface{}, resourceVersion string) err
 // watchHandler watches w and sets setLastSyncResourceVersion
 func watchHandler(start time.Time,
 	w watch.Interface,
-	store cache.Store,
+	store cache.ReflectorStore,
 	expectedType reflect.Type,
 	expectedGVK *schema.GroupVersionKind,
 	name string,

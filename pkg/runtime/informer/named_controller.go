@@ -1,6 +1,7 @@
 package informer
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -37,13 +38,6 @@ type Config struct {
 	// resync.
 	ShouldResync cache.ShouldResyncFunc
 
-	// If true, when Process() returns an error, re-enqueue the object.
-	// TODO: add interface to let you inject a delay/backoff or drop
-	//       the object completely if desired. Pass the object in
-	//       question to this interface as a parameter.  This is probably moot
-	//       now that this functionality appears at a higher level.
-	RetryOnError bool
-
 	// Called whenever the ListAndWatch drops the connection with an error.
 	WatchErrorHandler WatchErrorHandler
 
@@ -75,10 +69,10 @@ func NewNamedController(name string, config *Config) cache.Controller {
 	}
 }
 
-func (c *controller) Run(stopCh <-chan struct{}) {
-	defer utilruntime.HandleCrash()
+func (c *controller) RunWithContext(ctx context.Context) {
+	defer utilruntime.HandleCrashWithContext(ctx, func(context.Context, interface{}) {})
 	go func() {
-		<-stopCh
+		<-ctx.Done()
 		c.config.Queue.Close()
 	}()
 
@@ -101,6 +95,7 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 	c.reflector = r
 	c.reflectorMutex.Unlock()
 
+	stopCh := ctx.Done()
 	var wg wait.Group
 	wg.StartWithChannel(stopCh, r.Run)
 
@@ -108,16 +103,16 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 	wg.Wait()
 }
 
+func (c *controller) Run(stopCh <-chan struct{}) {
+	c.RunWithContext(wait.ContextForChannel(stopCh))
+}
+
 func (c *controller) processLoop() {
 	for {
-		obj, err := c.config.Queue.Pop(cache.PopProcessFunc(c.config.Process))
+		_, err := c.config.Queue.Pop(cache.PopProcessFunc(c.config.Process))
 		if err != nil {
 			if err == cache.ErrFIFOClosed {
 				return
-			}
-			if c.config.RetryOnError {
-				// This is the safe way to re-enqueue.
-				_ = c.config.Queue.AddIfNotPresent(obj)
 			}
 		}
 	}

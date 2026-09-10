@@ -40,20 +40,32 @@ func NewClusterImportPolicyInformer(client versioned.Interface, resyncPeriod tim
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredClusterImportPolicyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.PolicyV1alpha1().ClusterImportPolicies().List(context.TODO(), options)
+				return client.PolicyV1alpha1().ClusterImportPolicies().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.PolicyV1alpha1().ClusterImportPolicies().Watch(context.TODO(), options)
+				return client.PolicyV1alpha1().ClusterImportPolicies().Watch(context.Background(), options)
 			},
-		},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.PolicyV1alpha1().ClusterImportPolicies().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.PolicyV1alpha1().ClusterImportPolicies().Watch(ctx, options)
+			},
+		}, client),
 		&apipolicyv1alpha1.ClusterImportPolicy{},
 		resyncPeriod,
 		indexers,
