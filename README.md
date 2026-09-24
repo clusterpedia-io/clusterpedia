@@ -35,10 +35,10 @@ Lean More About [Interfacing to Multi-Cloud Platforms](https://clusterpedia.io/d
 
 ### More retrieval features and compatibility with **Kubernetes OpenAPI**
 * Support for retrieving resources using `kubectl`, `client-go` or `controller-runtime/client`, [client-go example](https://github.com/clusterpedia-io/client-go/blob/main/examples/list-clusterpedia-resources/main.go)
-* The resource metadata can be retrived via API or [client-go/metadata](https://pkg.go.dev/k8s.io/client-go/metadata)
+* The resource metadata can be retrieved via API or [client-go/metadata](https://pkg.go.dev/k8s.io/client-go/metadata)
 * Rich retrieval conditions: [Filter by cluster/namespace/name/creation](https://clusterpedia.io/docs/usage/search/multi-cluster/#basic-features), [Search by parent or ancestor owner](https://clusterpedia.io/docs/usage/search/multi-cluster/#search-by-parent-or-ancestor-owner),[Multi-Cluster Label Selector](https://clusterpedia.io/docs/usage/search/#label-selector), [Enhanced Field Selector](https://clusterpedia.io/docs/usage/search/#field-selector), [Custom Search Conditions](https://clusterpedia.io/docs/usage/search/#advanced-searchcustom-conditional-search), etc.
 ### Support for importing Kubernetes 1.10+
-### Automic conversion of different versions of Kube resources and support for multiple version of resources
+### Automatic conversion of different versions of Kube resources and support for multiple version of resources
 * Even if you import different version of Kube, we can still use the same resource version to retrieve resources
 > For example, we can use `v1`, `v1beta2`, `v1beta1` version to retrieve the Deployments resources in different clusters.
 > 
@@ -81,7 +81,7 @@ kuberesources   .*,*.admission.k8s.io,*.admissionregistration.k8s.io,*.apiextens
 ### Diverse policies and intelligent synchronization
 * [Wildcards](https://clusterpedia.io/docs/usage/sync-resources/#using-wildcards-to-sync-resources) can be used to sync all types of resources within a specified group or cluster.
 * [Support for synchronizing all custom resources](https://clusterpedia.io/docs/usage/sync-resources/#sync-all-custom-resources)
-* The type and version of resources that Clusterpedia is synchroizing with can be adapted to you CRD and AA changes
+* The type and version of resources that Clusterpedia is synchronizing with can be adapted to your CRD and AA changes
 ### Unify the search entry for master clusters and multi-cluster resources
 * Based on [Aggregated API](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/), the entry portal for multi-cluster retrieval is the same as that of the master cluster(IP:PORT)
 ### Very low memory usage and weak network optimization
