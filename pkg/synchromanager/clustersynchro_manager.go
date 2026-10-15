@@ -466,7 +466,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		synchro = nil
 
 		manager.synchrolock.Lock()
-		manager.synchros[cluster.Name] = synchro
+		delete(manager.synchros, cluster.Name)
 		manager.synchrolock.Unlock()
 	}
 
