@@ -41,6 +41,9 @@ func (negotiator *ResourceNegotiator) SetSyncAllCustomResources(sync bool) {
 }
 
 func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clusterv1alpha2.ClusterGroupResources) (*GroupResourceStatus, map[schema.GroupVersionResource]syncConfig) {
+	// the caller keeps the slice and re-negotiates on every discovery change, so wildcard expansion must not leak back
+	syncResources = append([]clusterv1alpha2.ClusterGroupResources(nil), syncResources...)
+
 	var syncAllResources bool
 	var watchKubeVersion, watchAggregatorResourceTypes bool
 	for i, syncResource := range syncResources {
@@ -63,6 +66,7 @@ func (negotiator *ResourceNegotiator) NegotiateSyncResources(syncResources []clu
 					klog.InfoS("Skip resource sync", "cluster", negotiator.name, "group", syncResource.Group, "reason", "not match group")
 				} else {
 					syncResourcesByGroup.Versions = syncResource.Versions
+					syncResourcesByGroup.EventsInvolvedResources = syncResource.EventsInvolvedResources
 					syncResources[i] = *syncResourcesByGroup
 					if groupType == discovery.KubeResource {
 						watchKubeVersion = true
