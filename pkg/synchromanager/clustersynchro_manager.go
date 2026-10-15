@@ -385,6 +385,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	if cluster.Spec.ShardingName != manager.shardingName {
 		// status.sharding == manager.shardingName
+		manager.clusterSecretsMap.Delete(cluster.Name)
 		manager.stopClusterSynchro(cluster.Name)
 
 		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, nil); err != nil {
@@ -401,19 +402,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	synchro := manager.synchros[cluster.Name]
 	manager.synchrolock.RUnlock()
 
-	if from := cluster.Spec.AuthenticationFrom; from != nil {
-		secrets := make(map[string]struct{}, 5)
-		for _, source := range []*clusterv1alpha2.ClusterAuthenticationSource{
-			from.KubeConfig, from.CA, from.Cert, from.Token, from.Key,
-		} {
-			if source != nil {
-				secrets[source.Name] = struct{}{}
-			}
-		}
-		if len(secrets) != 0 {
-			manager.clusterSecretsMap.Store(cluster.Name, secrets)
-		}
-	}
+	manager.trackClusterSecrets(cluster)
 
 	config, err := utils.BuildClusterRestConfig(cluster, manager.secretLister)
 	if err != nil {
@@ -526,6 +515,31 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	synchro.SetResources(syncResources, cluster.Spec.SyncAllCustomResources)
 	return controller.NoRequeueResult
+}
+
+// trackClusterSecrets keeps clusterSecretsMap mirroring the secrets currently referenced by
+// spec.authenticationFrom, so secret events only enqueue clusters that still depend on them.
+func (manager *Manager) trackClusterSecrets(cluster *clusterv1alpha2.PediaCluster) {
+	var secrets map[string]struct{}
+	if from := cluster.Spec.AuthenticationFrom; from != nil {
+		for _, source := range []*clusterv1alpha2.ClusterAuthenticationSource{
+			from.KubeConfig, from.CA, from.Cert, from.Token, from.Key,
+		} {
+			if source == nil {
+				continue
+			}
+			if secrets == nil {
+				secrets = make(map[string]struct{}, 5)
+			}
+			secrets[source.Name] = struct{}{}
+		}
+	}
+
+	if len(secrets) == 0 {
+		manager.clusterSecretsMap.Delete(cluster.Name)
+		return
+	}
+	manager.clusterSecretsMap.Store(cluster.Name, secrets)
 }
 
 func (manager *Manager) stopClusterSynchro(name string) {
