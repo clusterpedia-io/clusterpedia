@@ -96,7 +96,9 @@ func (stmt *Statement) QuoteTo(writer clause.Writer, field interface{}) {
 		if v.Name == clause.CurrentTable {
 			if stmt.TableExpr != nil {
 				stmt.TableExpr.Build(stmt)
-			} else {
+			} else if stmt.Table != "" {
+				write(v.Raw, stmt.Table)
+			} else if stmt.AddError(stmt.Parse(stmt.Model)) == nil {
 				write(v.Raw, stmt.Table)
 			}
 		} else {
@@ -334,6 +336,8 @@ func (stmt *Statement) BuildCondition(query interface{}, args ...interface{}) []
 		switch v := arg.(type) {
 		case clause.Expression:
 			conds = append(conds, v)
+		case []clause.Expression:
+			conds = append(conds, v...)
 		case *DB:
 			v.executeScopes()
 
@@ -341,7 +345,9 @@ func (stmt *Statement) BuildCondition(query interface{}, args ...interface{}) []
 				if where, ok := cs.Expression.(clause.Where); ok {
 					if len(where.Exprs) == 1 {
 						if orConds, ok := where.Exprs[0].(clause.OrConditions); ok {
-							where.Exprs[0] = clause.AndConditions(orConds)
+							if len(orConds.Exprs) == 1 {
+								where.Exprs[0] = clause.AndConditions(orConds)
+							}
 						}
 					}
 					conds = append(conds, clause.And(where.Exprs...))
@@ -362,6 +368,9 @@ func (stmt *Statement) BuildCondition(query interface{}, args ...interface{}) []
 
 			for _, key := range keys {
 				column := clause.Column{Name: key, Table: curTable}
+				if strings.Contains(key, ".") {
+					column = clause.Column{Name: key}
+				}
 				conds = append(conds, clause.Eq{Column: column, Value: v[key]})
 			}
 		case map[string]interface{}:
@@ -374,6 +383,9 @@ func (stmt *Statement) BuildCondition(query interface{}, args ...interface{}) []
 			for _, key := range keys {
 				reflectValue := reflect.Indirect(reflect.ValueOf(v[key]))
 				column := clause.Column{Name: key, Table: curTable}
+				if strings.Contains(key, ".") {
+					column = clause.Column{Name: key}
+				}
 				switch reflectValue.Kind() {
 				case reflect.Slice, reflect.Array:
 					if _, ok := v[key].(driver.Valuer); ok {
@@ -650,12 +662,15 @@ func (stmt *Statement) Changed(fields ...string) bool {
 				for destValue.Kind() == reflect.Ptr {
 					destValue = destValue.Elem()
 				}
-
-				changedValue, zero := field.ValueOf(stmt.Context, destValue)
-				if v {
-					return !utils.AssertEqual(changedValue, fieldValue)
+				if descSchema, err := schema.Parse(stmt.Dest, stmt.DB.cacheStore, stmt.DB.NamingStrategy); err == nil {
+					if destField := descSchema.LookUpField(field.DBName); destField != nil {
+						changedValue, zero := destField.ValueOf(stmt.Context, destValue)
+						if v {
+							return !utils.AssertEqual(changedValue, fieldValue)
+						}
+						return !zero && !utils.AssertEqual(changedValue, fieldValue)
+					}
 				}
-				return !zero && !utils.AssertEqual(changedValue, fieldValue)
 			}
 		}
 		return false
