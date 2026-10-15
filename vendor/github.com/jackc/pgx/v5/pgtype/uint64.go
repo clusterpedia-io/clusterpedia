@@ -2,7 +2,6 @@ package pgtype
 
 import (
 	"database/sql/driver"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
@@ -24,16 +23,18 @@ type Uint64 struct {
 	Valid  bool
 }
 
+// ScanUint64 implements the [Uint64Scanner] interface.
 func (n *Uint64) ScanUint64(v Uint64) error {
 	*n = v
 	return nil
 }
 
+// Uint64Value implements the [Uint64Valuer] interface.
 func (n Uint64) Uint64Value() (Uint64, error) {
 	return n, nil
 }
 
-// Scan implements the database/sql Scanner interface.
+// Scan implements the [database/sql.Scanner] interface.
 func (dst *Uint64) Scan(src any) error {
 	if src == nil {
 		*dst = Uint64{}
@@ -63,7 +64,7 @@ func (dst *Uint64) Scan(src any) error {
 	return nil
 }
 
-// Value implements the database/sql/driver Valuer interface.
+// Value implements the [database/sql/driver.Valuer] interface.
 func (src Uint64) Value() (driver.Value, error) {
 	if !src.Valid {
 		return nil, nil
@@ -156,7 +157,7 @@ type encodePlanUint64CodecTextUint64 struct{}
 
 func (encodePlanUint64CodecTextUint64) Encode(value any, buf []byte) (newBuf []byte, err error) {
 	v := value.(uint64)
-	return append(buf, strconv.FormatUint(uint64(v), 10)...), nil
+	return append(buf, strconv.FormatUint(v, 10)...), nil
 }
 
 type encodePlanUint64CodecTextUint64Valuer struct{}
@@ -194,7 +195,6 @@ func (encodePlanUint64CodecTextInt64Valuer) Encode(value any, buf []byte) (newBu
 }
 
 func (Uint64Codec) PlanScan(m *Map, oid uint32, format int16, target any) ScanPlan {
-
 	switch format {
 	case BinaryFormatCode:
 		switch target.(type) {
@@ -250,12 +250,13 @@ func (scanPlanBinaryUint64ToUint64) Scan(src []byte, dst any) error {
 		return fmt.Errorf("cannot scan NULL into %T", dst)
 	}
 
-	if len(src) != 8 {
-		return fmt.Errorf("invalid length for uint64: %v", len(src))
+	raw, err := pgio.Uint64Exact(src)
+	if err != nil {
+		return fmt.Errorf("uint64: %w", err)
 	}
 
-	p := (dst).(*uint64)
-	*p = binary.BigEndian.Uint64(src)
+	p := dst.(*uint64)
+	*p = raw
 
 	return nil
 }
@@ -263,7 +264,7 @@ func (scanPlanBinaryUint64ToUint64) Scan(src []byte, dst any) error {
 type scanPlanBinaryUint64ToUint64Scanner struct{}
 
 func (scanPlanBinaryUint64ToUint64Scanner) Scan(src []byte, dst any) error {
-	s, ok := (dst).(Uint64Scanner)
+	s, ok := dst.(Uint64Scanner)
 	if !ok {
 		return ErrScanTargetTypeChanged
 	}
@@ -272,11 +273,10 @@ func (scanPlanBinaryUint64ToUint64Scanner) Scan(src []byte, dst any) error {
 		return s.ScanUint64(Uint64{})
 	}
 
-	if len(src) != 8 {
-		return fmt.Errorf("invalid length for uint64: %v", len(src))
+	n, err := pgio.Uint64Exact(src)
+	if err != nil {
+		return fmt.Errorf("uint64: %w", err)
 	}
-
-	n := binary.BigEndian.Uint64(src)
 
 	return s.ScanUint64(Uint64{Uint64: n, Valid: true})
 }
@@ -284,7 +284,7 @@ func (scanPlanBinaryUint64ToUint64Scanner) Scan(src []byte, dst any) error {
 type scanPlanBinaryUint64ToTextScanner struct{}
 
 func (scanPlanBinaryUint64ToTextScanner) Scan(src []byte, dst any) error {
-	s, ok := (dst).(TextScanner)
+	s, ok := dst.(TextScanner)
 	if !ok {
 		return ErrScanTargetTypeChanged
 	}
@@ -293,18 +293,18 @@ func (scanPlanBinaryUint64ToTextScanner) Scan(src []byte, dst any) error {
 		return s.ScanText(Text{})
 	}
 
-	if len(src) != 8 {
-		return fmt.Errorf("invalid length for uint64: %v", len(src))
+	n, err := pgio.Uint64Exact(src)
+	if err != nil {
+		return fmt.Errorf("uint64: %w", err)
 	}
 
-	n := uint64(binary.BigEndian.Uint64(src))
 	return s.ScanText(Text{String: strconv.FormatUint(n, 10), Valid: true})
 }
 
 type scanPlanTextAnyToUint64Scanner struct{}
 
 func (scanPlanTextAnyToUint64Scanner) Scan(src []byte, dst any) error {
-	s, ok := (dst).(Uint64Scanner)
+	s, ok := dst.(Uint64Scanner)
 	if !ok {
 		return ErrScanTargetTypeChanged
 	}

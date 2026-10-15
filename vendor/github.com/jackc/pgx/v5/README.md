@@ -12,7 +12,15 @@ The toolkit component is a related set of packages that implement PostgreSQL fun
 and type mapping between PostgreSQL and Go. These underlying packages can be used to implement alternative drivers,
 proxies, load balancers, logical replication clients, etc.
 
-## Example Usage
+## Quick Start
+
+### Installation
+
+```bash
+go get github.com/jackc/pgx/v5
+```
+
+### Example Usage
 
 ```go
 package main
@@ -46,7 +54,18 @@ func main() {
 }
 ```
 
-See the [getting started guide](https://github.com/jackc/pgx/wiki/Getting-started-with-pgx) for more information.
+### Connection Configuration
+
+`pgx.Connect` and `pgxpool.New` accept PostgreSQL connection URLs (such as `postgres://user:pass@host:5432/db?sslmode=verify-full`) as well as `key=value` strings. See [`pgconn.ParseConfig`](https://pkg.go.dev/github.com/jackc/pgx/v5/pgconn#ParseConfig) and the [PostgreSQL connection string documentation](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING) for supported options and environment variables.
+
+For a step-by-step walkthrough, see the [getting started guide](https://github.com/jackc/pgx/wiki/Getting-started-with-pgx).
+
+## Documentation
+
+Package documentation and API reference are available on [pkg.go.dev](https://pkg.go.dev/github.com/jackc/pgx/v5):
+* [`pgx`](https://pkg.go.dev/github.com/jackc/pgx/v5) — base PostgreSQL driver
+* [`pgxpool`](https://pkg.go.dev/github.com/jackc/pgx/v5/pgxpool) — concurrency-safe connection pool
+* [`stdlib`](https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib) — `database/sql` compatibility adapter
 
 ## Features
 
@@ -82,9 +101,30 @@ The pgx interface is recommended when:
 
 It is also possible to use the `database/sql` interface and convert a connection to the lower-level pgx interface as needed.
 
-## Testing
+## Development and Testing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup instructions.
+Each checkout has its own PostgreSQL 14-18 clusters and CockroachDB node, so the whole test matrix
+is available locally on macOS, on Linux, or in the included devcontainer. Only PostgreSQL 18 stays
+running by default; other targets start and stop around their tests:
+
+```sh
+scripts/setup-host # native macOS (Homebrew required) or Ubuntu: host packages and mise
+export PATH="$HOME/.local/bin:$PATH" # if mise was just installed
+mise trust
+mise install        # project tools
+mise run dev:init   # checkout ports and certificates
+mise run dev        # start PostgreSQL 18 and the on-demand database supervisor
+./test.sh           # the suite against PostgreSQL 18
+./test.sh all       # every target, starting and stopping each server as needed
+```
+
+Host setup installs PostgreSQL 14-18 and Ruby build dependencies. It does not install project
+tools or initialize the checkout; those remain separate steps above. The devcontainer already
+provides the host prerequisites.
+
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for the full setup, and
+[CONTRIBUTING.md](./CONTRIBUTING.md) for how to contribute — including how to run the tests against
+a PostgreSQL server you already have, without any of the above.
 
 ## Architecture
 
@@ -92,7 +132,7 @@ See the presentation at Golang Estonia, [PGX Top to Bottom](https://www.youtube.
 
 ## Supported Go and PostgreSQL Versions
 
-pgx supports the same versions of Go and PostgreSQL that are supported by their respective teams. For [Go](https://golang.org/doc/devel/release.html#policy) that is the two most recent major releases and for [PostgreSQL](https://www.postgresql.org/support/versioning/) the major releases in the last 5 years. This means pgx supports Go 1.23 and higher and PostgreSQL 13 and higher. pgx also is tested against the latest version of [CockroachDB](https://www.cockroachlabs.com/product/).
+pgx supports the same versions of Go and PostgreSQL that are supported by their respective teams. For [Go](https://golang.org/doc/devel/release.html#policy) that is the two most recent major releases and for [PostgreSQL](https://www.postgresql.org/support/versioning/) the major releases in the last 5 years. This means pgx supports Go 1.25 and higher and PostgreSQL 14 and higher. pgx also is tested against the latest version of [CockroachDB](https://www.cockroachlabs.com/product/).
 
 ## Version Policy
 
@@ -120,6 +160,7 @@ pgerrcode contains constants for the PostgreSQL error codes.
 
 * [github.com/jackc/pgx-gofrs-uuid](https://github.com/jackc/pgx-gofrs-uuid)
 * [github.com/jackc/pgx-shopspring-decimal](https://github.com/jackc/pgx-shopspring-decimal)
+* [github.com/ColeBurch/pgx-govalues-decimal](https://github.com/ColeBurch/pgx-govalues-decimal)
 * [github.com/twpayne/pgx-geos](https://github.com/twpayne/pgx-geos) ([PostGIS](https://postgis.net/) and [GEOS](https://libgeos.org/) via [go-geos](https://github.com/twpayne/go-geos))
 * [github.com/vgarvardt/pgx-google-uuid](https://github.com/vgarvardt/pgx-google-uuid)
 
@@ -127,6 +168,7 @@ pgerrcode contains constants for the PostgreSQL error codes.
 ## Adapters for 3rd Party Tracers
 
 * [github.com/jackhopner/pgx-xray-tracer](https://github.com/jackhopner/pgx-xray-tracer)
+* [github.com/exaring/otelpgx](https://github.com/exaring/otelpgx)
 
 ## Adapters for 3rd Party Loggers
 
@@ -184,3 +226,7 @@ Simple Golang implementation for transactional outbox pattern for PostgreSQL usi
 ### [https://github.com/Arlandaren/pgxWrappy](https://github.com/Arlandaren/pgxWrappy)
 
 Simplifies working with the pgx library, providing convenient scanning of nested structures.
+
+### [https://github.com/KoNekoD/pgx-colon-query-rewriter](https://github.com/KoNekoD/pgx-colon-query-rewriter)
+
+Implementation of the pgx query rewriter to use ':' instead of '@' in named query parameters.
