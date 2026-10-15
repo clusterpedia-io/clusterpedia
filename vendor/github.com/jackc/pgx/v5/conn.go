@@ -17,8 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// ConnConfig contains all the options used to establish a connection. It must be created by ParseConfig and
-// then it can be modified. A manually initialized ConnConfig will cause ConnectConfig to panic.
+// ConnConfig contains all the options used to establish a connection. It must be created by [ParseConfig] and
+// then it can be modified. A manually initialized ConnConfig will cause [ConnectConfig] to panic.
 type ConnConfig struct {
 	pgconn.Config
 
@@ -36,9 +36,10 @@ type ConnConfig struct {
 	DescriptionCacheCapacity int
 
 	// DefaultQueryExecMode controls the default mode for executing queries. By default pgx uses the extended protocol
-	// and automatically prepares and caches prepared statements. However, this may be incompatible with proxies such as
-	// PGBouncer. In this case it may be preferable to use QueryExecModeExec or QueryExecModeSimpleProtocol. The same
-	// functionality can be controlled on a per query basis by passing a QueryExecMode as the first query argument.
+	// and automatically prepares and caches prepared statements. This may be incompatible with proxies such as PgBouncer
+	// unless they are configured to support protocol-level prepared statements. In an incompatible configuration it may
+	// be preferable to use [QueryExecModeExec] or [QueryExecModeSimpleProtocol]. The same functionality can be controlled
+	// on a per query basis by passing a [QueryExecMode] as the first query argument.
 	DefaultQueryExecMode QueryExecMode
 
 	createdByParseConfig bool // Used to enforce created by ParseConfig rule.
@@ -65,11 +66,12 @@ func (cc *ConnConfig) ConnString() string { return cc.connString }
 // Conn is a PostgreSQL connection handle. It is not safe for concurrent usage. Use a connection pool to manage access
 // to multiple database connections from multiple goroutines.
 type Conn struct {
-	pgConn             *pgconn.PgConn
-	config             *ConnConfig // config used when establishing this connection
-	preparedStatements map[string]*pgconn.StatementDescription
-	statementCache     stmtcache.Cache
-	descriptionCache   stmtcache.Cache
+	pgConn                  *pgconn.PgConn
+	config                  *ConnConfig // config used when establishing this connection
+	preparedStatements      map[string]*pgconn.StatementDescription
+	failedDescribeStatement string
+	statementCache          stmtcache.Cache
+	descriptionCache        stmtcache.Cache
 
 	queryTracer    QueryTracer
 	batchTracer    BatchTracer
@@ -130,7 +132,7 @@ var (
 )
 
 // Connect establishes a connection with a PostgreSQL server with a connection string. See
-// pgconn.Connect for details.
+// [pgconn.Connect] for details.
 func Connect(ctx context.Context, connString string) (*Conn, error) {
 	connConfig, err := ParseConfig(connString)
 	if err != nil {
@@ -140,7 +142,7 @@ func Connect(ctx context.Context, connString string) (*Conn, error) {
 }
 
 // ConnectWithOptions behaves exactly like Connect with the addition of options. At the present options is only used to
-// provide a GetSSLPassword function.
+// provide a [pgconn.GetSSLPasswordFunc] function.
 func ConnectWithOptions(ctx context.Context, connString string, options ParseConfigOptions) (*Conn, error) {
 	connConfig, err := ParseConfigWithOptions(connString, options)
 	if err != nil {
@@ -150,7 +152,7 @@ func ConnectWithOptions(ctx context.Context, connString string, options ParseCon
 }
 
 // ConnectConfig establishes a connection with a PostgreSQL server with a configuration struct.
-// connConfig must have been created by ParseConfig.
+// connConfig must have been created by [ParseConfig].
 func ConnectConfig(ctx context.Context, connConfig *ConnConfig) (*Conn, error) {
 	// In general this improves safety. In particular avoid the config.Config.OnNotification mutation from affecting other
 	// connections with the same config. See https://github.com/jackc/pgx/issues/618.
@@ -159,8 +161,8 @@ func ConnectConfig(ctx context.Context, connConfig *ConnConfig) (*Conn, error) {
 	return connect(ctx, connConfig)
 }
 
-// ParseConfigWithOptions behaves exactly as ParseConfig does with the addition of options. At the present options is
-// only used to provide a GetSSLPassword function.
+// ParseConfigWithOptions behaves exactly as [ParseConfig] does with the addition of options. At the present options is
+// only used to provide a [pgconn.GetSSLPasswordFunc] function.
 func ParseConfigWithOptions(connString string, options ParseConfigOptions) (*ConnConfig, error) {
 	config, err := pgconn.ParseConfigWithOptions(connString, options.ParseConfigOptions)
 	if err != nil {
@@ -172,7 +174,7 @@ func ParseConfigWithOptions(connString string, options ParseConfigOptions) (*Con
 		delete(config.RuntimeParams, "statement_cache_capacity")
 		n, err := strconv.ParseInt(s, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse statement_cache_capacity: %w", err)
+			return nil, pgconn.NewParseConfigError(connString, "cannot parse statement_cache_capacity", err)
 		}
 		statementCacheCapacity = int(n)
 	}
@@ -182,7 +184,7 @@ func ParseConfigWithOptions(connString string, options ParseConfigOptions) (*Con
 		delete(config.RuntimeParams, "description_cache_capacity")
 		n, err := strconv.ParseInt(s, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse description_cache_capacity: %w", err)
+			return nil, pgconn.NewParseConfigError(connString, "cannot parse description_cache_capacity", err)
 		}
 		descriptionCacheCapacity = int(n)
 	}
@@ -202,7 +204,9 @@ func ParseConfigWithOptions(connString string, options ParseConfigOptions) (*Con
 		case "simple_protocol":
 			defaultQueryExecMode = QueryExecModeSimpleProtocol
 		default:
-			return nil, fmt.Errorf("invalid default_query_exec_mode: %s", s)
+			return nil, pgconn.NewParseConfigError(
+				connString, "invalid default_query_exec_mode", fmt.Errorf("unknown value %q", s),
+			)
 		}
 	}
 
@@ -305,8 +309,8 @@ func (c *Conn) Close(ctx context.Context) error {
 }
 
 // Prepare creates a prepared statement with name and sql. sql can contain placeholders for bound parameters. These
-// placeholders are referenced positionally as $1, $2, etc. name can be used instead of sql with Query, QueryRow, and
-// Exec to execute the statement. It can also be used with Batch.Queue.
+// placeholders are referenced positionally as $1, $2, etc. name can be used instead of sql with [Conn.Query],
+// [Conn.QueryRow], and [Conn.Exec] to execute the statement. It can also be used with [Batch.Queue].
 //
 // The underlying PostgreSQL identifier for the prepared statement will be name if name != sql or a digest of sql if
 // name == sql.
@@ -314,6 +318,14 @@ func (c *Conn) Close(ctx context.Context) error {
 // Prepare is idempotent; i.e. it is safe to call Prepare multiple times with the same name and sql arguments. This
 // allows a code path to Prepare and Query/Exec without concern for if the statement has already been prepared.
 func (c *Conn) Prepare(ctx context.Context, name, sql string) (sd *pgconn.StatementDescription, err error) {
+	if c.failedDescribeStatement != "" {
+		err = c.Deallocate(ctx, c.failedDescribeStatement)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deallocate previously failed statement %q: %w", c.failedDescribeStatement, err)
+		}
+		c.failedDescribeStatement = ""
+	}
+
 	if c.prepareTracer != nil {
 		ctx = c.prepareTracer.TracePrepareStart(ctx, c, TracePrepareStartData{Name: name, SQL: sql})
 	}
@@ -346,6 +358,15 @@ func (c *Conn) Prepare(ctx context.Context, name, sql string) (sd *pgconn.Statem
 
 	sd, err = c.pgConn.Prepare(ctx, psName, sql, nil)
 	if err != nil {
+		var pErr *pgconn.PrepareError
+		if errors.As(err, &pErr) && pErr.ParseComplete {
+			// The server-side statement was created under psName — the name sent in
+			// Parse. In the name == sql case psKey is the SQL text, and deallocating
+			// by it would close a nonexistent statement while leaking the real one.
+			// When Parse never completed no statement was created at all, so there
+			// is nothing to clean up.
+			c.failedDescribeStatement = psName
+		}
 		return nil, err
 	}
 
@@ -460,6 +481,9 @@ func (c *Conn) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.C
 	}
 
 	if err := c.deallocateInvalidatedCachedStatements(ctx); err != nil {
+		if c.queryTracer != nil {
+			c.queryTracer.TraceQueryEnd(ctx, c, TraceQueryEndData{Err: err})
+		}
 		return pgconn.CommandTag{}, err
 	}
 
@@ -501,6 +525,18 @@ optionLoop:
 	if len(arguments) == 0 {
 		mode = QueryExecModeSimpleProtocol
 	}
+
+	defer func() {
+		if err != nil {
+			if sc := c.statementCache; sc != nil {
+				sc.Invalidate(sql)
+			}
+
+			if sc := c.descriptionCache; sc != nil {
+				sc.Invalidate(sql)
+			}
+		}
+	}()
 
 	if sd, ok := c.preparedStatements[sql]; ok {
 		return c.execPrepared(ctx, sd, arguments)
@@ -583,7 +619,7 @@ func (c *Conn) execPrepared(ctx context.Context, sd *pgconn.StatementDescription
 		return pgconn.CommandTag{}, err
 	}
 
-	result := c.pgConn.ExecPrepared(ctx, sd.Name, c.eqb.ParamValues, c.eqb.ParamFormats, c.eqb.ResultFormats).Read()
+	result := c.pgConn.ExecStatement(ctx, sd, c.eqb.ParamValues, c.eqb.ParamFormats, c.eqb.ResultFormats).Read()
 	c.eqb.reset() // Allow c.eqb internal memory to be GC'ed as soon as possible.
 	return result.CommandTag, result.Err
 }
@@ -715,7 +751,7 @@ type QueryRewriter interface {
 // collected before processing rather than processed while receiving each row. This avoids the possibility of the
 // application processing rows from a query that the server rejected. The CollectRows function is useful here.
 //
-// An implementor of QueryRewriter may be passed as the first element of args. It can rewrite the sql and change or
+// An implementer of QueryRewriter may be passed as the first element of args. It can rewrite the sql and change or
 // replace args. For example, NamedArgs is QueryRewriter that implements named arguments.
 //
 // For extra control over how the query is executed, the types QueryExecMode, QueryResultFormats, and
@@ -781,7 +817,8 @@ optionLoop:
 
 	var err error
 	sd, explicitPreparedStatement := c.preparedStatements[sql]
-	if sd != nil || mode == QueryExecModeCacheStatement || mode == QueryExecModeCacheDescribe || mode == QueryExecModeDescribeExec {
+	switch {
+	case sd != nil || mode == QueryExecModeCacheStatement || mode == QueryExecModeCacheDescribe || mode == QueryExecModeDescribeExec:
 		if sd == nil {
 			sd, err = c.getStatementDescription(ctx, mode, sql)
 			if err != nil {
@@ -806,7 +843,7 @@ optionLoop:
 		if resultFormatsByOID != nil {
 			resultFormats = make([]int16, len(sd.Fields))
 			for i := range resultFormats {
-				resultFormats[i] = resultFormatsByOID[uint32(sd.Fields[i].DataTypeOID)]
+				resultFormats[i] = resultFormatsByOID[sd.Fields[i].DataTypeOID]
 			}
 		}
 
@@ -817,9 +854,9 @@ optionLoop:
 		if !explicitPreparedStatement && mode == QueryExecModeCacheDescribe {
 			rows.resultReader = c.pgConn.ExecParams(ctx, sql, c.eqb.ParamValues, sd.ParamOIDs, c.eqb.ParamFormats, resultFormats)
 		} else {
-			rows.resultReader = c.pgConn.ExecPrepared(ctx, sd.Name, c.eqb.ParamValues, c.eqb.ParamFormats, resultFormats)
+			rows.resultReader = c.pgConn.ExecStatement(ctx, sd, c.eqb.ParamValues, c.eqb.ParamFormats, resultFormats)
 		}
-	} else if mode == QueryExecModeExec {
+	case mode == QueryExecModeExec:
 		err := c.eqb.Build(c.typeMap, nil, args)
 		if err != nil {
 			rows.fatal(err)
@@ -827,7 +864,7 @@ optionLoop:
 		}
 
 		rows.resultReader = c.pgConn.ExecParams(ctx, sql, c.eqb.ParamValues, nil, c.eqb.ParamFormats, c.eqb.ResultFormats)
-	} else if mode == QueryExecModeSimpleProtocol {
+	case mode == QueryExecModeSimpleProtocol:
 		sql, err = c.sanitizeForSimpleQuery(sql, args...)
 		if err != nil {
 			rows.fatal(err)
@@ -845,7 +882,7 @@ optionLoop:
 		}
 
 		return rows, nil
-	} else {
+	default:
 		err = fmt.Errorf("unknown QueryExecMode: %v", mode)
 		rows.fatal(err)
 		return rows, rows.err
@@ -906,12 +943,16 @@ func (c *Conn) QueryRow(ctx context.Context, sql string, args ...any) Row {
 }
 
 // SendBatch sends all queued queries to the server at once. All queries are run in an implicit transaction unless
-// explicit transaction control statements are executed. The returned BatchResults must be closed before the connection
+// explicit transaction control statements are executed. The returned [BatchResults] must be closed before the connection
 // is used again.
 //
 // Depending on the QueryExecMode, all queries may be prepared before any are executed. This means that creating a table
 // and using it in a subsequent query in the same batch can fail.
 func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
+	if len(b.QueuedQueries) == 0 {
+		return &emptyBatchResults{conn: c}
+	}
+
 	if c.batchTracer != nil {
 		ctx = c.batchTracer.TraceBatchStart(ctx, c, TraceBatchStartData{Batch: b})
 		defer func() {
@@ -1163,7 +1204,7 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 			for _, sd := range distinctNewQueries {
 				results, err := pipeline.GetResults()
 				if err != nil {
-					return err
+					return newErrPreprocessingBatch("prepare", sd.SQL, err)
 				}
 
 				resultSD, ok := results.(*pgconn.StatementDescription)
@@ -1197,15 +1238,18 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 	for _, bi := range b.QueuedQueries {
 		err := c.eqb.Build(c.typeMap, bi.sd, bi.Arguments)
 		if err != nil {
-			// we wrap the error so we the user can understand which query failed inside the batch
-			err = fmt.Errorf("error building query %s: %w", bi.SQL, err)
+			err = newErrPreprocessingBatch("build", bi.SQL, err)
 			return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 		}
 
 		if bi.sd.Name == "" {
 			pipeline.SendQueryParams(bi.sd.SQL, c.eqb.ParamValues, bi.sd.ParamOIDs, c.eqb.ParamFormats, c.eqb.ResultFormats)
 		} else {
-			pipeline.SendQueryPrepared(bi.sd.Name, c.eqb.ParamValues, c.eqb.ParamFormats, c.eqb.ResultFormats)
+			// Copy ResultFormats because SendQueryStatement stores the slice for later use, and eqb.Build reuses the
+			// backing array on the next iteration.
+			resultFormats := make([]int16, len(c.eqb.ResultFormats))
+			copy(resultFormats, c.eqb.ResultFormats)
+			pipeline.SendQueryStatement(bi.sd, c.eqb.ParamValues, c.eqb.ParamFormats, resultFormats)
 		}
 	}
 
@@ -1243,7 +1287,7 @@ func (c *Conn) sanitizeForSimpleQuery(sql string, args ...any) (string, error) {
 	return sanitize.SanitizeSQL(sql, valueArgs...)
 }
 
-// LoadType inspects the database for typeName and produces a pgtype.Type suitable for registration. typeName must be
+// LoadType inspects the database for typeName and produces a [pgtype.Type] suitable for registration. typeName must be
 // the name of a type where the underlying type(s) is already understood by pgx. It is for derived types. In particular,
 // typeName must be one of the following:
 //   - An array type name of a type that is already registered. e.g. "_foo" when "foo" is registered.
@@ -1270,7 +1314,7 @@ func (c *Conn) LoadType(ctx context.Context, typeName string) (*pgtype.Type, err
 
 	switch typtype {
 	case "b": // array
-		elementOID, err := c.getArrayElementOID(ctx, oid)
+		elementOID, delimiter, err := c.getArrayElementOIDAndDelimiter(ctx, oid)
 		if err != nil {
 			return nil, err
 		}
@@ -1280,7 +1324,7 @@ func (c *Conn) LoadType(ctx context.Context, typeName string) (*pgtype.Type, err
 			return nil, errors.New("array element OID not registered")
 		}
 
-		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.ArrayCodec{ElementType: dt}}, nil
+		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.ArrayCodec{ElementType: dt, Delimiter: delimiter}}, nil
 	case "c": // composite
 		fields, err := c.getCompositeFields(ctx, oid)
 		if err != nil {
@@ -1326,15 +1370,16 @@ func (c *Conn) LoadType(ctx context.Context, typeName string) (*pgtype.Type, err
 	}
 }
 
-func (c *Conn) getArrayElementOID(ctx context.Context, oid uint32) (uint32, error) {
+func (c *Conn) getArrayElementOIDAndDelimiter(ctx context.Context, oid uint32) (uint32, byte, error) {
 	var typelem uint32
+	var typdelim string
 
-	err := c.QueryRow(ctx, "select typelem from pg_type where oid=$1", oid).Scan(&typelem)
+	err := c.QueryRow(ctx, "select typelem, typdelim::text from pg_type where oid=$1", oid).Scan(&typelem, &typdelim)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	return typelem, nil
+	return typelem, parseTypeDelimiter(typdelim), nil
 }
 
 func (c *Conn) getRangeElementOID(ctx context.Context, oid uint32) (uint32, error) {
