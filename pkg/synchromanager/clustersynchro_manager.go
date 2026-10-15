@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
@@ -240,7 +241,7 @@ func (manager *Manager) updateCluster(older, newer interface{}) {
 	newObj := newer.(*clusterv1alpha2.PediaCluster)
 	if newObj.DeletionTimestamp.IsZero() &&
 		equality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) &&
-		oldObj.Status.ShardingName == newObj.Status.ShardingName {
+		ptr.Equal(oldObj.Status.ShardingName, newObj.Status.ShardingName) {
 		return
 	}
 
