@@ -461,7 +461,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	manager.UpdateClusterAPIServerAndValidatedCondition(cluster.Name, config.Host, synchro, clusterv1alpha2.ValidatedReason, warnMsg, metav1.ConditionTrue)
 
 	// check cluster config
-	if synchro != nil && !reflect.DeepEqual(synchro.RESTConfig, config) {
+	if synchro != nil && !utils.RestConfigEqual(synchro.RESTConfig, config) {
 		klog.InfoS("cluster config is changed, rebuild cluster synchro", "cluster", cluster.Name)
 		synchro.Shutdown(true)
 		synchro = nil
