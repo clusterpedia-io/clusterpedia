@@ -3,6 +3,9 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"reflect"
 
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
@@ -10,6 +13,46 @@ import (
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 )
+
+// RestConfigEqual reports whether two configs built by BuildClusterRestConfig are equivalent.
+// reflect.DeepEqual never treats non-nil funcs as equal, so func fields are compared by effect instead.
+func RestConfigEqual(a, b *rest.Config) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if !proxyURLEqual(a.Proxy, b.Proxy) {
+		return false
+	}
+	return reflect.DeepEqual(stripFuncs(a), stripFuncs(b))
+}
+
+func stripFuncs(config *rest.Config) *rest.Config {
+	c := rest.CopyConfig(config)
+	c.Transport = nil
+	c.WrapTransport = nil
+	c.RateLimiter = nil
+	c.WarningHandler = nil
+	c.Dial = nil
+	c.Proxy = nil
+	return c
+}
+
+// clientcmd only ever sets Proxy to http.ProxyURL(u), which returns the same URL for every request.
+func proxyURLEqual(a, b func(*http.Request) (*url.URL, error)) bool {
+	if a == nil || b == nil {
+		return (a == nil) == (b == nil)
+	}
+	req := &http.Request{URL: &url.URL{Scheme: "https", Host: "placeholder"}}
+	ua, erra := a(req)
+	ub, errb := b(req)
+	if erra != nil || errb != nil {
+		return false
+	}
+	if ua == nil || ub == nil {
+		return ua == ub
+	}
+	return ua.String() == ub.String()
+}
 
 func BuildClusterRestConfig(cluster *clusterv1alpha2.PediaCluster, lister v1.SecretNamespaceLister) (*rest.Config, error) {
 	// This is a simple and straightforward logic: authentication information is only retrieved
