@@ -18,50 +18,101 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/mdlayher/vsock"
 	config_util "github.com/prometheus/common/config"
+	"go.yaml.in/yaml/v2"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v2"
+	"golang.org/x/time/rate"
 )
 
 var (
 	errNoTLSConfig = errors.New("TLS config is not present")
+	ErrMissingFlag = errors.New("missing required flag configuration")
 	ErrNoListeners = errors.New("no web listen address or systemd socket flag specified")
 )
 
 type Config struct {
-	TLSConfig  TLSConfig                     `yaml:"tls_server_config"`
-	HTTPConfig HTTPConfig                    `yaml:"http_server_config"`
-	Users      map[string]config_util.Secret `yaml:"basic_auth_users"`
+	TLSConfig         TLSConfig                     `yaml:"tls_server_config"`
+	HTTPConfig        HTTPConfig                    `yaml:"http_server_config"`
+	RateLimiterConfig RateLimiterConfig             `yaml:"rate_limit"`
+	Users             map[string]config_util.Secret `yaml:"basic_auth_users"`
 }
 
 type TLSConfig struct {
-	TLSCert                  string             `yaml:"cert"`
-	TLSKey                   config_util.Secret `yaml:"key"`
-	ClientCAsText            string             `yaml:"client_ca"`
-	TLSCertPath              string             `yaml:"cert_file"`
-	TLSKeyPath               string             `yaml:"key_file"`
-	ClientAuth               string             `yaml:"client_auth_type"`
-	ClientCAs                string             `yaml:"client_ca_file"`
-	CipherSuites             []Cipher           `yaml:"cipher_suites"`
-	CurvePreferences         []Curve            `yaml:"curve_preferences"`
-	MinVersion               TLSVersion         `yaml:"min_version"`
-	MaxVersion               TLSVersion         `yaml:"max_version"`
-	PreferServerCipherSuites bool               `yaml:"prefer_server_cipher_suites"`
-	ClientAllowedSans        []string           `yaml:"client_allowed_sans"`
+	TLSCert          string             `yaml:"cert"`
+	TLSKey           config_util.Secret `yaml:"key"`
+	ClientCAsText    string             `yaml:"client_ca"`
+	TLSCertPath      string             `yaml:"cert_file"`
+	TLSKeyPath       string             `yaml:"key_file"`
+	ClientAuth       string             `yaml:"client_auth_type"`
+	ClientCAs        string             `yaml:"client_ca_file"`
+	CipherSuites     []Cipher           `yaml:"cipher_suites"`
+	CurvePreferences []Curve            `yaml:"curve_preferences"`
+	MinVersion       TLSVersion         `yaml:"min_version"`
+	MaxVersion       TLSVersion         `yaml:"max_version"`
+	// PreferServerCipherSuites is parsed and ignored.
+	//
+	// Deprecated: it used to be passed to tls.Config, whose field of the same
+	// name has had no effect since Go 1.17. crypto/tls now picks the cipher
+	// suite itself. The key is still accepted so that existing configuration
+	// files keep loading.
+	PreferServerCipherSuites bool     `yaml:"prefer_server_cipher_suites"`
+	ClientAllowedSans        []string `yaml:"client_allowed_sans"`
 }
 
 type FlagConfig struct {
+	// WebListenAddresses contains the listen addresses for the HTTP server.
 	WebListenAddresses *[]string
-	WebSystemdSocket   *bool
-	WebConfigFile      *string
+	// WebSystemdSocket enables systemd socket activation listeners.
+	WebSystemdSocket *bool
+	// WebConfigFile points to the TLS and authentication configuration file.
+	WebConfigFile *string
+}
+
+// checkFlags validates that the flag configuration contains the required
+// listener and web config fields needed by the web package.
+func (c *FlagConfig) checkFlags() error {
+	if c == nil {
+		return ErrMissingFlag
+	}
+	if c.WebConfigFile == nil {
+		return ErrMissingFlag
+	}
+	// Listen addresses are only optional when systemd socket activation is
+	// actually enabled. Checking that WebSystemdSocket is non-nil is not
+	// enough: kingpinflag.AddFlags always hands out a non-nil pointer, so a
+	// nil-but-false flag would otherwise pass validation and then panic on the
+	// *flags.WebListenAddresses dereference in ListenAndServe.
+	if c.WebSystemdSocket == nil || !*c.WebSystemdSocket {
+		if c.WebListenAddresses == nil || len(*c.WebListenAddresses) == 0 {
+			return ErrNoListeners
+		}
+	}
+	return nil
+}
+
+// IsEnabled reports whether the TLSConfig configures TLS, i.e. whether at least
+// one TLS-related field is set. It does not validate that the configuration is
+// complete or that the referenced files exist; use ConfigToTLSConfig for that.
+// This is useful for callers that need to know whether the server will serve
+// HTTPS, for example to infer the scheme of an external URL.
+func (t *TLSConfig) IsEnabled() bool {
+	return t.TLSCertPath != "" || t.TLSCert != "" ||
+		t.TLSKeyPath != "" || t.TLSKey != "" ||
+		t.ClientCAs != "" || t.ClientCAsText != "" ||
+		t.ClientAuth != ""
 }
 
 // SetDirectory joins any relative file paths with dir.
@@ -80,7 +131,7 @@ func (t *TLSConfig) VerifyPeerCertificate(rawCerts [][]byte, _ [][]*x509.Certifi
 	}
 
 	// Build up a slice of strings with all Subject Alternate Name values
-	sanValues := append(cert.DNSNames, cert.EmailAddresses...)
+	sanValues := slices.Concat(cert.DNSNames, cert.EmailAddresses)
 
 	for _, ip := range cert.IPAddresses {
 		sanValues = append(sanValues, ip.String())
@@ -91,10 +142,8 @@ func (t *TLSConfig) VerifyPeerCertificate(rawCerts [][]byte, _ [][]*x509.Certifi
 	}
 
 	for _, sanValue := range sanValues {
-		for _, allowedSan := range t.ClientAllowedSans {
-			if sanValue == allowedSan {
-				return nil
-			}
+		if slices.Contains(t.ClientAllowedSans, sanValue) {
+			return nil
 		}
 	}
 
@@ -104,6 +153,11 @@ func (t *TLSConfig) VerifyPeerCertificate(rawCerts [][]byte, _ [][]*x509.Certifi
 type HTTPConfig struct {
 	HTTP2  bool              `yaml:"http2"`
 	Header map[string]string `yaml:"headers,omitempty"`
+}
+
+type RateLimiterConfig struct {
+	Burst    int           `yaml:"burst"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 func getConfig(configPath string) (*Config, error) {
@@ -136,10 +190,7 @@ func getTLSConfig(configPath string) (*tls.Config, error) {
 }
 
 func validateTLSPaths(c *TLSConfig) error {
-	if c.TLSCertPath == "" && c.TLSCert == "" &&
-		c.TLSKeyPath == "" && c.TLSKey == "" &&
-		c.ClientCAs == "" && c.ClientCAsText == "" &&
-		c.ClientAuth == "" {
+	if !c.IsEnabled() {
 		return errNoTLSConfig
 	}
 
@@ -194,10 +245,11 @@ func ConfigToTLSConfig(c *TLSConfig) (*tls.Config, error) {
 		return nil, err
 	}
 
+	// c.PreferServerCipherSuites is deliberately not passed on: the tls.Config
+	// field of that name has had no effect since Go 1.17.
 	cfg := &tls.Config{
-		MinVersion:               (uint16)(c.MinVersion),
-		MaxVersion:               (uint16)(c.MaxVersion),
-		PreferServerCipherSuites: c.PreferServerCipherSuites,
+		MinVersion: (uint16)(c.MinVersion),
+		MaxVersion: (uint16)(c.MaxVersion),
 	}
 
 	cfg.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -251,11 +303,11 @@ func ConfigToTLSConfig(c *TLSConfig) (*tls.Config, error) {
 	case "", "NoClientCert":
 		cfg.ClientAuth = tls.NoClientCert
 	default:
-		return nil, errors.New("Invalid ClientAuth: " + c.ClientAuth)
+		return nil, errors.New("invalid ClientAuth: " + c.ClientAuth)
 	}
 
 	if (c.ClientCAs != "" || c.ClientCAsText != "") && cfg.ClientAuth == tls.NoClientCert {
-		return nil, errors.New("Client CA's have been configured without a Client Auth Policy")
+		return nil, errors.New("client CA's have been configured without a Client Auth Policy")
 	}
 
 	return cfg, nil
@@ -263,10 +315,9 @@ func ConfigToTLSConfig(c *TLSConfig) (*tls.Config, error) {
 
 // ServeMultiple starts the server on the given listeners. The FlagConfig is
 // also passed on to Serve.
-func ServeMultiple(listeners []net.Listener, server *http.Server, flags *FlagConfig, logger log.Logger) error {
+func ServeMultiple(listeners []net.Listener, server *http.Server, flags *FlagConfig, logger *slog.Logger) error {
 	errs := new(errgroup.Group)
 	for _, l := range listeners {
-		l := l
 		errs.Go(func() error {
 			return Serve(l, server, flags, logger)
 		})
@@ -275,16 +326,18 @@ func ServeMultiple(listeners []net.Listener, server *http.Server, flags *FlagCon
 }
 
 // ListenAndServe starts the server on addresses given in WebListenAddresses in
-// the FlagConfig or instead uses systemd socket activated listeners if
-// WebSystemdSocket in the FlagConfig is true. The FlagConfig is also passed on
-// to ServeMultiple.
-func ListenAndServe(server *http.Server, flags *FlagConfig, logger log.Logger) error {
-	if flags.WebSystemdSocket == nil && (flags.WebListenAddresses == nil || len(*flags.WebListenAddresses) == 0) {
-		return ErrNoListeners
+// the FlagConfig. When address starts looks like vsock://:{port}, it listens on
+// vsock. More info check https://wiki.qemu.org/Features/VirtioVsock .
+// Or instead uses systemd socket activated listeners if WebSystemdSocket in the
+// FlagConfig is true.
+// The FlagConfig is also passed on to ServeMultiple.
+func ListenAndServe(server *http.Server, flags *FlagConfig, logger *slog.Logger) error {
+	if err := flags.checkFlags(); err != nil {
+		return err
 	}
 
 	if flags.WebSystemdSocket != nil && *flags.WebSystemdSocket {
-		level.Info(logger).Log("msg", "Listening on systemd activated listeners instead of port listeners.")
+		logger.Info("Listening on systemd activated listeners instead of port listeners.")
 		listeners, err := activation.Listeners()
 		if err != nil {
 			return err
@@ -297,9 +350,22 @@ func ListenAndServe(server *http.Server, flags *FlagConfig, logger log.Logger) e
 
 	listeners := make([]net.Listener, 0, len(*flags.WebListenAddresses))
 	for _, address := range *flags.WebListenAddresses {
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			return err
+		var err error
+		var listener net.Listener
+		if strings.HasPrefix(address, "vsock://") {
+			port, err := parseVsockPort(address)
+			if err != nil {
+				return err
+			}
+			listener, err = vsock.Listen(port, nil)
+			if err != nil {
+				return err
+			}
+		} else {
+			listener, err = net.Listen("tcp", address)
+			if err != nil {
+				return err
+			}
 		}
 		defer listener.Close()
 		listeners = append(listeners, listener)
@@ -307,13 +373,29 @@ func ListenAndServe(server *http.Server, flags *FlagConfig, logger log.Logger) e
 	return ServeMultiple(listeners, server, flags, logger)
 }
 
+func parseVsockPort(address string) (uint32, error) {
+	uri, err := url.Parse(address)
+	if err != nil {
+		return 0, err
+	}
+	_, portStr, err := net.SplitHostPort(uri.Host)
+	if err != nil {
+		return 0, err
+	}
+	port, err := strconv.ParseUint(portStr, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(port), nil
+}
+
 // Server starts the server on the given listener. Based on the file path
 // WebConfigFile in the FlagConfig, TLS or basic auth could be enabled.
-func Serve(l net.Listener, server *http.Server, flags *FlagConfig, logger log.Logger) error {
-	level.Info(logger).Log("msg", "Listening on", "address", l.Addr().String())
+func Serve(l net.Listener, server *http.Server, flags *FlagConfig, logger *slog.Logger) error {
+	logger.Info("Listening on", "address", l.Addr().String())
 	tlsConfigPath := *flags.WebConfigFile
 	if tlsConfigPath == "" {
-		level.Info(logger).Log("msg", "TLS is disabled.", "http2", false, "address", l.Addr().String())
+		logger.Info("TLS is disabled.", "http2", false, "address", l.Addr().String())
 		return server.Serve(l)
 	}
 
@@ -332,11 +414,18 @@ func Serve(l net.Listener, server *http.Server, flags *FlagConfig, logger log.Lo
 		return err
 	}
 
+	var limiter *rate.Limiter
+	if c.RateLimiterConfig.Interval != 0 {
+		limiter = rate.NewLimiter(rate.Every(c.RateLimiterConfig.Interval), c.RateLimiterConfig.Burst)
+		logger.Info("Rate Limiter is enabled.", "burst", c.RateLimiterConfig.Burst, "interval", c.RateLimiterConfig.Interval)
+	}
+
 	server.Handler = &webHandler{
 		tlsConfigPath: tlsConfigPath,
 		logger:        logger,
 		handler:       handler,
 		cache:         newCache(),
+		limiter:       limiter,
 	}
 
 	config, err := ConfigToTLSConfig(&c.TLSConfig)
@@ -346,10 +435,10 @@ func Serve(l net.Listener, server *http.Server, flags *FlagConfig, logger log.Lo
 			server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 		}
 		// Valid TLS config.
-		level.Info(logger).Log("msg", "TLS is enabled.", "http2", c.HTTPConfig.HTTP2, "address", l.Addr().String())
+		logger.Info("TLS is enabled.", "http2", c.HTTPConfig.HTTP2, "address", l.Addr().String())
 	case errNoTLSConfig:
 		// No TLS config, back to plain HTTP.
-		level.Info(logger).Log("msg", "TLS is disabled.", "http2", false, "address", l.Addr().String())
+		logger.Info("TLS is disabled.", "http2", false, "address", l.Addr().String())
 		return server.Serve(l)
 	default:
 		// Invalid TLS config.
@@ -365,10 +454,38 @@ func Serve(l net.Listener, server *http.Server, flags *FlagConfig, logger log.Lo
 		if err != nil {
 			return nil, err
 		}
-		config.NextProtos = server.TLSConfig.NextProtos
+		config.NextProtos = tlsNextProtos(server, c.HTTPConfig.HTTP2)
 		return config, nil
 	}
 	return server.ServeTLS(l, "", "")
+}
+
+// tlsNextProtos preserves the server's ALPN policy on reloaded TLS configs.
+// ServeTLS does not necessarily populate the original server.TLSConfig: it
+// adjusts the protocols on an internal clone, which the reload callback replaces.
+func tlsNextProtos(server *http.Server, http2Enabled bool) []string {
+	// ServeTLS initializes protocol handlers before accepting connections. Checking
+	// registration respects GODEBUG=http2server=0 and custom HTTP/2 implementations.
+	http1 := true
+	http2 := http2Enabled && server.TLSNextProto["h2"] != nil
+	if server.Protocols != nil {
+		http1 = http1Enabled(*server.Protocols)
+		// An h2 handler may have been registered for unencrypted HTTP/2 only.
+		http2 = http2 && server.Protocols.HTTP2()
+	}
+
+	// Do not modify the original configuration or discard other ALPN protocols.
+	protos := slices.Clone(server.TLSConfig.NextProtos)
+	protos = slices.DeleteFunc(protos, func(proto string) bool {
+		return (proto == "h2" && !http2) || (proto == "http/1.1" && !http1)
+	})
+	if http2 && !slices.Contains(protos, "h2") {
+		protos = append(protos, "h2")
+	}
+	if http1 && !slices.Contains(protos, "http/1.1") {
+		protos = append(protos, "http/1.1")
+	}
+	return protos
 }
 
 // Validate configuration file by reading the configuration and the certificates.
@@ -392,9 +509,9 @@ func Validate(tlsConfigPath string) error {
 
 type Cipher uint16
 
-func (c *Cipher) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *Cipher) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
-	err := unmarshal((*string)(&s))
+	err := unmarshal(&s)
 	if err != nil {
 		return err
 	}
@@ -407,7 +524,7 @@ func (c *Cipher) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return errors.New("unknown cipher: " + s)
 }
 
-func (c Cipher) MarshalYAML() (interface{}, error) {
+func (c Cipher) MarshalYAML() (any, error) {
 	return tls.CipherSuiteName((uint16)(c)), nil
 }
 
@@ -420,9 +537,9 @@ var curves = map[string]Curve{
 	"X25519":    (Curve)(tls.X25519),
 }
 
-func (c *Curve) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *Curve) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
-	err := unmarshal((*string)(&s))
+	err := unmarshal(&s)
 	if err != nil {
 		return err
 	}
@@ -433,7 +550,7 @@ func (c *Curve) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return errors.New("unknown curve: " + s)
 }
 
-func (c *Curve) MarshalYAML() (interface{}, error) {
+func (c *Curve) MarshalYAML() (any, error) {
 	for s, curveid := range curves {
 		if *c == curveid {
 			return s, nil
@@ -451,9 +568,9 @@ var tlsVersions = map[string]TLSVersion{
 	"TLS10": (TLSVersion)(tls.VersionTLS10),
 }
 
-func (tv *TLSVersion) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (tv *TLSVersion) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
-	err := unmarshal((*string)(&s))
+	err := unmarshal(&s)
 	if err != nil {
 		return err
 	}
@@ -464,7 +581,7 @@ func (tv *TLSVersion) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return errors.New("unknown TLS version: " + s)
 }
 
-func (tv *TLSVersion) MarshalYAML() (interface{}, error) {
+func (tv *TLSVersion) MarshalYAML() (any, error) {
 	for s, v := range tlsVersions {
 		if *tv == v {
 			return s, nil
@@ -477,6 +594,6 @@ func (tv *TLSVersion) MarshalYAML() (interface{}, error) {
 // tlsConfigPath, TLS or basic auth could be enabled.
 //
 // Deprecated: Use ListenAndServe instead.
-func Listen(server *http.Server, flags *FlagConfig, logger log.Logger) error {
+func Listen(server *http.Server, flags *FlagConfig, logger *slog.Logger) error {
 	return ListenAndServe(server, flags, logger)
 }
