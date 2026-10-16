@@ -320,6 +320,14 @@ func (manager *Manager) processNextCluster() (continued bool) {
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.InfoS("cluster has been deleted", "cluster", name)
+			// the cluster no longer exists, idempotently release any local state left for it.
+			// removeCluster is not used here: storage is left untouched to avoid deleting data
+			// of a same-named cluster that may already be synced by another shard.
+			manager.clusterSecretsMap.Delete(name)
+			if manager.stopClusterSynchro(name, false) {
+				// the finalizer was bypassed, storage data is intentionally left untouched
+				klog.Warningf("cluster %q was deleted before its finalizer was handled, stale storage data is not cleaned", name)
+			}
 			return
 		}
 
@@ -386,7 +394,7 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 	if cluster.Spec.ShardingName != manager.shardingName {
 		// status.sharding == manager.shardingName
 		manager.clusterSecretsMap.Delete(cluster.Name)
-		manager.stopClusterSynchro(cluster.Name)
+		manager.stopClusterSynchro(cluster.Name, true)
 
 		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, nil); err != nil {
 			klog.ErrorS(err, "Failed to remove cluster shardingName status", "cluster", cluster.Name)
@@ -542,30 +550,25 @@ func (manager *Manager) trackClusterSecrets(cluster *clusterv1alpha2.PediaCluste
 	manager.clusterSecretsMap.Store(cluster.Name, secrets)
 }
 
-func (manager *Manager) stopClusterSynchro(name string) {
+func (manager *Manager) stopClusterSynchro(name string, updateStatus bool) bool {
 	manager.synchrolock.Lock()
 	synchro := manager.synchros[name]
 	delete(manager.synchros, name)
 	manager.synchrolock.Unlock()
 
-	if synchro != nil {
-		synchro.Shutdown(true)
+	if synchro == nil {
+		return false
 	}
+	synchro.Shutdown(updateStatus)
+	return true
 }
 
 func (manager *Manager) removeCluster(name string) error {
 	manager.clusterSecretsMap.Delete(name)
 
-	manager.synchrolock.Lock()
-	synchro := manager.synchros[name]
-	delete(manager.synchros, name)
-	manager.synchrolock.Unlock()
-
-	if synchro != nil {
-		// not update removed cluster status,
-		// and ensure that no more data is being synchronized to the resource storage
-		synchro.Shutdown(false)
-	}
+	// not update removed cluster status,
+	// and ensure that no more data is being synchronized to the resource storage
+	manager.stopClusterSynchro(name, false)
 
 	// clean cluster from storage
 	return manager.storage.CleanCluster(context.TODO(), name)
