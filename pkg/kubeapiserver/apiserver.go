@@ -16,11 +16,11 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/apiserver/pkg/util/compatibility"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/component-base/tracing"
-	"k8s.io/component-base/version"
 
 	informers "github.com/clusterpedia-io/clusterpedia/pkg/generated/informers/externalversions"
 	"github.com/clusterpedia-io/clusterpedia/pkg/kubeapiserver/discovery"
@@ -88,7 +88,7 @@ type Config struct {
 
 func (c *Config) Complete() CompletedConfig {
 	if c.GenericConfig.EffectiveVersion == nil {
-		c.GenericConfig.EffectiveVersion = version.DefaultKubeEffectiveVersion()
+		c.GenericConfig.EffectiveVersion = compatibility.DefaultBuildEffectiveVersion()
 	}
 
 	completed := &completedConfig{

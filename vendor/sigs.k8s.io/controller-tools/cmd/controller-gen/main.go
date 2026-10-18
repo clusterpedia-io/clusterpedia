@@ -25,7 +25,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/tools/go/packages"
- 
+
+	"sigs.k8s.io/controller-tools/pkg/applyconfiguration"
 	"sigs.k8s.io/controller-tools/pkg/crd"
 	"sigs.k8s.io/controller-tools/pkg/deepcopy"
 	"sigs.k8s.io/controller-tools/pkg/genall"
@@ -50,11 +51,12 @@ var (
 	// each turns into a command line option,
 	// and has options for output forms.
 	allGenerators = map[string]genall.Generator{
-		"crd":         crd.Generator{},
-		"rbac":        rbac.Generator{},
-		"object":      deepcopy.Generator{},
-		"webhook":     webhook.Generator{},
-		"schemapatch": schemapatcher.Generator{},
+		"crd":                crd.Generator{},
+		"rbac":               rbac.Generator{},
+		"object":             deepcopy.Generator{},
+		"applyconfiguration": applyconfiguration.Generator{},
+		"webhook":            webhook.Generator{},
+		"schemapatch":        schemapatcher.Generator{},
 	}
 
 	// allOutputRules defines the list of all known output rules, giving
@@ -142,13 +144,18 @@ func main() {
 	controller-gen object paths=./apis/v1beta1/some_types.go
 
 	# Generate OpenAPI v3 schemas for API packages and merge them into existing CRD manifests
-	controller-gen schemapatch:manifests=./manifests output:dir=./manifests paths=./pkg/apis/... 
+	controller-gen schemapatch:manifests=./manifests output:dir=./manifests paths=./pkg/apis/...
 
 	# Run all the generators for a given project
 	controller-gen paths=./apis/...
 
 	# Explain the markers for generating CRDs, and their arguments
 	controller-gen crd -ww
+
+	# Generate applyconfigurations for CRDs for use with Server Side Apply. They will be placed
+	# into a "applyconfiguration/" subdirectory
+
+	controller-gen applyconfiguration paths=./apis/...
 `,
 		RunE: func(c *cobra.Command, rawOpts []string) error {
 			// print version if asked for it

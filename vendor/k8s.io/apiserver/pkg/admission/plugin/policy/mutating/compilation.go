@@ -19,7 +19,7 @@ package mutating
 import (
 	"fmt"
 
-	"k8s.io/api/admissionregistration/v1alpha1"
+	"k8s.io/api/admissionregistration/v1beta1"
 	plugincel "k8s.io/apiserver/pkg/admission/plugin/cel"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/mutating/patch"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/matchconditions"
@@ -33,8 +33,8 @@ import (
 // Each individual mutation is compiled into MutationEvaluationFunc and
 // returned is a PolicyEvaluator in the same order as the mutations appeared in the policy.
 func compilePolicy(policy *Policy) PolicyEvaluator {
-	opts := plugincel.OptionalVariableDeclarations{HasParams: policy.Spec.ParamKind != nil, StrictCost: true, HasAuthorizer: true}
-	compiler, err := plugincel.NewCompositedCompiler(environment.MustBaseEnvSet(environment.DefaultCompatibilityVersion(), true))
+	opts := plugincel.OptionalVariableDeclarations{HasParams: policy.Spec.ParamKind != nil, HasAuthorizer: true}
+	compiler, err := plugincel.NewCompositedCompiler(environment.MustBaseEnvSet(environment.DefaultCompatibilityVersion()))
 	if err != nil {
 		return PolicyEvaluator{Error: &apiservercel.Error{
 			Type:   apiservercel.ErrorTypeInternal,
@@ -62,13 +62,13 @@ func compilePolicy(policy *Policy) PolicyEvaluator {
 	patchOptions.HasPatchTypes = true
 	for _, m := range policy.Spec.Mutations {
 		switch m.PatchType {
-		case v1alpha1.PatchTypeJSONPatch:
+		case v1beta1.PatchTypeJSONPatch:
 			if m.JSONPatch != nil {
 				accessor := &patch.JSONPatchCondition{Expression: m.JSONPatch.Expression}
 				compileResult := compiler.CompileMutatingEvaluator(accessor, patchOptions, environment.StoredExpressions)
 				patchers = append(patchers, patch.NewJSONPatcher(compileResult))
 			}
-		case v1alpha1.PatchTypeApplyConfiguration:
+		case v1beta1.PatchTypeApplyConfiguration:
 			if m.ApplyConfiguration != nil {
 				accessor := &patch.ApplyConfigurationCondition{Expression: m.ApplyConfiguration.Expression}
 				compileResult := compiler.CompileMutatingEvaluator(accessor, patchOptions, environment.StoredExpressions)
