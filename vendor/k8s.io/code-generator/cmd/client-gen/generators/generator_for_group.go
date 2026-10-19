@@ -20,12 +20,11 @@ import (
 	"io"
 	"path"
 
-	"k8s.io/gengo/v2"
+	"k8s.io/code-generator/cmd/client-gen/generators/util"
+	"k8s.io/code-generator/pkg/apidefinitions"
 	"k8s.io/gengo/v2/generator"
 	"k8s.io/gengo/v2/namer"
 	"k8s.io/gengo/v2/types"
-
-	"k8s.io/code-generator/cmd/client-gen/generators/util"
 )
 
 // genGroup produces a file for a group client, e.g. ExtensionsClient for the extension group.
@@ -73,8 +72,12 @@ func (g *genGroup) GenerateType(c *generator.Context, t *types.Type, w io.Writer
 	// allow user to define a group name that's different from the one parsed from the directory.
 	p := c.Universe.Package(g.inputPackage)
 	groupName := g.group
-	if override := gengo.ExtractCommentTags("+", p.Comments)["groupName"]; override != nil {
-		groupName = override[0]
+	override, ok, err := apidefinitions.GroupNameForPackage(p.Comments)
+	if err != nil {
+		return err
+	}
+	if ok {
+		groupName = override
 	}
 
 	apiPath := `"` + g.apiPath + `"`
@@ -169,9 +172,7 @@ var newClientForConfigTemplate = `
 // where httpClient was generated with rest.HTTPClientFor(c).
 func NewForConfig(c *$.restConfig|raw$) (*$.GroupGoName$$.Version$Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	httpClient, err := $.RESTHTTPClientFor|raw$(&config)
 	if err != nil {
 		return nil, err
@@ -185,9 +186,7 @@ var newClientForConfigAndClientTemplate = `
 // Note the http client provided takes precedence over the configured transport values.
 func NewForConfigAndClient(c *$.restConfig|raw$, h *$.httpClient|raw$) (*$.GroupGoName$$.Version$Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	client, err := $.restRESTClientForConfigAndClient|raw$(&config, h)
 	if err != nil {
 		return nil, err
@@ -227,7 +226,7 @@ func New(c $.restRESTClientInterface|raw$) *$.GroupGoName$$.Version$Client {
 `
 
 var setInternalVersionClientDefaultsTemplate = `
-func setConfigDefaults(config *$.restConfig|raw$) error {
+func setConfigDefaults(config *$.restConfig|raw$) {
 	config.APIPath = $.apiPath$
 	if config.UserAgent == "" {
 		config.UserAgent = $.restDefaultKubernetesUserAgent|raw$()
@@ -244,13 +243,11 @@ func setConfigDefaults(config *$.restConfig|raw$) error {
 	if config.Burst == 0 {
 		config.Burst = 10
 	}
-
-	return nil
 }
 `
 
 var setClientDefaultsTemplate = `
-func setConfigDefaults(config *$.restConfig|raw$) error {
+func setConfigDefaults(config *$.restConfig|raw$) {
 	gv := $.SchemeGroupVersion|raw$
 	config.GroupVersion =  &gv
 	config.APIPath = $.apiPath$
@@ -259,7 +256,5 @@ func setConfigDefaults(config *$.restConfig|raw$) error {
 	if config.UserAgent == "" {
 		config.UserAgent = $.restDefaultKubernetesUserAgent|raw$()
 	}
-
-	return nil
 }
 `
