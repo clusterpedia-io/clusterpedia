@@ -774,9 +774,13 @@ func (synchro *eventSynchro) handleResourceEvent(ctx context.Context, event *que
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		klog.ErrorS(err, "Failed to storage event", "cluster", synchro.cluster, "event", key,
-			"involvedObject", klog.KRef(obj.InvolvedObject.Namespace, obj.InvolvedObject.Name), "kind", obj.InvolvedObject.Kind)
-		return
+		if !genericstorage.IsInvalidObj(err) {
+			klog.ErrorS(err, "Failed to storage event", "cluster", synchro.cluster, "event", key,
+				"involvedObject", klog.KRef(obj.InvolvedObject.Namespace, obj.InvolvedObject.Name), "kind", obj.InvolvedObject.Kind)
+			return
+		}
+		// the storage declines this event permanently, track its rv so it is not resubmitted until it changes
+		klog.V(4).InfoS("Skip unrecordable event", "cluster", synchro.cluster, "event", key, "reason", err.Error())
 	}
 
 	synchro.rvsLock.Lock()
