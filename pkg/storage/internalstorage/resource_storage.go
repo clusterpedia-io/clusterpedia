@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -332,15 +331,15 @@ func (s *ResourceStorage) Watch(_ context.Context, _ *internal.ListOptions) (wat
 var codec = scheme.LegacyResourceCodecs.LegacyCodec(corev1.SchemeGroupVersion)
 
 func (s *ResourceStorage) RecordEvent(ctx context.Context, cluster string, event *corev1.Event) error {
+	key, _ := cache.MetaNamespaceKeyFunc(event)
 	if event.InvolvedObject.UID == "" {
-		return errors.New("invalid event: involedObject.UID is empty")
+		return genericstorage.NewInvalidObjError(key, "involvedObject.UID is empty")
 	}
 
 	var buffer bytes.Buffer
 	if err := codec.Encode(event, &buffer); err != nil {
 		return err
 	}
-	key, _ := cache.MetaNamespaceKeyFunc(event)
 
 	if err := s.db.WithContext(ctx).Model(&Resource{}).Where(
 		map[string]interface{}{"cluster": cluster, "uid": event.InvolvedObject.UID},
