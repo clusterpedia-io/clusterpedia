@@ -69,8 +69,6 @@ type resourceSynchro struct {
 	stopForStorage       chan struct{}
 
 	closeOnce sync.Once
-	ctx       context.Context
-	cancel    context.CancelFunc
 	closer    chan struct{}
 	closed    chan struct{}
 
@@ -112,7 +110,6 @@ func (factory DefaultResourceSynchroFactory) NewResourceSynchro(cluster string, 
 	}
 	synchro.isRunnableForStorage.Store(true)
 	close(synchro.runnableForStorage)
-	synchro.ctx, synchro.cancel = context.WithCancel(context.Background())
 
 	example := &unstructured.Unstructured{}
 	example.SetGroupVersionKind(config.GroupVersionKind())
@@ -173,9 +170,7 @@ func (synchro *resourceSynchro) Run(shutdown <-chan struct{}) {
 	}
 
 	synchro.runningStage = "running"
-	wait.Until(func() {
-		synchro.processResources()
-	}, time.Second, synchro.closer)
+	wait.UntilWithContext(wait.ContextForChannel(synchro.closer), synchro.processResources, time.Second)
 	synchro.runningStage = "processorStop"
 
 	synchro.startlock.Lock()
@@ -195,7 +190,6 @@ func (synchro *resourceSynchro) Close() <-chan struct{} {
 	synchro.closeOnce.Do(func() {
 		close(synchro.closer)
 		synchro.queue.Close()
-		synchro.cancel()
 	})
 	return synchro.closed
 }
@@ -407,10 +401,10 @@ func (synchro *resourceSynchro) OnDelete(obj interface{}, isInInitialList bool) 
 
 func (synchro *resourceSynchro) OnSync(obj interface{}) {}
 
-func (synchro *resourceSynchro) processResources() {
+func (synchro *resourceSynchro) processResources(ctx context.Context) {
 	for {
 		select {
-		case <-synchro.closer:
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -425,11 +419,11 @@ func (synchro *resourceSynchro) processResources() {
 			continue
 		}
 
-		synchro.handleResourceEvent(event)
+		synchro.handleResourceEvent(ctx, event)
 	}
 }
 
-func (synchro *resourceSynchro) handleResourceEvent(event *queue.Event) {
+func (synchro *resourceSynchro) handleResourceEvent(ctx context.Context, event *queue.Event) {
 	defer func() { _ = synchro.queue.Done(event) }()
 
 	obj, ok := event.Object.(runtime.Object)
@@ -480,7 +474,7 @@ func (synchro *resourceSynchro) handleResourceEvent(event *queue.Event) {
 	// TODO(Iceber): put the event back into the queue to retry?
 	for i := 0; ; i++ {
 		now := time.Now()
-		ctx, cancel := context.WithTimeout(synchro.ctx, 30*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		err := handler(ctx, obj)
 		cancel()
 		if err == nil {
