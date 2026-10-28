@@ -657,9 +657,6 @@ func (synchro *resourceSynchro) ErrorHandler(r *informer.Reflector, err error) {
 }
 
 type eventSynchro struct {
-	ctx    context.Context
-	closer <-chan struct{}
-
 	cluster       string
 	synchro       *resourceSynchro
 	listerWatcher cache.ListerWatcher
@@ -681,12 +678,12 @@ func newEventSynchro(cluster string, synchro *resourceSynchro, lw cache.ListerWa
 }
 
 func (synchro *eventSynchro) Run(closer <-chan struct{}) {
-	synchro.closer = closer
+	go func() {
+		<-closer
+		synchro.queue.Close()
+	}()
 
-	wait.Until(func() {
-		synchro.processResources()
-	}, time.Second, closer)
-	synchro.queue.Close()
+	wait.UntilWithContext(wait.ContextForChannel(closer), synchro.processResources, time.Second)
 }
 
 func (synchro *eventSynchro) Start(stop <-chan struct{}) {
@@ -744,10 +741,10 @@ func (*eventSynchro) OnSync(obj interface{}) {
 	// ignore deletion event
 }
 
-func (synchro *eventSynchro) processResources() {
+func (synchro *eventSynchro) processResources(ctx context.Context) {
 	for {
 		select {
-		case <-synchro.closer:
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -761,22 +758,26 @@ func (synchro *eventSynchro) processResources() {
 			continue
 		}
 
-		synchro.handleResourceEvent(event)
+		synchro.handleResourceEvent(ctx, event)
 	}
 }
 
-func (synchro *eventSynchro) handleResourceEvent(event *queue.Event) {
+func (synchro *eventSynchro) handleResourceEvent(ctx context.Context, event *queue.Event) {
 	defer func() { _ = synchro.queue.Done(event) }()
 
 	obj := event.Object.(*corev1.Event)
 	obj.SetManagedFields(nil)
-	err := synchro.synchro.storage.RecordEvent(synchro.ctx, synchro.cluster, obj)
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
+
+	err := synchro.synchro.storage.RecordEvent(ctx, synchro.cluster, obj)
 	if err != nil {
-		klog.ErrorS(err, "Failed to storage event", "cluster", synchro.cluster)
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		klog.ErrorS(err, "Failed to storage event", "cluster", synchro.cluster, "event", key,
+			"involvedObject", klog.KRef(obj.InvolvedObject.Namespace, obj.InvolvedObject.Name), "kind", obj.InvolvedObject.Kind)
 		return
 	}
-
-	key, _ := cache.MetaNamespaceKeyFunc(obj)
 
 	synchro.rvsLock.Lock()
 	synchro.rvs[key] = obj.GetResourceVersion()
