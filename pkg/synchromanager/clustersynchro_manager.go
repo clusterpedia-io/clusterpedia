@@ -2,6 +2,7 @@ package synchromanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -43,6 +44,9 @@ import (
 const ClusterSynchroControllerFinalizer = "clusterpedia.io/cluster-synchro-controller"
 
 const defaultRetryNum = 5
+
+// errShardingNotOwned is returned by status writers when status.shardingName does not name this manager.
+var errShardingNotOwned = errors.New("cluster sharding is not owned by this manager")
 
 type Manager struct {
 	runLock sync.Mutex
@@ -245,7 +249,10 @@ func (manager *Manager) updateCluster(older, newer interface{}) {
 		return
 	}
 
-	manager.enqueue(newer)
+	// a cluster that was ours must be reconciled so the synchro it may still have here is stopped
+	if manager.isRelevant(oldObj) || manager.isRelevant(newObj) {
+		manager.queue.Add(newObj.Name)
+	}
 }
 
 func (manager *Manager) deleteCluster(obj interface{}) {
@@ -258,18 +265,19 @@ func (manager *Manager) enqueue(obj interface{}) {
 		return
 	}
 
-	if cluster, ok := obj.(*clusterv1alpha2.PediaCluster); ok {
-		currentSharding := cluster.Status.ShardingName
-		if cluster.Spec.ShardingName != manager.shardingName {
-			if currentSharding == nil || *currentSharding != manager.shardingName {
-				return
-			}
-		} else if currentSharding != nil && *currentSharding != manager.shardingName {
-			return
-		}
+	if cluster, ok := obj.(*clusterv1alpha2.PediaCluster); ok && !manager.isRelevant(cluster) {
+		return
 	}
 
 	manager.queue.Add(key)
+}
+
+// isRelevant reports whether the cluster is assigned to or owned by this manager.
+func (manager *Manager) isRelevant(cluster *clusterv1alpha2.PediaCluster) bool {
+	if cluster.Status.ShardingName != nil {
+		return *cluster.Status.ShardingName == manager.shardingName
+	}
+	return cluster.Spec.ShardingName == manager.shardingName
 }
 
 func (manager *Manager) handleClusterSyncResources(obj interface{}) {
@@ -351,10 +359,12 @@ func (manager *Manager) processNextCluster() (continued bool) {
 // if err returned is not nil, cluster will be requeued
 func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) controller.Result {
 	if cluster.Status.ShardingName == nil && cluster.Spec.ShardingName != manager.shardingName {
+		manager.stopUnownedClusterSynchro(cluster.Name)
 		return controller.NoRequeueResult
 	}
 
 	if cluster.Status.ShardingName != nil && *cluster.Status.ShardingName != manager.shardingName {
+		manager.stopUnownedClusterSynchro(cluster.Name)
 		return controller.NoRequeueResult
 	}
 	// After the above filtering， The cluster will be in the following state：
@@ -396,15 +406,26 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 		manager.clusterSecretsMap.Delete(cluster.Name)
 		manager.stopClusterSynchro(cluster.Name, true)
 
-		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, nil); err != nil {
-			klog.ErrorS(err, "Failed to remove cluster shardingName status", "cluster", cluster.Name)
-			return controller.RequeueResult(defaultRetryNum)
+		if err := manager.releaseSharding(context.TODO(), cluster.Name); err != nil {
+			// nothing re-triggers a dropped release, keep retrying until the lock is handed over
+			klog.ErrorS(err, "Failed to release cluster sharding", "cluster", cluster.Name)
+			return controller.RequeueResult(math.MaxInt)
 		}
 
 		return controller.NoRequeueResult
 	}
 
-	cluster.Status.ShardingName = &manager.shardingName
+	// Claim ownership before any other status write or data sync.
+	// The spec/status seen above is a snapshot; the claim is a compare-and-swap against the live object.
+	if err := manager.claimSharding(context.TODO(), cluster.Name); err != nil {
+		if errors.Is(err, errShardingNotOwned) {
+			manager.stopUnownedClusterSynchro(cluster.Name)
+			return controller.NoRequeueResult
+		}
+		// a transient claim error must not consume the retry budget of an ongoing initialization
+		klog.ErrorS(err, "Failed to claim cluster sharding", "cluster", cluster.Name)
+		return controller.RequeueResult(math.MaxInt)
+	}
 
 	manager.synchrolock.RLock()
 	synchro := manager.synchros[cluster.Name]
@@ -470,6 +491,12 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 
 	// create resource synchro
 	if synchro == nil {
+		// run before New so that nothing fallible remains between New and Run
+		if err := manager.storage.PrepareCluster(cluster.Name); err != nil {
+			klog.ErrorS(err, "Failed to prepare cluster", "cluster", cluster.Name)
+			return controller.NoRequeueResult
+		}
+
 		synchro, err = clustersynchro.New(cluster.Name, config, manager.storage, manager, manager.clusterSyncConfig)
 		if err != nil {
 			_, forever := err.(clustersynchro.RetryableError)
@@ -501,17 +528,6 @@ func (manager *Manager) reconcileCluster(cluster *clusterv1alpha2.PediaCluster) 
 				return controller.RequeueResult(math.MaxInt)
 			}
 			return controller.NoRequeueResult
-		}
-
-		err = manager.storage.PrepareCluster(cluster.Name)
-		if err != nil {
-			klog.ErrorS(err, "Failed to prepare cluster", "cluster", cluster.Name)
-			return controller.NoRequeueResult
-		}
-
-		if err := manager.UpdateClusterShardingStatus(context.TODO(), cluster.Name, &manager.shardingName); err != nil {
-			klog.ErrorS(err, "Failed to update cluster shardingName status", "cluster", cluster.Name)
-			return controller.RequeueResult(defaultRetryNum)
 		}
 
 		manager.synchroWaitGroup.StartWithChannel(manager.stopCh, synchro.Run)
@@ -563,6 +579,15 @@ func (manager *Manager) stopClusterSynchro(name string, updateStatus bool) bool 
 	return true
 }
 
+// stopUnownedClusterSynchro releases local state of a cluster this manager does not own.
+// Status is not updated: writing it would race with the real owner.
+func (manager *Manager) stopUnownedClusterSynchro(name string) {
+	manager.clusterSecretsMap.Delete(name)
+	if manager.stopClusterSynchro(name, false) {
+		klog.InfoS("stopped cluster synchro, cluster is owned by another sharding", "cluster", name)
+	}
+}
+
 func (manager *Manager) removeCluster(name string) error {
 	manager.clusterSecretsMap.Delete(name)
 
@@ -581,7 +606,9 @@ func (manager *Manager) UpdateClusterAPIServerAndValidatedCondition(name string,
 		Status:  status,
 		Message: message,
 	}
-	if err := manager.updateClusterStatus(context.TODO(), name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+	if err := manager.updateClusterStatus(context.TODO(), name, func(cluster *clusterv1alpha2.PediaCluster) error {
+		clusterStatus := &cluster.Status
+
 		// set cluster apiserver endpoint to cluster status
 		if apiServerEndpoint != "" {
 			clusterStatus.APIServer = apiServerEndpoint
@@ -589,7 +616,7 @@ func (manager *Manager) UpdateClusterAPIServerAndValidatedCondition(name string,
 
 		meta.SetStatusCondition(&clusterStatus.Conditions, validatedCondition)
 		if synchro != nil {
-			return
+			return nil
 		}
 
 		// if the cluster synchro is nil, update SynchroRunning and ClusterHealthy conditions.
@@ -619,13 +646,16 @@ func (manager *Manager) UpdateClusterAPIServerAndValidatedCondition(name string,
 			Message: "wait cluster synchro",
 		}
 		meta.SetStatusCondition(&clusterStatus.Conditions, healthyCondition)
+		return nil
 	}); err != nil {
 		klog.ErrorS(err, "Failed to update cluster validated condition status", "cluster", name, "condition", validatedCondition)
 	}
 }
 
 func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, status *clusterv1alpha2.ClusterStatus) error {
-	return manager.updateClusterStatus(ctx, name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
+	return manager.updateClusterStatus(ctx, name, func(cluster *clusterv1alpha2.PediaCluster) error {
+		clusterStatus := &cluster.Status
+
 		if status.Version != "" {
 			clusterStatus.Version = status.Version
 		}
@@ -635,19 +665,57 @@ func (manager *Manager) UpdateClusterStatus(ctx context.Context, name string, st
 		for _, condition := range status.Conditions {
 			meta.SetStatusCondition(&clusterStatus.Conditions, condition)
 		}
+		return nil
 	})
 }
 
-func (manager *Manager) updateClusterStatus(ctx context.Context, name string, updateFunc func(status *clusterv1alpha2.ClusterStatus)) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		cluster, err := manager.clusterlister.Get(name)
+// ownedBy reports whether status.shardingName names shardingName.
+// An unset owner never matches, a pointer to "" is the claim of the default sharding.
+func ownedBy(cluster *clusterv1alpha2.PediaCluster, shardingName string) bool {
+	return cluster.Status.ShardingName != nil && *cluster.Status.ShardingName == shardingName
+}
+
+// updateClusterStatus applies updateFunc to a copy of the cluster and writes back its status with optimistic locking.
+// The first attempt reads from the lister, retries after a conflict read the live object.
+// updateFunc sees the whole object so ownership decisions can use spec and status of the same resource version,
+// it may return an error to abort the update, the error is returned as is.
+// The write is only performed by the owner of the cluster: the manager owning it before updateFunc (release)
+// or after it (claim), otherwise errShardingNotOwned is returned and nothing is written.
+func (manager *Manager) updateClusterStatus(ctx context.Context, name string, updateFunc func(cluster *clusterv1alpha2.PediaCluster) error) error {
+	return manager.doUpdateClusterStatus(ctx, name, true, updateFunc)
+}
+
+// updateClusterStatusFromLive is updateClusterStatus with every read served by the apiserver,
+// for ownership transitions that must not be decided on a lister that may lag behind our own writes.
+func (manager *Manager) updateClusterStatusFromLive(ctx context.Context, name string, updateFunc func(cluster *clusterv1alpha2.PediaCluster) error) error {
+	return manager.doUpdateClusterStatus(ctx, name, false, updateFunc)
+}
+
+func (manager *Manager) doUpdateClusterStatus(ctx context.Context, name string, fromCache bool, updateFunc func(cluster *clusterv1alpha2.PediaCluster) error) error {
+	readLive := false
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cluster *clusterv1alpha2.PediaCluster
+		var err error
+		if fromCache {
+			fromCache = false
+			cluster, err = manager.clusterlister.Get(name)
+		} else {
+			readLive = true
+			cluster, err = manager.clusterpediaclient.ClusterV1alpha2().PediaClusters().Get(ctx, name, metav1.GetOptions{})
+		}
 		if err != nil {
 			return err
 		}
 		lastStatus := cluster.Status
+		ownedBefore := ownedBy(cluster, manager.shardingName)
 
 		cluster = cluster.DeepCopy()
-		updateFunc(&cluster.Status)
+		if err := updateFunc(cluster); err != nil {
+			return err
+		}
+		if !ownedBefore && !ownedBy(cluster, manager.shardingName) {
+			return errShardingNotOwned
+		}
 
 		// remove deprecated conditions
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, clusterv1alpha2.ClusterSynchroInitializedCondition)
@@ -690,12 +758,38 @@ func (manager *Manager) updateClusterStatus(ctx context.Context, name string, up
 		}
 		return err
 	})
+	if errors.Is(err, errShardingNotOwned) && !readLive {
+		// the lister may lag behind our own claim, an ownership rejection is only final on the live object
+		return manager.doUpdateClusterStatus(ctx, name, false, updateFunc)
+	}
+	return err
 }
 
-func (manager *Manager) UpdateClusterShardingStatus(ctx context.Context, name string, shardingName *string) error {
-	return manager.updateClusterStatus(ctx, name, func(clusterStatus *clusterv1alpha2.ClusterStatus) {
-		clusterStatus.ShardingName = shardingName
+// claimSharding sets status.shardingName to this manager if it is unset and the live spec assigns the cluster here.
+// The lister may still show a stale assignment or owner, so the claim is always decided on the live object;
+// every other outcome is rejected by the ownership gate of the status writer with errShardingNotOwned.
+func (manager *Manager) claimSharding(ctx context.Context, name string) error {
+	return manager.updateClusterStatusFromLive(ctx, name, func(cluster *clusterv1alpha2.PediaCluster) error {
+		if cluster.Status.ShardingName == nil && cluster.Spec.ShardingName == manager.shardingName {
+			cluster.Status.ShardingName = ptr.To(manager.shardingName)
+		}
+		return nil
 	})
+}
+
+// releaseSharding clears status.shardingName if this manager owns it and the live spec no longer assigns the cluster here.
+// A cluster this manager does not own needs no release, the gate's rejection is the desired end state.
+func (manager *Manager) releaseSharding(ctx context.Context, name string) error {
+	err := manager.updateClusterStatusFromLive(ctx, name, func(cluster *clusterv1alpha2.PediaCluster) error {
+		if ownedBy(cluster, manager.shardingName) && cluster.Spec.ShardingName != manager.shardingName {
+			cluster.Status.ShardingName = nil
+		}
+		return nil
+	})
+	if errors.Is(err, errShardingNotOwned) {
+		return nil
+	}
+	return err
 }
 
 type ItemExponentialFailureAndJitterSlowRateLimter struct {
