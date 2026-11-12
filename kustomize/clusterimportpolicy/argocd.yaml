@@ -1,0 +1,38 @@
+apiVersion: policy.clusterpedia.io/v1alpha1
+kind: ClusterImportPolicy
+metadata:
+  name: argocd
+spec:
+  source:
+    group: ""
+    resource: secrets
+    selectorTemplate: |
+      {{ if hasPrefix "argo-" .source.metadata.name }}
+        {{ $name := (get .source.data "name") }}
+        {{ $serverurl := (get .source.data "server") }}
+        {{ if and $name $serverurl (hasKey .source.data "config") }}
+          {{ $kubeconfig := (b64dec .source.data.config) }}
+          {{ and
+            (contains $name $kubeconfig)
+            (contains $serverurl $kubeconfig)
+           }}
+        {{ end }}
+      {{ end }}
+  nameTemplate: 'argo-{{ .source.metadata.namespace }}-{{ trimPrefix "argo-" .source.metadata.name }}'
+  template: |
+    spec:
+      apiserver: 'https://{{ trimPrefix "argo-" .source.metadata.name }}.{{ .source.metadata.namespace }}.svc'
+      kubeconfig: '{'tlsClientConfig':{'insecure':false}}'
+      syncResources:
+        - group: ""
+          resources:
+          - "pods"
+          - "services"
+          - "configmaps"
+          - "secrets"
+          - "namespaces"
+        - group: "apps"
+          resources:
+            - "*"
+      syncResourcesRefName: ""
+  creationCondition: "true"
