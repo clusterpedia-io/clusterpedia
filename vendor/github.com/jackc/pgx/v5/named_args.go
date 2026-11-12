@@ -3,6 +3,7 @@ package pgx
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -18,6 +19,7 @@ import (
 //
 // Named placeholders are case sensitive and must start with a letter or underscore. Subsequent characters can be
 // letters, numbers, or underscores.
+
 type NamedArgs map[string]any
 
 // RewriteQuery implements the QueryRewriter interface.
@@ -34,15 +36,133 @@ func (sna StrictNamedArgs) RewriteQuery(ctx context.Context, conn *Conn, sql str
 	return rewriteQuery(sna, sql, true)
 }
 
+type errorQueryRewriter struct {
+	err error
+}
+
+func (r errorQueryRewriter) RewriteQuery(ctx context.Context, conn *Conn, sql string, args []any) (newSQL string, newArgs []any, err error) {
+	return "", nil, r.err
+}
+
+// StructArgs converts exported fields of a struct into a QueryRewriter so it can
+// be used as the first argument to a query method (e.g. "where id=@id").
+//
+// Field names are taken from the `db` struct tag if present. Tag values may
+// include comma-separated options (e.g. `db:"id,omitempty"`). A `db:"-"` field is
+// ignored. If no `db` tag is present, the Go field name is used.
+//
+// sa may be a struct or a pointer to a struct.
+func StructArgs(sa any) QueryRewriter {
+	args, err := structArgs(sa)
+	if err != nil {
+		return errorQueryRewriter{err: err}
+	}
+	return NamedArgs(args)
+}
+
+// StrictStructArgs is like StructArgs but uses StrictNamedArgs rewriting
+// semantics (i.e. errors if the SQL query references missing arguments or if
+// extra arguments are provided).
+func StrictStructArgs(sa any) QueryRewriter {
+	args, err := structArgs(sa)
+	if err != nil {
+		return errorQueryRewriter{err: err}
+	}
+	return StrictNamedArgs(args)
+}
+
+func structArgs(sa any) (map[string]any, error) {
+	if sa == nil {
+		return nil, fmt.Errorf("StructArgs requires a struct or pointer to struct, got nil")
+	}
+
+	v := reflect.ValueOf(sa)
+	t := v.Type()
+
+	if t.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return nil, fmt.Errorf("StructArgs requires a non-nil pointer to struct")
+		}
+		v = v.Elem()
+		t = v.Type()
+	}
+
+	if t.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("StructArgs requires a struct or pointer to struct, got %s", t)
+	}
+
+	out := make(map[string]any, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+
+		// Ignore unexported fields.
+		if sf.PkgPath != "" {
+			continue
+		}
+
+		key, ok, err := dbTagKey(sf)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+
+		if _, exists := out[key]; exists {
+			return nil, fmt.Errorf("duplicate StructArgs key %q", key)
+		}
+
+		out[key] = v.Field(i).Interface()
+	}
+
+	return out, nil
+}
+
+// dbTagKey derives the named-argument key for a struct field. Tag parsing matches
+// RowToStructByName* in rows.go (structTagKey, Lookup, comma options, db:"-").
+// Anonymous embedded structs are skipped without flattening (unlike row scanning).
+func dbTagKey(sf reflect.StructField) (key string, ok bool, err error) {
+	if sf.Anonymous {
+		ft := sf.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if ft.Kind() == reflect.Struct {
+			return "", false, nil
+		}
+	}
+
+	dbTag, dbTagPresent := sf.Tag.Lookup(structTagKey)
+	if dbTagPresent {
+		dbTag, _, _ = strings.Cut(dbTag, ",")
+	}
+	if dbTag == "-" {
+		return "", false, nil
+	}
+	if dbTagPresent {
+		if dbTag == "" {
+			return "", false, fmt.Errorf("field %s has empty `%s` tag", sf.Name, structTagKey)
+		}
+		return dbTag, true, nil
+	}
+
+	return sf.Name, true, nil
+}
+
 type namedArg string
 
+// utf8.RuneError is returned both for a decoding failure and for a literal U+FFFD, which is a valid
+// character in a query. Only the former ends the input.
+const replacementcharacterwidth = 3
+
 type sqlLexer struct {
-	src     string
-	start   int
-	pos     int
-	nested  int // multiline comment nesting level.
-	stateFn stateFn
-	parts   []any
+	src       string
+	start     int
+	pos       int
+	nested    int    // multiline comment nesting level.
+	dollarTag string // active dollar-quote delimiter, including both '$' characters.
+	stateFn   stateFn
+	parts     []any
 
 	nameToOrdinal map[namedArg]int
 }
@@ -107,6 +227,12 @@ func rawState(l *sqlLexer) stateFn {
 			return singleQuoteState
 		case '"':
 			return doubleQuoteState
+		case '$':
+			if tagLen, ok := scanDollarQuoteTag(l.src[l.pos:]); ok {
+				l.dollarTag = l.src[l.pos-1 : l.pos+tagLen+1]
+				l.pos += tagLen + 1
+				return dollarQuoteState
+			}
 		case '@':
 			nextRune, _ := utf8.DecodeRuneInString(l.src[l.pos:])
 			if isLetter(nextRune) || nextRune == '_' {
@@ -129,13 +255,68 @@ func rawState(l *sqlLexer) stateFn {
 				return multilineCommentState
 			}
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
+		}
+
+		// A dollar sign within an unquoted identifier does not start a
+		// dollar-quoted string. Consume identifiers as a single token.
+		if isSQLIdentifierStart(r) {
+			for l.pos < len(l.src) {
+				next, width := utf8.DecodeRuneInString(l.src[l.pos:])
+				if next == utf8.RuneError && width != replacementcharacterwidth {
+					break
+				}
+				if !(isSQLIdentifierStart(next) || next >= '0' && next <= '9' || next == '$') {
+					break
+				}
+				l.pos += width
+			}
 		}
 	}
+}
+
+func isSQLIdentifierStart(r rune) bool {
+	return isLetter(r) || r == '_' || r >= 0x80
+}
+
+// scanDollarQuoteTag scans an optional tag and its terminating '$', starting
+// just after the opening '$'. Tags follow PostgreSQL's unquoted identifier
+// rules except that they cannot contain '$'.
+func scanDollarQuoteTag(src string) (int, bool) {
+	for i := 0; i < len(src); {
+		r, width := utf8.DecodeRuneInString(src[i:])
+		if r == '$' {
+			return i, true
+		}
+		if r == utf8.RuneError && width != replacementcharacterwidth {
+			return 0, false
+		}
+		if !(isSQLIdentifierStart(r) || i > 0 && r >= '0' && r <= '9') {
+			return 0, false
+		}
+		i += width
+	}
+	return 0, false
+}
+
+func dollarQuoteState(l *sqlLexer) stateFn {
+	idx := strings.Index(l.src[l.pos:], l.dollarTag)
+	if idx < 0 {
+		// Preserve unterminated literals, leaving syntax validation to PostgreSQL.
+		l.parts = append(l.parts, l.src[l.start:])
+		l.pos = len(l.src)
+		l.start = l.pos
+		return nil
+	}
+	l.pos += idx + len(l.dollarTag)
+	l.dollarTag = ""
+	return rawState
 }
 
 func isLetter(r rune) bool {
@@ -147,7 +328,7 @@ func namedArgState(l *sqlLexer) stateFn {
 		r, width := utf8.DecodeRuneInString(l.src[l.pos:])
 		l.pos += width
 
-		if r == utf8.RuneError {
+		if r == utf8.RuneError && width != replacementcharacterwidth {
 			if l.pos-l.start > 0 {
 				na := namedArg(l.src[l.start:l.pos])
 				if _, found := l.nameToOrdinal[na]; !found {
@@ -163,7 +344,7 @@ func namedArgState(l *sqlLexer) stateFn {
 			if _, found := l.nameToOrdinal[na]; !found {
 				l.nameToOrdinal[na] = len(l.nameToOrdinal) + 1
 			}
-			l.parts = append(l.parts, namedArg(na))
+			l.parts = append(l.parts, na)
 			l.start = l.pos
 			return rawState
 		}
@@ -183,11 +364,13 @@ func singleQuoteState(l *sqlLexer) stateFn {
 			}
 			l.pos += width
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 }
@@ -205,11 +388,13 @@ func doubleQuoteState(l *sqlLexer) stateFn {
 			}
 			l.pos += width
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 }
@@ -230,11 +415,13 @@ func escapeStringState(l *sqlLexer) stateFn {
 			}
 			l.pos += width
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 }
@@ -245,17 +432,16 @@ func oneLineCommentState(l *sqlLexer) stateFn {
 		l.pos += width
 
 		switch r {
-		case '\\':
-			_, width = utf8.DecodeRuneInString(l.src[l.pos:])
-			l.pos += width
 		case '\n', '\r':
 			return rawState
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 }
@@ -285,11 +471,13 @@ func multilineCommentState(l *sqlLexer) stateFn {
 			l.nested--
 
 		case utf8.RuneError:
-			if l.pos-l.start > 0 {
-				l.parts = append(l.parts, l.src[l.start:l.pos])
-				l.start = l.pos
+			if width != replacementcharacterwidth {
+				if l.pos-l.start > 0 {
+					l.parts = append(l.parts, l.src[l.start:l.pos])
+					l.start = l.pos
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 }
