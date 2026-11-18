@@ -53,7 +53,7 @@ function main() {
         done
     done
 
-    for version in "${multi_versions[@]}"; do
+    for version in "${multiple_versions[@]}"; do
         for file in "${TEST_ROOT}"/cases/*.test.sh; do
             [[ -e "${file}" ]] || continue
             name="${file##*/}"
