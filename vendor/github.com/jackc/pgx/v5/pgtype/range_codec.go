@@ -3,6 +3,7 @@ package pgtype
 import (
 	"database/sql/driver"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/internal/pgio"
 )
@@ -79,6 +80,7 @@ func (plan *encodePlanRangeCodecRangeValuerToBinary) Encode(value any, buf []byt
 
 	lowerType, upperType := getter.BoundTypes()
 	lower, upper := getter.Bounds()
+	lower, upper = derefAnyRangeBound(lower), derefAnyRangeBound(upper)
 
 	var rangeType byte
 	switch lowerType {
@@ -170,6 +172,7 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 
 	lowerType, upperType := getter.BoundTypes()
 	lower, upper := getter.Bounds()
+	lower, upper = derefAnyRangeBound(lower), derefAnyRangeBound(upper)
 
 	switch lowerType {
 	case Exclusive, Unbounded:
@@ -192,6 +195,7 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 			return nil, fmt.Errorf("cannot encode %v as element of range", lower)
 		}
 
+		boundStart := len(buf)
 		buf, err = lowerPlan.Encode(lower, buf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode %v as element of range: %w", lower, err)
@@ -199,6 +203,7 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 		if buf == nil {
 			return nil, fmt.Errorf("Lower cannot be NULL unless LowerType is Unbounded")
 		}
+		buf = append(buf[:boundStart], quoteRangeBoundIfNeeded(string(buf[boundStart:]))...)
 	}
 
 	buf = append(buf, ',')
@@ -213,6 +218,7 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 			return nil, fmt.Errorf("cannot encode %v as element of range", upper)
 		}
 
+		boundStart := len(buf)
 		buf, err = upperPlan.Encode(upper, buf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode %v as element of range: %w", upper, err)
@@ -220,6 +226,7 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 		if buf == nil {
 			return nil, fmt.Errorf("Upper cannot be NULL unless UpperType is Unbounded")
 		}
+		buf = append(buf[:boundStart], quoteRangeBoundIfNeeded(string(buf[boundStart:]))...)
 	}
 
 	switch upperType {
@@ -234,16 +241,31 @@ func (plan *encodePlanRangeCodecRangeValuerToText) Encode(value any, buf []byte)
 	return buf, nil
 }
 
+// derefAnyRangeBound returns the value held by v when v is a *any. Range[any], which is what RangeCodec.DecodeValue
+// returns, reports its bounds as *any. No encode plan can be found for a pointer to an interface, so the bound value
+// must be unwrapped before planning.
+func derefAnyRangeBound(v any) any {
+	if p, ok := v.(*any); ok && p != nil {
+		return *p
+	}
+	return v
+}
+
+func quoteRangeBoundIfNeeded(src string) string {
+	if src == "" || strings.ContainsAny(src, "\"\\,()[]") {
+		return quoteArrayElement(src)
+	}
+	return src
+}
+
 func (c *RangeCodec) PlanScan(m *Map, oid uint32, format int16, target any) ScanPlan {
 	switch format {
 	case BinaryFormatCode:
-		switch target.(type) {
-		case RangeScanner:
+		if _, ok := target.(RangeScanner); ok {
 			return &scanPlanBinaryRangeToRangeScanner{rc: c, m: m}
 		}
 	case TextFormatCode:
-		switch target.(type) {
-		case RangeScanner:
+		if _, ok := target.(RangeScanner); ok {
 			return &scanPlanTextRangeToRangeScanner{rc: c, m: m}
 		}
 	}
@@ -257,7 +279,7 @@ type scanPlanBinaryRangeToRangeScanner struct {
 }
 
 func (plan *scanPlanBinaryRangeToRangeScanner) Scan(src []byte, target any) error {
-	rangeScanner := (target).(RangeScanner)
+	rangeScanner := target.(RangeScanner)
 
 	if src == nil {
 		return rangeScanner.ScanNull()
@@ -307,7 +329,7 @@ type scanPlanTextRangeToRangeScanner struct {
 }
 
 func (plan *scanPlanTextRangeToRangeScanner) Scan(src []byte, target any) error {
-	rangeScanner := (target).(RangeScanner)
+	rangeScanner := target.(RangeScanner)
 
 	if src == nil {
 		return rangeScanner.ScanNull()
