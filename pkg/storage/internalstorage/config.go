@@ -36,6 +36,8 @@ type Config struct {
 	Password string `env:"DB_PASSWORD"`
 	Database string `env:"DB_DATABASE"`
 
+	IAMAuth IAMAuthConfig `yaml:"iamAuth"`
+
 	SSLMode      string `yaml:"sslMode"`
 	CertFile     string `yaml:"sslCertFile"`
 	KeyFile      string `yaml:"sslKeyFile"`
@@ -50,6 +52,11 @@ type Config struct {
 
 	Log     *LogConfig    `yaml:"log"`
 	Metrics MetricsConfig `yaml:"metrics"`
+}
+
+type IAMAuthConfig struct {
+	Type   string `yaml:"type"`   // Empty to use the password, or aws-rds
+	Region string `yaml:"region"` // AWS region of the database, Default is resolved by the AWS SDK, e.g. AWS_REGION
 }
 
 type LogConfig struct {

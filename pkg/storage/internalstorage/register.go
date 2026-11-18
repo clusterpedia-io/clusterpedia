@@ -1,6 +1,7 @@
 package internalstorage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -39,12 +40,22 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		return nil, err
 	}
 
+	iamAuth, err := cfg.newRDSIAMAuth(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	var dialector gorm.Dialector
 	switch cfg.Type {
 	case "mysql":
 		mysqlConfig, err := cfg.genMySQLConfig()
 		if err != nil {
 			return nil, err
+		}
+		if iamAuth != nil {
+			if err := mysqlConfig.Apply(mysql.BeforeConnect(iamAuth.mysqlBeforeConnect)); err != nil {
+				return nil, err
+			}
 		}
 
 		connector, err := mysql.NewConnector(mysqlConfig)
@@ -60,9 +71,18 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 			return nil, err
 		}
 
+		var opts []stdlib.OptionOpenDB
+		if iamAuth != nil {
+			opts = append(opts, stdlib.OptionBeforeConnect(iamAuth.postgresBeforeConnect))
+		}
+
 		cfg.addPostgresErrorCodes()
-		dialector = gpostgres.New(gpostgres.Config{Conn: stdlib.OpenDB(*pgconfig)})
+		dialector = gpostgres.New(gpostgres.Config{Conn: stdlib.OpenDB(*pgconfig, opts...)})
 	case "sqlite", "sqlite3":
+		if iamAuth != nil {
+			return nil, fmt.Errorf("sqlite: not support iamAuth type: %s", cfg.IAMAuth.Type)
+		}
+
 		dsn, err := cfg.genSQLiteDSN()
 		if err != nil {
 			return nil, err
