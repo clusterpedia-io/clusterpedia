@@ -40,9 +40,6 @@ function build_image() {
 function load_image() {
     local name="${1}"
     local image="${2}"
-    if ! docker image inspect "${image}" >/dev/null 2>&1; then
-        docker pull "${image}"
-    fi
     kind load docker-image "${image}" --name "${name}"
 }
 
@@ -55,7 +52,6 @@ function create_cluster() {
     load_image "${name}" localtest/clustersynchro-manager-amd64:test
     load_image "${name}" localtest/apiserver-amd64:test
     load_image "${name}" localtest/controller-manager-amd64:test
-    load_image "${name}" postgres:12
 }
 # delete the kind cluster
 function delete_cluster() {
@@ -163,14 +159,7 @@ function delete_data_plane() {
     kwokctl delete cluster --name "${name}"
 }
 
-# check if the apiserver in the control plane is ready
+# wait for the apiserver in the control plane to be ready
 function check_clusterpedia_apiserver() {
-    for i in {1..3}
-    do
-        if kubectl get --raw="/apis/clusterpedia.io/v1beta1/">/dev/null; then # only print error messages of the kubectl
-            return 0
-        fi
-        sleep 10
-    done
-    return 1
+    kubectl wait --for=condition=Available apiservice/v1beta1.clusterpedia.io --timeout=300s
 }
