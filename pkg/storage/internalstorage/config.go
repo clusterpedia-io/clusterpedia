@@ -277,7 +277,7 @@ func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 		names = append(names, fmt.Sprintf("sslcert=%s", cfg.CertFile))
 	}
 	if cfg.KeyFile != "" {
-		names = append(names, fmt.Sprintf("sslcert=%s", cfg.KeyFile))
+		names = append(names, fmt.Sprintf("sslkey=%s", cfg.KeyFile))
 	}
 	if cfg.RootCertFile != "" {
 		names = append(names, fmt.Sprintf("sslrootcert=%s", cfg.RootCertFile))
