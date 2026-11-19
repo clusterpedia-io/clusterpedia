@@ -254,39 +254,43 @@ func (cfg *Config) genPostgresConfig() (*pgx.ConnConfig, error) {
 		return nil, errors.New("postgres: database name is required")
 	}
 
+	// Encode literal configuration values in PostgreSQL's keyword/value format.
 	var names []string
+	escapeValue := strings.NewReplacer("\\", "\\\\", "'", "\\'")
+	appendSetting := func(key, value string) {
+		names = append(names, key+"='"+escapeValue.Replace(value)+"'")
+	}
 	if cfg.Host != "" {
-		names = append(names, fmt.Sprintf("host=%s", cfg.Host))
+		appendSetting("host", cfg.Host)
 	}
 	if cfg.Port != "" {
-		names = append(names, fmt.Sprintf("port=%s", cfg.Port))
+		appendSetting("port", cfg.Port)
 	}
 	if cfg.User != "" {
-		names = append(names, fmt.Sprintf("user=%s", cfg.User))
+		appendSetting("user", cfg.User)
 	}
 	if cfg.Password != "" {
-		names = append(names, fmt.Sprintf("password=%s", cfg.Password))
+		appendSetting("password", cfg.Password)
 	}
 	if cfg.Database != "" {
-		names = append(names, fmt.Sprintf("dbname=%s", cfg.Database))
+		appendSetting("dbname", cfg.Database)
 	}
 	if cfg.SSLMode != "" {
-		names = append(names, fmt.Sprintf("sslmode=%s", cfg.SSLMode))
+		appendSetting("sslmode", cfg.SSLMode)
 	}
 	if cfg.CertFile != "" {
-		names = append(names, fmt.Sprintf("sslcert=%s", cfg.CertFile))
+		appendSetting("sslcert", cfg.CertFile)
 	}
 	if cfg.KeyFile != "" {
-		names = append(names, fmt.Sprintf("sslkey=%s", cfg.KeyFile))
+		appendSetting("sslkey", cfg.KeyFile)
 	}
 	if cfg.RootCertFile != "" {
-		names = append(names, fmt.Sprintf("sslrootcert=%s", cfg.RootCertFile))
+		appendSetting("sslrootcert", cfg.RootCertFile)
 	}
 	for key, value := range cfg.Params {
-		names = append(names, fmt.Sprintf("%s=%s", key, value))
+		appendSetting(key, value)
 	}
-	dns := strings.Join(names, " ")
-	return pgx.ParseConfig(dns)
+	return pgx.ParseConfig(strings.Join(names, " "))
 }
 
 func (cfg *Config) genSQLiteDSN() (string, error) {
