@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
-	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/rest"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -94,7 +93,7 @@ func (s *RESTStorage) resolveListOptions(ctx context.Context, requestInfo *gener
 	}
 
 	if options.WithRemainingCount == nil {
-		if enabled := utilfeature.DefaultFeatureGate.Enabled(genericfeatures.RemainingItemCount); enabled {
+		if enabled := utilfeature.DefaultFeatureGate.Enabled(features.RemainingItemCount); enabled {
 			options.WithRemainingCount = &enabled
 		}
 	}
