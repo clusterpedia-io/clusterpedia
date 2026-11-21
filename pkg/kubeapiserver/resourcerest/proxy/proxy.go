@@ -33,6 +33,7 @@ func (r *RemoteProxyREST) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	handler, err := proxyConn(req.Context(), r.connGetter, false, r, nil)
 	if err != nil {
 		r.Error(rw, req, err)
+		return
 	}
 	handler.ServeHTTP(rw, req)
 }
