@@ -77,10 +77,14 @@ func (rows *mysqlRows) ColumnTypePrecisionScale(i int) (int64, int64, bool) {
 
 	switch column.fieldType {
 	case fieldTypeDecimal, fieldTypeNewDecimal:
-		if decimals > 0 {
-			return int64(column.length) - 2, decimals, true
+		precision := int64(column.length)
+		if column.flags&flagUnsigned == 0 {
+			precision-- // signed decimals include space for the sign
 		}
-		return int64(column.length) - 1, decimals, true
+		if decimals > 0 {
+			precision-- // decimals with a scale include a decimal point
+		}
+		return precision, decimals, true
 	case fieldTypeTimestamp, fieldTypeDateTime, fieldTypeTime:
 		return decimals, decimals, true
 	case fieldTypeFloat, fieldTypeDouble:
@@ -113,7 +117,7 @@ func (rows *mysqlRows) Close() (err error) {
 
 	// Remove unread packets from stream
 	if !rows.rs.done {
-		err = mc.readUntilEOF()
+		err = mc.skipRows()
 	}
 	if err == nil {
 		handleOk := mc.clearResult()
@@ -143,7 +147,7 @@ func (rows *mysqlRows) nextResultSet() (int, error) {
 
 	// Remove unread packets from stream
 	if !rows.rs.done {
-		if err := rows.mc.readUntilEOF(); err != nil {
+		if err := rows.mc.skipRows(); err != nil {
 			return 0, err
 		}
 		rows.rs.done = true
@@ -156,7 +160,7 @@ func (rows *mysqlRows) nextResultSet() (int, error) {
 	rows.rs = resultSet{}
 	// rows.mc.affectedRows and rows.mc.insertIds accumulate on each call to
 	// nextResultSet.
-	resLen, err := rows.mc.resultUnchanged().readResultSetHeaderPacket()
+	resLen, _, err := rows.mc.resultUnchanged().readResultSetHeaderPacket()
 	if err != nil {
 		// Clean up about multi-results flag
 		rows.rs.done = true
@@ -186,7 +190,7 @@ func (rows *binaryRows) NextResultSet() error {
 		return err
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
+	rows.rs.columns, err = rows.mc.readColumns(resLen, nil)
 	return err
 }
 
@@ -208,7 +212,7 @@ func (rows *textRows) NextResultSet() (err error) {
 		return err
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
+	rows.rs.columns, err = rows.mc.readColumns(resLen, nil)
 	return err
 }
 
