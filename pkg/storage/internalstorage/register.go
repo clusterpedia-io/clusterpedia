@@ -30,19 +30,19 @@ func init() {
 	storage.RegisterStorageFactoryFunc(StorageName, NewStorageFactory)
 }
 
-func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
+func openDB(configPath string) (*Config, *gorm.DB, error) {
 	if configPath == "" {
-		return nil, fmt.Errorf("configPath should not be empty")
+		return nil, nil, fmt.Errorf("configPath should not be empty")
 	}
 
 	cfg := &Config{}
 	if err := configor.Load(cfg, configPath); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	iamAuth, err := cfg.newRDSIAMAuth(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var dialector gorm.Dialector
@@ -50,17 +50,17 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	case "mysql":
 		mysqlConfig, err := cfg.genMySQLConfig()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if iamAuth != nil {
 			if err := mysqlConfig.Apply(mysql.BeforeConnect(iamAuth.mysqlBeforeConnect)); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 
 		connector, err := mysql.NewConnector(mysqlConfig)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		cfg.addMysqlErrorNumbers()
@@ -68,7 +68,7 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	case "postgres":
 		pgconfig, err := cfg.genPostgresConfig()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		var opts []stdlib.OptionOpenDB
@@ -80,24 +80,32 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 		dialector = gpostgres.New(gpostgres.Config{Conn: stdlib.OpenDB(*pgconfig, opts...)})
 	case "sqlite", "sqlite3":
 		if iamAuth != nil {
-			return nil, fmt.Errorf("sqlite: not support iamAuth type: %s", cfg.IAMAuth.Type)
+			return nil, nil, fmt.Errorf("sqlite: not support iamAuth type: %s", cfg.IAMAuth.Type)
 		}
 
 		dsn, err := cfg.genSQLiteDSN()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		dialector = gsqlite.Open(dsn)
 	default:
-		return nil, fmt.Errorf("not support storage type: %s", cfg.Type)
+		return nil, nil, fmt.Errorf("not support storage type: %s", cfg.Type)
 	}
 
 	logger, err := newLogger(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{SkipDefaultTransaction: true, Logger: logger})
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, db, nil
+}
+
+func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
+	cfg, db, err := openDB(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +135,11 @@ func NewStorageFactory(configPath string) (storage.StorageFactory, error) {
 	sqlDB.SetMaxOpenConns(connPool.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(connPool.ConnMaxLifetime)
 
-	if err := db.AutoMigrate(&Resource{}); err != nil {
+	if cfg.DisableAutoMigration {
+		if err := checkSchema(db); err != nil {
+			return nil, fmt.Errorf("auto migration is disabled and %w", err)
+		}
+	} else if err := db.AutoMigrate(&Resource{}); err != nil {
 		return nil, err
 	}
 

@@ -52,6 +52,9 @@ type Config struct {
 
 	Log     *LogConfig    `yaml:"log"`
 	Metrics MetricsConfig `yaml:"metrics"`
+
+	// DisableAutoMigration makes the storage only check the schema on startup and fail if it is out of date.
+	DisableAutoMigration bool `yaml:"disableAutoMigration"`
 }
 
 type IAMAuthConfig struct {
