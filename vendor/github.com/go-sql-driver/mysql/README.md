@@ -1,5 +1,8 @@
 # Go-MySQL-Driver
 
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-go--sql--driver%2Fmysql-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/go-sql-driver/mysql)
+
+
 A MySQL-Driver for Go's [database/sql](https://golang.org/pkg/database/sql/) package
 
 ![Go-MySQL-Driver logo](https://raw.github.com/wiki/go-sql-driver/mysql/gomysql_m.png "Golang Gopher holding the MySQL Dolphin")
@@ -42,8 +45,8 @@ A MySQL-Driver for Go's [database/sql](https://golang.org/pkg/database/sql/) pac
 
 ## Requirements
 
-* Go 1.21 or higher. We aim to support the 3 latest versions of Go.
-* MySQL (5.7+) and MariaDB (10.5+) are supported.
+* Go 1.24 or higher. We aim to support the 3 latest versions of Go.
+* MySQL (5.7+) and MariaDB (10.5+) are supported by maintainers.
 * [TiDB](https://github.com/pingcap/tidb) is supported by PingCAP.
   * Do not ask questions about TiDB in our issue tracker or forum.
   * [Document](https://docs.pingcap.com/tidb/v6.1/dev-guide-sample-application-golang)
@@ -288,7 +291,18 @@ Default:        false
 
 If `interpolateParams` is true, placeholders (`?`) in calls to `db.Query()` and `db.Exec()` are interpolated into a single query string with given parameters. This reduces the number of roundtrips, since the driver has to prepare a statement, execute it with given parameters and close the statement again with `interpolateParams=false`.
 
-*This can not be used together with the multibyte encodings BIG5, CP932, GB2312, GBK or SJIS. These are rejected as they may [introduce a SQL injection vulnerability](http://stackoverflow.com/a/12118602/3430118)!*
+*This can not be used together with the multibyte encodings BIG5, CP932, GB18030, GBK or SJIS. A `charset` or `collation` using one of these is rejected, as they may [introduce a SQL injection vulnerability](http://stackoverflow.com/a/12118602/3430118)!*
+
+> [!NOTE]
+> `interpolateParams` is designed to safely embed externally supplied parameter values into queries written by the application.
+> It does not fully replicate the MySQL server's parser: its handling of comments, quoting and escaping (e.g. executable comments `/*! ... */` or the `ANSI_QUOTES` SQL mode) may differ from the server's.
+> Queries using `interpolateParams` must not rely on character-set-specific recognition of `--` comments. When the byte immediately following `--` is non-ASCII, the driver's interpretation is not guaranteed to match the server's; use an ASCII space (`-- `) or server-side `Prepare()` instead. The driver recognizes a raw `0xA0` byte as a comment separator for latin1 compatibility. This is not U+00A0 encoded as UTF-8, whose bytes are `0xC2 0xA0`.
+> If you need to run arbitrary SQL with placeholders, use `Prepare()` (e.g. `db.Prepare()` or `conn.PrepareContext()`) so that the placeholders are processed by the server.
+
+> [!WARNING]
+> Unsafe-charset rejection is a fail-safe, not a complete safety mechanism. The driver checks the configured `charset` and `collation` but does not automatically select or enforce a safe effective charset on the server. Applications that enable `interpolateParams` are responsible for ensuring that `character_set_client` remains safe and for following the parser restrictions documented above.
+> Changes made through other paths, such as a `character_set_client=sjis` system variable in the DSN or `SET NAMES sjis` at runtime, are not detected and can make `interpolateParams` unsafe.
+> If the effective charset cannot be guaranteed, disable `interpolateParams` and let the server process the placeholders.
 
 ##### `loc`
 
@@ -311,7 +325,10 @@ Type:           duration
 Default:        0
 ```
 
-[Truncate time values](https://pkg.go.dev/time#Duration.Truncate) to the specified duration. The value must be a decimal number with a unit suffix (*"ms"*, *"s"*, *"m"*, *"h"*), such as *"30s"*, *"0.5m"* or *"1m30s"*.
+[Truncate time values](https://pkg.go.dev/time#Duration.Truncate) in query arguments to the specified duration. The value must be a decimal number with a unit suffix (*"ns"*, *"us"*, *"ms"*, etc...), such as "1us", "1ms", or "10ns".
+
+> [!NOTE]
+> `time.Time` arguments are sent with up to nanosecond precision, so a value from `time.Now()` usually has more fractional-second digits than a `DATETIME(N)` or `TIMESTAMP(N)` column stores. On MariaDB, comparing such a value against an indexed column can prevent an index range scan, turning it into a full index scan. Truncating to the column's precision (`1us` for `DATETIME(6)`) avoids this. Only arguments sent to the server are truncated; values read from the server are not affected.
 
 ##### `maxAllowedPacket`
 ```

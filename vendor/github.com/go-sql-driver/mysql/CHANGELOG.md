@@ -1,13 +1,101 @@
 # Changelog
 
+## v1.10.2 (2026-11-17)
+
+Changes since v1.10.1.
+
+### Security fixes
+
+* Return `ErrMalformPkt` instead of panicking on truncated initial handshake
+  packets, including the greeting received before TLS negotiation.
+  (GHSA-9qjq-77h9-895w, #1850)
+
+* Discard connections after a failed `LOAD DATA LOCAL INFILE`, including reader
+  `Close()` errors, so unread results from a multi-statement batch cannot be
+  returned to a later caller. Preserve the server's response status and avoid
+  retrying the batch after an upload write failure. (GHSA-4v5x-9mc8-gr98)
+
+* Reject `interpolateParams=true` combined with an unsafe multibyte charset
+  (`big5`, `sjis`, `gbk`, `cp932`, `gb18030`) given by `charset` or `Charset()`.
+  Previously only `collation` was checked. Collations are now matched
+  case-insensitively and by their charset prefix. The check also runs again
+  after a `BeforeConnect` callback has modified the config. Stop rejecting
+  `gb2312_bin`; GB2312 trailing bytes cannot contain a backslash. The error text
+  changed from `invalid DSN: interpolateParams can not be used with unsafe collations`
+  to `interpolateParams cannot be used with unsafe charsets`, because it may also
+  be returned by `NewConnector` or `Connector.Connect` after `BeforeConnect`.
+  Applications comparing the complete error string must update their comparison. (#1836)
+
+* Fix `interpolateParams` not treating `--` followed by `\v`, `\f`, another
+  control character, DEL, or a raw `0xA0` byte as a comment. Other non-ASCII
+  bytes after `--` remain outside the supported interpolation grammar. (#1836)
+
+* Fix `interpolateParams` treating the `*` that opens `/*/` as closing the
+  comment. (#1835)
+
+### Bugfixes
+
+* Honor `BeforeConnect` changes to the timeout, dialer, logger, and connection
+  attributes without modifying the shared connector. (#1809)
+
+* Validate prepared statement arguments and packet size before sending long
+  data, and reset the statement if a long-data write fails. (#1810)
+
+* Fix the reported precision of unsigned DECIMAL columns. (#1813)
+
+* Preserve full two-byte column collation IDs so IDs above 255 do not cause
+  text columns to be reported as binary columns. (#1818)
+
+* Fix the inverted check for collations outside the handshake's one-byte map.
+  Accept them when a charset is supplied, using `SET NAMES ... COLLATE`;
+  reject them when no charset is supplied instead of silently using the
+  default collation. (#1832)
+
+* Preserve and log idle server error packets before discarding a connection,
+  with bounded diagnostics over plain, TLS, and zlib connections. (#1843)
+
+### CI
+
+* Update GitHub Actions dependencies and add a workflow dependency lockfile. (#1838)
+
+* Pin the lint job to Go 1.26 and Staticcheck v0.8.1 for compatibility. (#1824)
+
+* Limit Go module Dependabot pull requests to security updates. (#1829)
+
+* Test Go 1.27 and MySQL 9.7 while retaining Go 1.24 and the existing database
+  compatibility jobs.
+
+## v1.10.1 (2026-09-02)
+
+* Fix `Config.FormatDSN()` dropping `Addr` when `Net` is empty.
+  It now uses the default `tcp` network so configs with only `Addr` round-trip correctly. (#1770)
+
+* Fix typed-nil `json.RawMessage` with `interpolateParams=true` being interpolated as an empty string.
+  It is now interpolated as SQL `NULL`, matching server-side prepared statements. (#1782)
+
+* Add MariaDB 11.8 and 12.3 to the test matrix. (#1774)
+
+## v1.10.0 (2026-04-28)
+
+* Fix `getSystemVar("max_allowed_packet")` potentially returned wrong value. (#1754)
+  This affects only when `maxAllowedPacket=0` is set.
+
+* Bump filippo.io/edwards25519 from 1.1.1 to 1.2.0. (#1756)
+  While older versions have reported CVEs, they do not affect go-mysql.
+
+* Update Go versions to 1.24-1.26. (#1763)
+
+* Enhance interpolateParams to correctly handle placeholders. (#1732)
+  The question mark (?) within strings and comments will no longer be treated as a placeholder.
+
+
 ## v1.9.3 (2025-06-13)
 
 * `tx.Commit()` and `tx.Rollback()` returned `ErrInvalidConn` always.
   Now they return cached real error if present. (#1690)
 
-* Optimize reading small resultsets to fix performance regression
-  introduced by compression protocol support. (#1707)
-
+* Optimize reading small result sets to fix a performance regression
+  introduced by compression protocol support. (`#1707`)
 * Fix `db.Ping()` on compressed connection. (#1723)
 
 
