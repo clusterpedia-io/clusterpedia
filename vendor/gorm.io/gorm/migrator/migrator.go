@@ -1,3 +1,4 @@
+// Package migrator provides the interface and implementation for database schema migration in GORM.
 package migrator
 
 import (
@@ -407,15 +408,15 @@ func (m Migrator) DropColumn(value interface{}, name string) error {
 	})
 }
 
-// AlterColumn alter value's `field` column' type based on schema definition
+// AlterColumn alter value's `field` column's type based on schema definition
 func (m Migrator) AlterColumn(value interface{}, field string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
 			if field := stmt.Schema.LookUpField(field); field != nil {
-				fileType := m.FullDataTypeOf(field)
+				fieldType := m.FullDataTypeOf(field)
 				return m.DB.Exec(
 					"ALTER TABLE ? ALTER COLUMN ? TYPE ?",
-					m.CurrentTable(stmt), clause.Column{Name: field.DBName}, fileType,
+					m.CurrentTable(stmt), clause.Column{Name: field.DBName}, fieldType,
 				).Error
 
 			}
@@ -474,7 +475,6 @@ func (m Migrator) MigrateColumn(value interface{}, field *schema.Field, columnTy
 	// found, smart migrate
 	fullDataType := strings.TrimSpace(strings.ToLower(m.DB.Migrator().FullDataTypeOf(field).SQL))
 	realDataType := strings.ToLower(columnType.DatabaseTypeName())
-
 	var (
 		alterColumn bool
 		isSameType  = fullDataType == realDataType
@@ -513,8 +513,19 @@ func (m Migrator) MigrateColumn(value interface{}, field *schema.Field, columnTy
 				}
 			}
 		}
+	}
 
-		// check precision
+	// check precision
+	if realDataType == "decimal" || realDataType == "numeric" &&
+		regexp.MustCompile(realDataType+`\(.*\)`).FindString(fullDataType) != "" { // if realDataType has no precision,ignore
+		precision, scale, ok := columnType.DecimalSize()
+		if ok {
+			if !strings.HasPrefix(fullDataType, fmt.Sprintf("%s(%d,%d)", realDataType, precision, scale)) &&
+				!strings.HasPrefix(fullDataType, fmt.Sprintf("%s(%d)", realDataType, precision)) {
+				alterColumn = true
+			}
+		}
+	} else {
 		if precision, _, ok := columnType.DecimalSize(); ok && int64(field.Precision) != precision {
 			if regexp.MustCompile(fmt.Sprintf("[^0-9]%d[^0-9]", field.Precision)).MatchString(m.DataTypeOf(field)) {
 				alterColumn = true
@@ -549,9 +560,17 @@ func (m Migrator) MigrateColumn(value interface{}, field *schema.Field, columnTy
 			case schema.Bool:
 				v1, _ := strconv.ParseBool(dv)
 				v2, _ := strconv.ParseBool(field.DefaultValue)
-				alterColumn = v1 != v2
+				if v1 != v2 {
+					alterColumn = true
+				}
+			case schema.String:
+				if dv != field.DefaultValue && dv != strings.Trim(field.DefaultValue, "'\"") {
+					alterColumn = true
+				}
 			default:
-				alterColumn = dv != field.DefaultValue
+				if dv != field.DefaultValue {
+					alterColumn = true
+				}
 			}
 		}
 	}
