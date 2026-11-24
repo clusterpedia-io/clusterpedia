@@ -6,8 +6,10 @@ FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} AS builder
 WORKDIR /clusterpedia
 
 ARG BIN_NAME
+ARG EXTRA_BIN_NAMES=""
 ARG TARGETARCH
-RUN GOARCH=${TARGETARCH} /builder.sh ${BIN_NAME}
+# The builder image may already contain /clusterpedia/bin, so the binaries are output to /out/bin.
+RUN set -e; for bin in ${BIN_NAME} ${EXTRA_BIN_NAMES}; do OUTPUT_DIR=/out GOARCH=${TARGETARCH} /builder.sh ${bin}; done
 
 # https://alpinelinux.org/releases/
 # Once we select a branch, we will continue to use the relevant version until it ends support.
@@ -18,5 +20,4 @@ RUN apk add --no-cache gcompat
 # https://pkg.go.dev/net#hdr-Name_Resolution
 ENV GODEBUG=netdns=go
 
-ARG BIN_NAME
-COPY --from=builder /clusterpedia/bin/${BIN_NAME} /usr/local/bin/${BIN_NAME}
+COPY --from=builder /out/bin/ /usr/local/bin/

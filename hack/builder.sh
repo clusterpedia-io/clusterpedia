@@ -8,7 +8,7 @@ function usage() {
     cat <<EOF
 
 Build components: 
-    $0 <apiserver|binding-apiserver|clustersynchro-manager|controller-manager>
+    $0 <apiserver|binding-apiserver|clustersynchro-manager|controller-manager|internalstorage-schema>
 
 Build plugins:
     $0 plugins <plugin_name>

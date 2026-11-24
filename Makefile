@@ -18,7 +18,7 @@ endif
 
 HOSTARCH = $(shell go env GOHOSTARCH)
 
-all: apiserver binding-apiserver clustersynchro-manager controller-manager
+all: apiserver binding-apiserver clustersynchro-manager controller-manager internalstorage-schema
 
 gen-clusterconfigs:
 	./hack/gen-clusterconfigs.sh
@@ -82,6 +82,14 @@ endif
 controller-manager:
 	hack/builder-nocgo.sh $@
 
+.PHONY: internalstorage-schema
+internalstorage-schema:
+ifeq ($(ON_PLUGINS), true)
+	hack/builder.sh $@
+else
+	hack/builder-nocgo.sh $@
+endif
+
 .PHONY: images
 images: image-builder image-apiserver image-binding-apiserver image-clustersynchro-manager image-controller-manager
 
@@ -118,6 +126,7 @@ image-clustersynchro-manager:
 		--platform=linux/$(GOARCH) \
 		--load \
 		--build-arg BUILDER_IMAGE=$(REGISTRY)/builder-$(HOSTARCH):$(BUILDER_IMAGE_TAG) \
+		--build-arg EXTRA_BIN_NAMES=internalstorage-schema \
 		--build-arg BIN_NAME=clustersynchro-manager .
 
 image-controller-manager:
