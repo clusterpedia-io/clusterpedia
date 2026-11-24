@@ -13,14 +13,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/component-base/metrics"
 	"k8s.io/utils/ptr"
 
 	clusterv1alpha2 "github.com/clusterpedia-io/api/cluster/v1alpha2"
 	"github.com/clusterpedia-io/clusterpedia/pkg/generated/clientset/versioned/fake"
 	clusterlister "github.com/clusterpedia-io/clusterpedia/pkg/generated/listers/cluster/v1alpha2"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro"
 )
 
 const (
@@ -390,6 +393,27 @@ func TestUpdateClusterEnqueue(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStopClusterSynchroDeletesClusterMetrics(t *testing.T) {
+	factory := resourcesynchro.NewMetricsWrapperFactory(resourcesynchro.MetricsWrapperConfig{Cluster: true})
+	defaultFactory := resourcesynchro.DefaultMetricsWrapperFactory
+	resourcesynchro.DefaultMetricsWrapperFactory = factory
+	t.Cleanup(func() { resourcesynchro.DefaultMetricsWrapperFactory = defaultFactory })
+
+	added := factory.NewCounterVec(&metrics.CounterOpts{Name: "added"})
+	registry := metrics.NewKubeRegistry()
+	registry.MustRegister(added)
+	wrapper := factory.NewWrapper(testCluster, schema.GroupVersionResource{Version: "v1", Resource: "pods"})
+	wrapper.Counter(added).Inc()
+
+	// no synchro is left after a failed rebuild, the series still have to go with the cluster
+	manager, _ := newTestManager(nil)
+	assert.False(t, manager.stopClusterSynchro(testCluster, false))
+
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	assert.Empty(t, families)
 }
 
 func TestItemExponentialFailureAndJitterSlowRateLimter(t *testing.T) {

@@ -37,6 +37,7 @@ import (
 	"github.com/clusterpedia-io/clusterpedia/pkg/storage"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/clustersynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/features"
+	"github.com/clusterpedia-io/clusterpedia/pkg/synchromanager/resourcesynchro"
 	"github.com/clusterpedia-io/clusterpedia/pkg/utils"
 	clusterpediafeature "github.com/clusterpedia-io/clusterpedia/pkg/utils/feature"
 )
@@ -567,6 +568,9 @@ func (manager *Manager) trackClusterSecrets(cluster *clusterv1alpha2.PediaCluste
 }
 
 func (manager *Manager) stopClusterSynchro(name string, updateStatus bool) bool {
+	// the cluster leaves this manager, unlike a rebuilt cluster synchro it does not keep its series
+	defer resourcesynchro.DefaultMetricsWrapperFactory.DeleteCluster(name)
+
 	manager.synchrolock.Lock()
 	synchro := manager.synchros[name]
 	delete(manager.synchros, name)
