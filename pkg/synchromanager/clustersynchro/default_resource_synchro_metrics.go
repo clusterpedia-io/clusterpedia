@@ -43,17 +43,6 @@ var (
 	resourceStorageDuration *compbasemetrics.HistogramVec
 )
 
-var resourceSynchroMetrics = []interface{}{
-	storagedResourcesTotal,
-	resourceAddedCounter,
-	resourceUpdatedCounter,
-	resourceDeletedCounter,
-	resourceFailedCounter,
-	resourceMaxRetryGauge,
-	resourceDroppedCounter,
-	resourceStorageDuration,
-}
-
 var registerOnce sync.Once
 
 func registerResourceSynchroMetrics() {
@@ -139,7 +128,7 @@ func registerResourceSynchroMetrics() {
 			},
 		)
 
-		resourceSynchroMetrics = []interface{}{
+		legacyregistry.MustRegister(
 			storagedResourcesTotal,
 			resourceAddedCounter,
 			resourceUpdatedCounter,
@@ -148,9 +137,6 @@ func registerResourceSynchroMetrics() {
 			resourceMaxRetryGauge,
 			resourceDroppedCounter,
 			resourceStorageDuration,
-		}
-		for _, m := range resourceSynchroMetrics {
-			legacyregistry.MustRegister(m.(compbasemetrics.Registerable))
-		}
+		)
 	})
 }

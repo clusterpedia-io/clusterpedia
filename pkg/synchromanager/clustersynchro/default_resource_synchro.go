@@ -181,9 +181,7 @@ func (synchro *resourceSynchro) Run(shutdown <-chan struct{}) {
 	synchro.setStatus(clusterv1alpha2.ResourceSyncStatusStop, "", "")
 	synchro.runningStage = "shutdown"
 
-	for _, m := range resourceSynchroMetrics {
-		synchro.metricsWrapper.Delete(m.(resourcesynchro.DeletableVecMetrics))
-	}
+	synchro.metricsWrapper.Close()
 }
 
 func (synchro *resourceSynchro) Close() <-chan struct{} {
