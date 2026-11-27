@@ -36,7 +36,7 @@ type ClusterImportPolicy struct {
 	Spec ClusterImportPolicySpec `json:"spec,omitempty"`
 
 	// +optional
-	Status ClusterImportPolicyStatus `json:"status,omitmepty"`
+	Status ClusterImportPolicyStatus `json:"status,omitempty"`
 }
 
 type ClusterImportPolicySpec struct {
